@@ -120,40 +120,83 @@ def make_ozon_request(endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         raise
 
 
-def request_products_report() -> str:
+def request_report(report_type: str, start_date: str = None, end_date: str = None, **kwargs) -> str:
     """
-    Заказывает отчет по товарам в API Ozon.
+    Универсальная функция для заказа отчетов через API Ozon.
+    
+    Args:
+        report_type (str): Тип отчета ('products', 'postings', 'transactions')
+        start_date (str, optional): Дата начала в формате YYYY-MM-DD
+        end_date (str, optional): Дата окончания в формате YYYY-MM-DD
+        **kwargs: Дополнительные параметры для конкретных типов отчетов
     
     Returns:
         str: Код отчета для последующего получения
     """
-    logger.info("Заказываем отчет по товарам из API Ozon")
+    logger.info(f"Заказываем отчет типа '{report_type}' из API Ozon")
     
-    # Данные для запроса согласно документации
-    request_data = {
-        "language": "DEFAULT",
-        "offer_id": [],
-        "search": "",
-        "sku": [],
-        "visibility": "ALL"
-    }
+    if report_type == 'products':
+        endpoint = '/v1/report/products/create'
+        request_data = {
+            "language": "DEFAULT",
+            "offer_id": [],
+            "search": "",
+            "sku": [],
+            "visibility": "ALL"
+        }
+    elif report_type == 'postings':
+        endpoint = '/v1/report/postings/create'
+        # Если даты уже в ISO формате, используем их как есть, иначе форматируем
+        if 'T' in start_date:
+            processed_from = start_date
+            processed_to = end_date
+        else:
+            processed_from = f"{start_date}T00:00:00.000Z"
+            processed_to = f"{end_date}T23:59:59.999Z"
+            
+        request_data = {
+            "filter": {
+                "processed_at_from": processed_from,
+                "processed_at_to": processed_to,
+                "delivery_schema": ["fbo"]  # FBO заказы (со склада Ozon)
+            },
+            "language": "DEFAULT"
+        }
+    elif report_type == 'transactions':
+        endpoint = '/v1/report/finance/create'
+        request_data = {
+            "filter": {
+                "date": {
+                    "from": f"{start_date}T00:00:00.000Z",
+                    "to": f"{end_date}T23:59:59.999Z"
+                }
+            }
+        }
+    else:
+        raise ValueError(f"Неподдерживаемый тип отчета: {report_type}")
     
-    try:
-        # Выполняем запрос к API
-        response = make_ozon_request('/v1/report/products/create', request_data)
-        
-        # Извлекаем код отчета из ответа
-        report_code = response.get('result', {}).get('code')
-        
-        if not report_code:
-            raise ValueError("Не удалось получить код отчета из ответа API")
-        
-        logger.info(f"Отчет заказан успешно, код: {report_code}")
-        return report_code
-        
-    except Exception as e:
-        logger.error(f"Ошибка при заказе отчета по товарам: {e}")
-        raise
+    # Добавляем дополнительные параметры если есть
+    request_data.update(kwargs)
+    
+    response = make_ozon_request(endpoint, request_data)
+    report_code = response.get('result', {}).get('code')
+    
+    if not report_code:
+        raise ValueError(f"Не удалось получить код отчета для типа {report_type}")
+    
+    logger.info(f"Отчет '{report_type}' заказан успешно, код: {report_code}")
+    return report_code
+
+
+def request_products_report() -> str:
+    """
+    Заказывает отчет по товарам через API Ozon.
+    Обертка для обратной совместимости.
+    
+    Returns:
+        str: Код отчета для последующего получения
+    """
+    return request_report('products')
 
 
 def get_report_by_code(report_code: str) -> str:
@@ -214,6 +257,11 @@ def get_report_by_code(report_code: str) -> str:
                 logger.info(f"CSV-файл скачан, размер: {len(csv_content)} символов")
                 return csv_content
                 
+            elif status == 'failed':
+                # Отчет завершился с ошибкой
+                error_msg = f"Отчет завершился с ошибкой (статус: failed). Проверьте параметры запроса."
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             else:
                 logger.info(f"Отчет еще формируется (статус: {status}), ждем 15 секунд... (попытка {attempt}/{max_attempts})")
                 time.sleep(15)
@@ -334,7 +382,7 @@ def load_products_to_db(products_list: List[Dict[str, Any]]) -> None:
 
 def get_postings_from_api(start_date: str, end_date: str) -> List[Dict[str, Any]]:
     """
-    Получает список заказов (отправлений) из API Ozon за указанный период.
+    Получает список заказов (отправлений) из API Ozon за указанный период через отчеты.
     
     Args:
         start_date (str): Начальная дата в формате 'YYYY-MM-DD'
@@ -343,53 +391,38 @@ def get_postings_from_api(start_date: str, end_date: str) -> List[Dict[str, Any]
     Returns:
         List[Dict[str, Any]]: Список заказов
     """
-    logger.info(f"Начинаем загрузку заказов с {start_date} по {end_date}")
+    logger.info(f"Начинаем загрузку заказов с {start_date} по {end_date} через API отчетов")
     
-    all_postings = []
-    offset = 0
-    limit = 1000  # Максимальное количество заказов за один запрос
-    
-    while True:
-        # Формируем данные для запроса
-        request_data = {
-            "dir": "ASC",
-            "filter": {
-                "since": f"{start_date}T00:00:00.000Z",
-                "to": f"{end_date}T23:59:59.999Z",
-                "status": ""
-            },
-            "limit": limit,
-            "offset": offset,
-            "with": {
-                "analytics_data": True,
-                "financial_data": True
-            }
-        }
+    try:
+        # Заказываем отчет по заказам
+        report_code = request_report('postings', start_date, end_date)
         
-        # Выполняем запрос к API (используем FBS метод)
-        response = make_ozon_request('/v3/posting/fbs/list', request_data)
+        # Получаем CSV-файл с отчетом
+        csv_content = get_report_by_code(report_code)
         
-        # Извлекаем заказы из ответа
-        postings = response.get('result', {}).get('postings', [])
+        # Парсим CSV
+        csv_file = io.StringIO(csv_content)
+        csv_reader = csv.DictReader(csv_file, delimiter=';')
         
-        if not postings:
-            break
-            
-        all_postings.extend(postings)
+        postings = []
+        for row in csv_reader:
+            postings.append(row)
+        
+        logger.info(f"Загрузка заказов завершена. Всего заказов: {len(postings)}")
+        logger.info("Пример заказа из CSV:")
+        if postings:
+            sample_posting = postings[0]
+            for key, value in list(sample_posting.items())[:10]:  # Показываем первые 10 полей
+                logger.info(f"  {key}: {value}")
         
         # Сохраняем сырые данные в raw_events
         save_raw_events(postings, 'ozon_posting')
         
-        offset += limit
+        return postings
         
-        logger.info(f"Загружено {len(postings)} заказов, всего: {len(all_postings)}")
-        
-        # Если заказов меньше лимита, значит это последняя страница
-        if len(postings) < limit:
-            break
-    
-    logger.info(f"Загрузка заказов завершена. Всего заказов: {len(all_postings)}")
-    return all_postings
+    except Exception as e:
+        logger.error(f"Ошибка при получении заказов через отчеты: {e}")
+        raise
 
 
 def save_raw_events(events: List[Dict[str, Any]], event_type: str) -> None:
