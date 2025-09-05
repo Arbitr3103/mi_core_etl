@@ -52,7 +52,7 @@ def view_recent_orders(limit=10):
   Номер заказа: {order['order_id']}
   Товар: {order['product_name'] or order['sku']}
   Количество: {order['qty']}
-  Цена: {order['price']} руб.
+  Цена: {float(order['price']):.2f} руб.
   Дата заказа: {order['order_date']}
   Клиент: {order['client_name']}
   Источник: {order['source_name']}
@@ -92,7 +92,7 @@ def view_orders_stats():
   Всего записей: {stats['total_orders']}
   Уникальных заказов: {stats['unique_orders']}
   Общее количество товаров: {stats['total_qty']}
-  Общая сумма: {stats['total_amount']:.2f} руб.
+  Общая сумма: {float(stats['total_amount']):.2f} руб.
   Период: с {stats['first_date']} по {stats['last_date']}
 """)
         
@@ -113,7 +113,7 @@ def view_orders_stats():
         
         print("Статистика по дням (последние 7 дней):")
         for day in daily_stats:
-            print(f"  {day['order_date']}: {day['orders_count']} заказов, {day['total_qty']} шт., {day['total_amount']:.2f} руб.")
+            print(f"  {day['order_date']}: {day['orders_count']} заказов, {day['total_qty']} шт., {float(day['total_amount']):.2f} руб.")
         
         cursor.close()
         connection.close()
