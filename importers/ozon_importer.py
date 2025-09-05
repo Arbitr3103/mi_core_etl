@@ -15,6 +15,9 @@ import logging
 import mysql.connector
 from mysql.connector import Error
 import requests
+import csv
+import time
+import io
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Any
@@ -117,65 +120,177 @@ def make_ozon_request(endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         raise
 
 
-def get_products_from_api() -> List[Dict[str, Any]]:
+def request_products_report() -> str:
     """
-    Получает список всех товаров из API Ozon с постраничной загрузкой.
+    Заказывает отчет по товарам в API Ozon.
     
     Returns:
-        List[Dict[str, Any]]: Список товаров
+        str: Код отчета для последующего получения
     """
-    logger.info("Начинаем загрузку товаров из API Ozon")
+    logger.info("Заказываем отчет по товарам из API Ozon")
     
-    all_products = []
-    last_id = ""
-    limit = 1000  # Максимальное количество товаров за один запрос
+    # Данные для запроса согласно документации
+    request_data = {
+        "language": "DEFAULT",
+        "offer_id": [],
+        "search": "",
+        "sku": [],
+        "visibility": "ALL"
+    }
     
-    while True:
-        # Формируем данные для запроса
+    try:
+        # Выполняем запрос к API
+        response = make_ozon_request('/v1/report/products/create', request_data)
+        
+        # Извлекаем код отчета из ответа
+        report_code = response.get('result', {}).get('code')
+        
+        if not report_code:
+            raise ValueError("Не удалось получить код отчета из ответа API")
+        
+        logger.info(f"Отчет заказан успешно, код: {report_code}")
+        return report_code
+        
+    except Exception as e:
+        logger.error(f"Ошибка при заказе отчета по товарам: {e}")
+        raise
+
+
+def get_report_by_code(report_code: str) -> str:
+    """
+    Проверяет готовность отчета и скачивает его содержимое.
+    
+    Args:
+        report_code (str): Код отчета, полученный от request_products_report()
+    
+    Returns:
+        str: Содержимое CSV-файла с товарами
+    """
+    logger.info(f"Проверяем готовность отчета {report_code}")
+    
+    max_attempts = 20  # Максимальное количество попыток
+    attempt = 0
+    
+    while attempt < max_attempts:
+        attempt += 1
+        
+        # Данные для запроса статуса отчета
         request_data = {
-            "filter": {},
-            "last_id": last_id,
-            "limit": limit
+            "code": report_code
         }
         
-        # Выполняем запрос к API
-        response = make_ozon_request('/v1/product/list', request_data)
-        
-        # Извлекаем товары из ответа
-        products = response.get('result', {}).get('items', [])
-        
-        if not products:
-            break
+        try:
+            # Выполняем запрос к API
+            response = make_ozon_request('/v1/report/info', request_data)
             
-        all_products.extend(products)
-        
-        # Обновляем last_id для следующей страницы
-        last_id = response.get('result', {}).get('last_id', "")
-        
-        logger.info(f"Загружено {len(products)} товаров, всего: {len(all_products)}")
-        
-        # Если товаров меньше лимита, значит это последняя страница
-        if len(products) < limit:
-            break
+            # Проверяем статус отчета
+            status = response.get('result', {}).get('status')
+            
+            if status == 'success':
+                # Отчет готов, получаем ссылку на файл
+                file_url = response.get('result', {}).get('file')
+                
+                if not file_url:
+                    raise ValueError("Не удалось получить ссылку на файл отчета")
+                
+                logger.info(f"Отчет готов, скачиваем файл: {file_url}")
+                
+                # Скачиваем CSV-файл с правильной кодировкой
+                file_response = requests.get(file_url, timeout=60)
+                file_response.raise_for_status()
+                
+                # Пробуем разные кодировки
+                try:
+                    # Сначала пробуем UTF-8 с BOM
+                    csv_content = file_response.content.decode('utf-8-sig')
+                except UnicodeDecodeError:
+                    try:
+                        # Затем обычный UTF-8
+                        csv_content = file_response.content.decode('utf-8')
+                    except UnicodeDecodeError:
+                        # В крайнем случае CP1251 (Windows-1251)
+                        csv_content = file_response.content.decode('cp1251')
+                
+                logger.info(f"CSV-файл скачан, размер: {len(csv_content)} символов")
+                return csv_content
+                
+            else:
+                logger.info(f"Отчет еще формируется (статус: {status}), ждем 15 секунд... (попытка {attempt}/{max_attempts})")
+                time.sleep(15)
+                
+        except Exception as e:
+            logger.error(f"Ошибка при проверке статуса отчета (попытка {attempt}): {e}")
+            if attempt >= max_attempts:
+                raise
+            time.sleep(15)
     
-    logger.info(f"Загрузка товаров завершена. Всего товаров: {len(all_products)}")
-    return all_products
+    raise TimeoutError(f"Отчет не был готов после {max_attempts} попыток")
+
+
+def get_products_from_api() -> List[Dict[str, Any]]:
+    """
+    Получает список всех товаров из API Ozon через систему отчетов.
+    
+    Returns:
+        List[Dict[str, Any]]: Список товаров, распарсенный из CSV-отчета
+    """
+    logger.info("Начинаем загрузку товаров из API Ozon через отчеты")
+    
+    try:
+        # Этап 1: Заказываем отчет
+        report_code = request_products_report()
+        
+        # Этап 2: Ждем готовности и скачиваем отчет
+        csv_content = get_report_by_code(report_code)
+        
+        # Этап 3: Парсим CSV-содержимое
+        logger.info("Парсим CSV-данные товаров")
+        
+        # Используем StringIO для работы с CSV (с правильным разделителем)
+        csv_file = io.StringIO(csv_content)
+        csv_reader = csv.DictReader(csv_file, delimiter=';')
+        
+        products = []
+        for row in csv_reader:
+            products.append(row)
+        
+        logger.info(f"Загрузка товаров завершена. Всего товаров: {len(products)}")
+        
+        # Выводим первые несколько товаров для отладки
+        if products:
+            logger.info("Пример товара из CSV:")
+            sample_product = products[0]
+            for key, value in sample_product.items():
+                logger.info(f"  {key}: {value}")
+        
+        return products
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении товаров через отчеты: {e}")
+        raise
 
 
 def transform_product_data(product_item: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Преобразует данные товара из API в формат для таблицы dim_products.
+    Преобразует данные товара из CSV-отчета в формат для таблицы dim_products.
     
     Args:
-        product_item (Dict[str, Any]): Данные товара из API
+        product_item (Dict[str, Any]): Данные товара из CSV-отчета
     
     Returns:
         Dict[str, Any]: Преобразованные данные товара
     """
+    # Извлекаем данные из CSV-отчета по названиям колонок
+    # Убираем кавычки и лишние символы из значений
+    def clean_value(value):
+        if isinstance(value, str):
+            return value.strip().strip('"').strip("'")
+        return value or ''
+    
     return {
-        'sku_ozon': product_item.get('offer_id', ''),
-        'barcode': product_item.get('barcode', ''),
-        'product_name': product_item.get('name', ''),
+        'sku_ozon': clean_value(product_item.get('Артикул', '')),
+        'barcode': clean_value(product_item.get('Barcode', '')),
+        'product_name': clean_value(product_item.get('Название товара', '')),
         'cost_price': None  # Оставляем пустым на этом этапе
     }
 
