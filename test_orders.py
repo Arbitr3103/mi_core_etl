@@ -33,7 +33,7 @@ def test_3_1_raw_events():
         connection = connect_to_db()
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT COUNT(*) as count FROM raw_events WHERE event_type='ozon_posting' AND DATE(created_at) = %s",
+                "SELECT COUNT(*) as count FROM raw_events WHERE event_type='ozon_posting' AND DATE(ingested_at) = %s",
                 (yesterday,)
             )
             result = cursor.fetchone()
@@ -59,7 +59,7 @@ def test_3_2_transformation():
         connection = connect_to_db()
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT event_data FROM raw_events WHERE event_type='ozon_posting' LIMIT 1"
+                "SELECT payload FROM raw_events WHERE event_type='ozon_posting' LIMIT 1"
             )
             result = cursor.fetchone()
             
@@ -69,7 +69,7 @@ def test_3_2_transformation():
                 return []
             
             # Парсим JSON
-            posting_json = json.loads(result['event_data'])
+            posting_json = json.loads(result['payload'])
             print(f"Тестируем заказ: {posting_json.get('posting_number', 'N/A')}")
             print(f"Количество товаров в заказе: {len(posting_json.get('products', []))}")
             
