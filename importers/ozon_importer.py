@@ -78,7 +78,8 @@ def connect_to_db() -> mysql.connector.MySQLConnection:
             charset='utf8mb4',
             collation='utf8mb4_unicode_ci',
             use_unicode=True,
-            autocommit=True
+            autocommit=True,
+            connection_timeout=5
         )
         
         logger.info(f"Успешное подключение к базе данных {config['DB_NAME']}")
