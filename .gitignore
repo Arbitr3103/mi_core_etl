@@ -1,0 +1,73 @@
+# Файлы конфигурации с секретными данными
+.env
+.env.local
+.env.production
+.env.staging
+
+# Виртуальное окружение Python
+venv/
+env/
+ENV/
+.venv/
+.ENV/
+
+# Кэш и временные файлы Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Логи
+*.log
+logs/
+log/
+
+# Файлы IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Временные файлы
+*.tmp
+*.temp
+.cache/
+
+# Файлы базы данных (если есть локальные)
+*.db
+*.sqlite
+*.sqlite3
+
+# Резервные копии
+*.bak
+*.backup
+
+# Файлы с паролями и ключами
+*password*
+*secret*
+*key*
+credentials.json
+config.json
