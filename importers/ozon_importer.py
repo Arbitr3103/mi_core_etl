@@ -442,8 +442,16 @@ def save_raw_events(events: List[Dict[str, Any]], event_type: str) -> None:
         cursor = connection.cursor(dictionary=True)
         for event in events:
             # Формируем данные для вставки
+            # Определяем ext_id в зависимости от типа события
+            if event_type == 'ozon_posting':
+                # Для заказов из CSV используем русское название поля
+                ext_id = event.get('Номер заказа', event.get('posting_number', ''))
+            else:
+                # Для других типов используем стандартные поля
+                ext_id = event.get('posting_number', event.get('operation_id', ''))
+            
             raw_data = {
-                'ext_id': event.get('posting_number', event.get('operation_id', '')),
+                'ext_id': ext_id,
                 'event_type': event_type,
                 'payload': json.dumps(event, ensure_ascii=False),
                 'ingested_at': datetime.now()
