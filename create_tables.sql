@@ -38,13 +38,15 @@ CREATE TABLE IF NOT EXISTS fact_orders (
     price DECIMAL(10,2) NOT NULL,
     order_date DATE NOT NULL,
     cost_price DECIMAL(10,2),
+    client_id INT NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY unique_order_product (order_id, sku),
     FOREIGN KEY (product_id) REFERENCES dim_products(id),
     INDEX idx_order_id (order_id),
     INDEX idx_order_date (order_date),
-    INDEX idx_sku (sku)
+    INDEX idx_sku (sku),
+    INDEX idx_client_id (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Таблица финансовых транзакций

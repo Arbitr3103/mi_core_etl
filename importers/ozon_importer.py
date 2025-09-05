@@ -531,7 +531,8 @@ def transform_posting_data(csv_row: Dict[str, Any]) -> List[Dict[str, Any]]:
             'qty': quantity,
             'price': price,
             'order_date': order_date,
-            'cost_price': product_info['cost_price']
+            'cost_price': product_info['cost_price'],
+            'client_id': 1  # Значение по умолчанию для Ozon клиента
         }
         
         orders_list.append(order_record)
@@ -565,8 +566,8 @@ def load_orders_to_db(orders_list: List[Dict[str, Any]]) -> None:
         cursor = connection.cursor(dictionary=True)
         # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
         sql = """
-        INSERT INTO fact_orders (product_id, order_id, transaction_type, sku, qty, price, order_date, cost_price)
-        VALUES (%(product_id)s, %(order_id)s, %(transaction_type)s, %(sku)s, %(qty)s, %(price)s, %(order_date)s, %(cost_price)s)
+        INSERT INTO fact_orders (product_id, order_id, transaction_type, sku, qty, price, order_date, cost_price, client_id)
+        VALUES (%(product_id)s, %(order_id)s, %(transaction_type)s, %(sku)s, %(qty)s, %(price)s, %(order_date)s, %(cost_price)s, %(client_id)s)
         ON DUPLICATE KEY UPDATE
             qty = VALUES(qty),
             price = VALUES(price),
