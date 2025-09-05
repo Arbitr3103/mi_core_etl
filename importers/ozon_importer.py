@@ -510,8 +510,8 @@ def transform_posting_data(csv_row: Dict[str, Any]) -> List[Dict[str, Any]]:
         product_info = cursor.fetchone()
         
         if not product_info:
-            logger.warning(f"Товар с SKU {sku_ozon} не найден в dim_products")
-            return []
+            logger.warning(f"Товар с SKU {sku_ozon} не найден в dim_products, устанавливаем product_id = NULL")
+            product_info = {'id': None, 'cost_price': None}
         
         # Извлекаем числовые значения из CSV
         try:
