@@ -18,6 +18,7 @@ import requests
 import csv
 import time
 import io
+import pprint
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Any
@@ -574,6 +575,17 @@ def load_orders_to_db(orders_list: List[Dict[str, Any]]) -> None:
             price = VALUES(price),
             cost_price = VALUES(cost_price)
         """
+        
+        # --- НАЧАЛО ОТЛАДОЧНОГО БЛОКА ---
+        print("--- DEBUG: ПРОВЕРКА ДАННЫХ ПЕРЕД ЗАГРУЗКОЙ ---")
+        if orders_list:
+            print(f"Всего записей для загрузки: {len(orders_list)}")
+            print("Пример первой записи:")
+            pprint.pprint(orders_list[0])  # Используем pprint для красивого вывода словаря
+        else:
+            print("Список для загрузки пуст!")
+        print("--- DEBUG: КОНЕЦ ПРОВЕРКИ ---")
+        # --- КОНЕЦ ОТЛАДОЧНОГО БЛОКА ---
         
         # Выполняем массовую вставку
         cursor.executemany(sql, orders_list)
