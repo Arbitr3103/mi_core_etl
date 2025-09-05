@@ -412,14 +412,14 @@ def save_raw_events(events: List[Dict[str, Any]], event_type: str) -> None:
             raw_data = {
                 'event_id': event.get('posting_number', event.get('operation_id', '')),
                 'event_type': event_type,
-                'event_data': json.dumps(event, ensure_ascii=False),
-                'created_at': datetime.now()
+                'payload': json.dumps(event, ensure_ascii=False),
+                'ingested_at': datetime.now()
             }
             
             # SQL запрос с IGNORE для избежания дублей
             sql = """
-            INSERT IGNORE INTO raw_events (event_id, event_type, event_data, created_at)
-            VALUES (%(event_id)s, %(event_type)s, %(event_data)s, %(created_at)s)
+            INSERT IGNORE INTO raw_events (event_id, event_type, payload, ingested_at)
+            VALUES (%(event_id)s, %(event_type)s, %(payload)s, %(ingested_at)s)
             """
             
             cursor.execute(sql, raw_data)
