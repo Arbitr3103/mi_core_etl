@@ -29,14 +29,24 @@ def check_dim_products():
             print("Необходимо запустить test_products.py для заполнения")
             return False
         
-        # 2. Показываем примеры товаров
-        cursor.execute("SELECT id, sku_ozon, name FROM dim_products LIMIT 5")
+        # 2. Показываем структуру таблицы
+        cursor.execute("DESCRIBE dim_products")
+        columns = cursor.fetchall()
+        print("\nСтруктура таблицы dim_products:")
+        for col in columns:
+            print(f"  {col['Field']} - {col['Type']} - {col['Null']} - {col['Key']}")
+        
+        # 3. Показываем примеры товаров (используем существующие колонки)
+        cursor.execute("SELECT * FROM dim_products LIMIT 3")
         samples = cursor.fetchall()
         print("\nПримеры товаров:")
-        for sample in samples:
-            print(f"  ID: {sample['id']}, SKU: {sample['sku_ozon']}, Name: {sample['name'][:50]}...")
+        for i, sample in enumerate(samples, 1):
+            print(f"  Товар {i}:")
+            for key, value in sample.items():
+                print(f"    {key}: {value}")
+            print()
         
-        # 3. Проверяем конкретные SKU из тестовых данных
+        # 4. Проверяем конкретные SKU из тестовых данных
         test_skus = ['Хлопья овсяные 700г', 'Фруктовый0,5', 'Молоко 1л']
         print("\nПроверка тестовых SKU:")
         for sku in test_skus:
