@@ -90,7 +90,7 @@ def make_ozon_request(endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
     Выполняет POST-запрос к API Ozon.
     
     Args:
-        endpoint (str): Конечная точка API (например, '/v2/product/list')
+        endpoint (str): Конечная точка API (например, '/v1/product/list')
         data (Dict[str, Any]): Данные для отправки в теле запроса
     
     Returns:
@@ -139,7 +139,7 @@ def get_products_from_api() -> List[Dict[str, Any]]:
         }
         
         # Выполняем запрос к API
-        response = make_ozon_request('/v2/product/list', request_data)
+        response = make_ozon_request('/v1/product/list', request_data)
         
         # Извлекаем товары из ответа
         products = response.get('result', {}).get('items', [])
