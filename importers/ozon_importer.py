@@ -475,52 +475,66 @@ def save_raw_events(events: List[Dict[str, Any]], event_type: str) -> None:
         connection.close()
 
 
-def transform_posting_data(posting_json: Dict[str, Any]) -> List[Dict[str, Any]]:
+def transform_posting_data(csv_row: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Преобразует данные заказа из API в формат для таблицы fact_orders.
-    Создает отдельную запись для каждого товара в заказе.
+    Преобразует данные заказа из CSV отчета в формат для таблицы fact_orders.
+    Каждая строка CSV уже содержит один товар из заказа.
     
     Args:
-        posting_json (Dict[str, Any]): Данные заказа из API
+        csv_row (Dict[str, Any]): Строка CSV с данными товара из заказа
     
     Returns:
-        List[Dict[str, Any]]: Список записей для fact_orders
+        List[Dict[str, Any]]: Список записей для fact_orders (обычно одна запись)
     """
     connection = connect_to_db()
     orders_list = []
     
     try:
         cursor = connection.cursor(dictionary=True)
-        # Извлекаем основную информацию о заказе
-        order_id = posting_json.get('posting_number', '')
-        order_date = posting_json.get('created_at', '')[:10]  # Берем только дату
         
-        # Проходим по каждому товару в заказе
-        for product in posting_json.get('products', []):
-            sku_ozon = product.get('offer_id', '')
-            
-            # Получаем product_id и cost_price из dim_products
-            sql = "SELECT id, cost_price FROM dim_products WHERE sku_ozon = %s"
-            cursor.execute(sql, (sku_ozon,))
-            product_info = cursor.fetchone()
-            
-            if not product_info:
-                logger.warning(f"Товар с SKU {sku_ozon} не найден в dim_products")
-                continue
-            
-            # Формируем запись для fact_orders (product_info теперь кортеж)
-            order_record = {
-                'product_id': product_info[0],  # id
-                'order_id': order_id,
-                'transaction_type': 'продажа',
-                'sku': sku_ozon,
-                'qty': product.get('quantity', 0),
-                'price': float(product.get('price', 0)),
-                'order_date': order_date,
-                'cost_price': product_info[1]  # cost_price
-            }
-            
-            orders_list.append(order_record)
+        # Извлекаем информацию из CSV строки (русские названия полей)
+        order_id = csv_row.get('Номер заказа', '')
+        order_date_str = csv_row.get('Принят в обработку', '')
+        sku_ozon = csv_row.get('Артикул', '')
+        
+        # Парсим дату (формат: "2025-09-02 00:00:39")
+        order_date = order_date_str[:10] if order_date_str else ''
+        
+        if not order_id or not sku_ozon:
+            logger.warning(f"Пропущена строка: отсутствует номер заказа или артикул")
+            return []
+        
+        # Получаем product_id и cost_price из dim_products
+        sql = "SELECT id, cost_price FROM dim_products WHERE sku_ozon = %s"
+        cursor.execute(sql, (sku_ozon,))
+        product_info = cursor.fetchone()
+        
+        if not product_info:
+            logger.warning(f"Товар с SKU {sku_ozon} не найден в dim_products")
+            return []
+        
+        # Извлекаем числовые значения из CSV
+        try:
+            quantity = int(csv_row.get('Количество', '0'))
+            price = float(csv_row.get('Ваша цена', '0').replace(',', '.'))
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Ошибка парсинга числовых значений для заказа {order_id}: {e}")
+            quantity = 0
+            price = 0.0
+        
+        # Формируем запись для fact_orders
+        order_record = {
+            'product_id': product_info['id'],
+            'order_id': order_id,
+            'transaction_type': 'продажа',
+            'sku': sku_ozon,
+            'qty': quantity,
+            'price': price,
+            'order_date': order_date,
+            'cost_price': product_info['cost_price']
+        }
+        
+        orders_list.append(order_record)
         cursor.close()
         
         logger.info(f"Преобразован заказ {order_id}, создано {len(orders_list)} записей")
