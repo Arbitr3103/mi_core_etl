@@ -41,7 +41,7 @@ def test_4_1_transactions():
         
         # Проверяем результат в базе данных
         connection = connect_to_db()
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             cursor.execute(
                 """
                 SELECT transaction_type, SUM(amount) as total_amount, COUNT(*) as count 

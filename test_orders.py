@@ -31,7 +31,7 @@ def test_3_1_raw_events():
         
         # Проверяем количество в raw_events
         connection = connect_to_db()
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             cursor.execute(
                 "SELECT COUNT(*) as count FROM raw_events WHERE event_type='ozon_posting' AND DATE(ingested_at) = %s",
                 (yesterday,)
@@ -57,7 +57,7 @@ def test_3_2_transformation():
     try:
         # Получаем один JSON из raw_events для тестирования
         connection = connect_to_db()
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             cursor.execute(
                 "SELECT payload FROM raw_events WHERE event_type='ozon_posting' LIMIT 1"
             )
@@ -115,7 +115,7 @@ def test_3_3_fact_orders():
         
         # Проверяем результат
         connection = connect_to_db()
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             cursor.execute(
                 "SELECT COUNT(*) as count FROM fact_orders WHERE order_date = %s",
                 (yesterday,)

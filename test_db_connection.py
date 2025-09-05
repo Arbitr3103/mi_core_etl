@@ -20,7 +20,7 @@ def test_db_connection():
         connection = connect_to_db()
         
         # Выполняем простой тестовый запрос
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             cursor.execute("SELECT 1 as test_value")
             result = cursor.fetchone()
             print(f"Результат тестового запроса: {result}")

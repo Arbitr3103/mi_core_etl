@@ -95,7 +95,7 @@ def test_2_3_database_load(transformed_products):
         
         # Проверяем результат в базе данных
         connection = connect_to_db()
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         
         cursor.execute("SELECT COUNT(*) FROM dim_products")
         result = cursor.fetchone()

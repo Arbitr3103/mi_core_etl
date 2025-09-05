@@ -309,7 +309,7 @@ def load_products_to_db(products_list: List[Dict[str, Any]]) -> None:
     connection = connect_to_db()
     
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
         sql = """
         INSERT INTO dim_products (sku_ozon, barcode, product_name, cost_price)
@@ -406,7 +406,7 @@ def save_raw_events(events: List[Dict[str, Any]], event_type: str) -> None:
     connection = connect_to_db()
     
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         for event in events:
             # Формируем данные для вставки
             raw_data = {
@@ -449,7 +449,7 @@ def transform_posting_data(posting_json: Dict[str, Any]) -> List[Dict[str, Any]]
     orders_list = []
     
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         # Извлекаем основную информацию о заказе
         order_id = posting_json.get('posting_number', '')
         order_date = posting_json.get('created_at', '')[:10]  # Берем только дату
@@ -507,7 +507,7 @@ def load_orders_to_db(orders_list: List[Dict[str, Any]]) -> None:
     connection = connect_to_db()
     
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
         sql = """
         INSERT INTO fact_orders (product_id, order_id, transaction_type, sku, qty, price, order_date, cost_price)
@@ -650,7 +650,7 @@ def load_transactions_to_db(transactions_list: List[Dict[str, Any]]) -> None:
     connection = connect_to_db()
     
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
         sql = """
         INSERT INTO fact_transactions (transaction_id, order_id, transaction_type, amount, transaction_date, description)
