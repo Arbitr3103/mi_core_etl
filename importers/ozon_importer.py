@@ -12,7 +12,8 @@
 import os
 import json
 import logging
-import pymysql
+import mysql.connector
+from mysql.connector import Error
 import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -55,30 +56,31 @@ def load_config() -> Dict[str, str]:
     return config
 
 
-def connect_to_db() -> pymysql.Connection:
+def connect_to_db() -> mysql.connector.MySQLConnection:
     """
     Устанавливает соединение с базой данных MySQL.
     
     Returns:
-        pymysql.Connection: Объект соединения с базой данных
+        mysql.connector.MySQLConnection: Объект соединения с базой данных
     """
     config = load_config()
     
     try:
-        connection = pymysql.connect(
+        connection = mysql.connector.connect(
             host=config['DB_HOST'],
             user=config['DB_USER'],
             password=config['DB_PASSWORD'],
             database=config['DB_NAME'],
             charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor,
+            collation='utf8mb4_unicode_ci',
+            use_unicode=True,
             autocommit=True
         )
         
         logger.info(f"Успешное подключение к базе данных {config['DB_NAME']}")
         return connection
         
-    except Exception as e:
+    except Error as e:
         logger.error(f"Ошибка подключения к базе данных: {e}")
         raise
 
@@ -192,20 +194,21 @@ def load_products_to_db(products_list: List[Dict[str, Any]]) -> None:
     connection = connect_to_db()
     
     try:
-        with connection.cursor() as cursor:
-            # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
-            sql = """
-            INSERT INTO dim_products (sku_ozon, barcode, product_name, cost_price)
-            VALUES (%(sku_ozon)s, %(barcode)s, %(product_name)s, %(cost_price)s)
-            ON DUPLICATE KEY UPDATE
-                product_name = VALUES(product_name),
-                barcode = VALUES(barcode)
-            """
-            
-            # Выполняем массовую вставку
-            cursor.executemany(sql, products_list)
-            
-            logger.info(f"Успешно загружено {len(products_list)} товаров в dim_products")
+        cursor = connection.cursor()
+        # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
+        sql = """
+        INSERT INTO dim_products (sku_ozon, barcode, product_name, cost_price)
+        VALUES (%(sku_ozon)s, %(barcode)s, %(product_name)s, %(cost_price)s)
+        ON DUPLICATE KEY UPDATE
+            product_name = VALUES(product_name),
+            barcode = VALUES(barcode)
+        """
+        
+        # Выполняем массовую вставку
+        cursor.executemany(sql, products_list)
+        cursor.close()
+        
+        logger.info(f"Успешно загружено {len(products_list)} товаров в dim_products")
             
     except Exception as e:
         logger.error(f"Ошибка загрузки товаров в базу данных: {e}")
@@ -288,25 +291,26 @@ def save_raw_events(events: List[Dict[str, Any]], event_type: str) -> None:
     connection = connect_to_db()
     
     try:
-        with connection.cursor() as cursor:
-            for event in events:
-                # Формируем данные для вставки
-                raw_data = {
-                    'event_id': event.get('posting_number', event.get('operation_id', '')),
-                    'event_type': event_type,
-                    'event_data': json.dumps(event, ensure_ascii=False),
-                    'created_at': datetime.now()
-                }
-                
-                # SQL запрос с IGNORE для избежания дублей
-                sql = """
-                INSERT IGNORE INTO raw_events (event_id, event_type, event_data, created_at)
-                VALUES (%(event_id)s, %(event_type)s, %(event_data)s, %(created_at)s)
-                """
-                
-                cursor.execute(sql, raw_data)
+        cursor = connection.cursor()
+        for event in events:
+            # Формируем данные для вставки
+            raw_data = {
+                'event_id': event.get('posting_number', event.get('operation_id', '')),
+                'event_type': event_type,
+                'event_data': json.dumps(event, ensure_ascii=False),
+                'created_at': datetime.now()
+            }
             
-            logger.info(f"Сохранено {len(events)} событий типа {event_type} в raw_events")
+            # SQL запрос с IGNORE для избежания дублей
+            sql = """
+            INSERT IGNORE INTO raw_events (event_id, event_type, event_data, created_at)
+            VALUES (%(event_id)s, %(event_type)s, %(event_data)s, %(created_at)s)
+            """
+            
+            cursor.execute(sql, raw_data)
+        cursor.close()
+        
+        logger.info(f"Сохранено {len(events)} событий типа {event_type} в raw_events")
             
     except Exception as e:
         logger.error(f"Ошибка сохранения сырых данных: {e}")
@@ -330,37 +334,38 @@ def transform_posting_data(posting_json: Dict[str, Any]) -> List[Dict[str, Any]]
     orders_list = []
     
     try:
-        with connection.cursor() as cursor:
-            # Извлекаем основную информацию о заказе
-            order_id = posting_json.get('posting_number', '')
-            order_date = posting_json.get('created_at', '')[:10]  # Берем только дату
+        cursor = connection.cursor()
+        # Извлекаем основную информацию о заказе
+        order_id = posting_json.get('posting_number', '')
+        order_date = posting_json.get('created_at', '')[:10]  # Берем только дату
+        
+        # Проходим по каждому товару в заказе
+        for product in posting_json.get('products', []):
+            sku_ozon = product.get('offer_id', '')
             
-            # Проходим по каждому товару в заказе
-            for product in posting_json.get('products', []):
-                sku_ozon = product.get('offer_id', '')
-                
-                # Получаем product_id и cost_price из dim_products
-                sql = "SELECT id, cost_price FROM dim_products WHERE sku_ozon = %s"
-                cursor.execute(sql, (sku_ozon,))
-                product_info = cursor.fetchone()
-                
-                if not product_info:
-                    logger.warning(f"Товар с SKU {sku_ozon} не найден в dim_products")
-                    continue
-                
-                # Формируем запись для fact_orders
-                order_record = {
-                    'product_id': product_info['id'],
-                    'order_id': order_id,
-                    'transaction_type': 'продажа',
-                    'sku': sku_ozon,
-                    'qty': product.get('quantity', 0),
-                    'price': float(product.get('price', 0)),
-                    'order_date': order_date,
-                    'cost_price': product_info['cost_price']
-                }
-                
-                orders_list.append(order_record)
+            # Получаем product_id и cost_price из dim_products
+            sql = "SELECT id, cost_price FROM dim_products WHERE sku_ozon = %s"
+            cursor.execute(sql, (sku_ozon,))
+            product_info = cursor.fetchone()
+            
+            if not product_info:
+                logger.warning(f"Товар с SKU {sku_ozon} не найден в dim_products")
+                continue
+            
+            # Формируем запись для fact_orders (product_info теперь кортеж)
+            order_record = {
+                'product_id': product_info[0],  # id
+                'order_id': order_id,
+                'transaction_type': 'продажа',
+                'sku': sku_ozon,
+                'qty': product.get('quantity', 0),
+                'price': float(product.get('price', 0)),
+                'order_date': order_date,
+                'cost_price': product_info[1]  # cost_price
+            }
+            
+            orders_list.append(order_record)
+        cursor.close()
         
         logger.info(f"Преобразован заказ {order_id}, создано {len(orders_list)} записей")
         
@@ -387,21 +392,22 @@ def load_orders_to_db(orders_list: List[Dict[str, Any]]) -> None:
     connection = connect_to_db()
     
     try:
-        with connection.cursor() as cursor:
-            # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
-            sql = """
-            INSERT INTO fact_orders (product_id, order_id, transaction_type, sku, qty, price, order_date, cost_price)
-            VALUES (%(product_id)s, %(order_id)s, %(transaction_type)s, %(sku)s, %(qty)s, %(price)s, %(order_date)s, %(cost_price)s)
-            ON DUPLICATE KEY UPDATE
-                qty = VALUES(qty),
-                price = VALUES(price),
-                cost_price = VALUES(cost_price)
-            """
-            
-            # Выполняем массовую вставку
-            cursor.executemany(sql, orders_list)
-            
-            logger.info(f"Успешно загружено {len(orders_list)} записей заказов в fact_orders")
+        cursor = connection.cursor()
+        # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
+        sql = """
+        INSERT INTO fact_orders (product_id, order_id, transaction_type, sku, qty, price, order_date, cost_price)
+        VALUES (%(product_id)s, %(order_id)s, %(transaction_type)s, %(sku)s, %(qty)s, %(price)s, %(order_date)s, %(cost_price)s)
+        ON DUPLICATE KEY UPDATE
+            qty = VALUES(qty),
+            price = VALUES(price),
+            cost_price = VALUES(cost_price)
+        """
+        
+        # Выполняем массовую вставку
+        cursor.executemany(sql, orders_list)
+        cursor.close()
+        
+        logger.info(f"Успешно загружено {len(orders_list)} записей заказов в fact_orders")
             
     except Exception as e:
         logger.error(f"Ошибка загрузки заказов в базу данных: {e}")
@@ -529,20 +535,21 @@ def load_transactions_to_db(transactions_list: List[Dict[str, Any]]) -> None:
     connection = connect_to_db()
     
     try:
-        with connection.cursor() as cursor:
-            # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
-            sql = """
-            INSERT INTO fact_transactions (transaction_id, order_id, transaction_type, amount, transaction_date, description)
-            VALUES (%(transaction_id)s, %(order_id)s, %(transaction_type)s, %(amount)s, %(transaction_date)s, %(description)s)
-            ON DUPLICATE KEY UPDATE
-                amount = VALUES(amount),
-                description = VALUES(description)
-            """
-            
-            # Выполняем массовую вставку
-            cursor.executemany(sql, transactions_list)
-            
-            logger.info(f"Успешно загружено {len(transactions_list)} транзакций в fact_transactions")
+        cursor = connection.cursor()
+        # SQL запрос с логикой INSERT ... ON DUPLICATE KEY UPDATE
+        sql = """
+        INSERT INTO fact_transactions (transaction_id, order_id, transaction_type, amount, transaction_date, description)
+        VALUES (%(transaction_id)s, %(order_id)s, %(transaction_type)s, %(amount)s, %(transaction_date)s, %(description)s)
+        ON DUPLICATE KEY UPDATE
+            amount = VALUES(amount),
+            description = VALUES(description)
+        """
+        
+        # Выполняем массовую вставку
+        cursor.executemany(sql, transactions_list)
+        cursor.close()
+        
+        logger.info(f"Успешно загружено {len(transactions_list)} транзакций в fact_transactions")
             
     except Exception as e:
         logger.error(f"Ошибка загрузки транзакций в базу данных: {e}")
