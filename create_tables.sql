@@ -1,34 +1,13 @@
--- Создание базы данных и таблиц для проекта mi_core_etl
-
--- 1. Создание базы данных (если не существует) - эта строка корректна
+-- 1. Создание и выбор базы данных
 CREATE DATABASE IF NOT EXISTS mi_core_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- 2. Выбираем базу данных для дальнейших операций
 USE mi_core_db;
 
--- 3. Создание пользователя ingest_user (если не существует)
--- ВАЖНО: Замените 'your_secure_password' на ваш надежный пароль
--- ИСПОЛЬЗУЕМ '%' для доступа откуда угодно, чтобы не было проблем с localhost
-CREATE USER IF NOT EXISTS 'ingest_user'@'%' IDENTIFIED BY 'xK9#mQ7$vN2@pL!rT4wY';
+-- ПРАВА ВЫДАЮТСЯ ВРУЧНУЮ ПОСЛЕ СОЗДАНИЯ ПОЛЬЗОВАТЕЛЕЙ
+-- GRANT SELECT, INSERT, UPDATE ON mi_core_db.* TO 'ingest_user'@'%';
+-- GRANT ALL PRIVILEGES ON mi_core_db.* TO 'v_admin'@'%' WITH GRANT OPTION;
+-- FLUSH PRIVILEGES;
 
--- 4. Предоставляем права пользователю ingest_user на НАШУ базу данных mi_core_db
--- Это позволит ему читать, записывать и обновлять данные
-GRANT SELECT, INSERT, UPDATE ON mi_core_db.* TO 'ingest_user'@'%';
-
--- 5. Создание пользователя v_admin (если не существует)
--- ВАЖНО: Замените 'ВАШ_НОВЫЙ_ПАРОЛЬ_ДЛЯ_АДМИНА' на надежный пароль
-CREATE USER IF NOT EXISTS 'v_admin'@'%' IDENTIFIED BY 'qwer123';
-
--- 6. Даем пользователю v_admin ПОЛНЫЕ права на mi_core_db
-GRANT ALL PRIVILEGES ON mi_core_db.* TO 'v_admin'@'%' WITH GRANT OPTION;
-
--- 7. Даем пользователю v_admin права на просмотр ВСЕХ баз (для удобства, если понадобится)
-GRANT SELECT ON *.* TO 'v_admin'@'%';
-
--- 8. Применяем все изменения прав
-FLUSH PRIVILEGES;
-
--- Таблица справочника товаров
+-- 2. Таблица справочника товаров
 CREATE TABLE IF NOT EXISTS dim_products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     sku_ozon VARCHAR(255) NOT NULL UNIQUE,
@@ -41,10 +20,10 @@ CREATE TABLE IF NOT EXISTS dim_products (
     INDEX idx_barcode (barcode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Таблица фактов заказов
+-- 3. Таблица фактов заказов
 CREATE TABLE IF NOT EXISTS fact_orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    product_id INT NOT NULL,
+    product_id INT NULL,  -- ИСПРАВЛЕНО: Сделано необязательным (NULL)
     order_id VARCHAR(255) NOT NULL,
     transaction_type VARCHAR(100) NOT NULL,
     sku VARCHAR(255) NOT NULL,
@@ -65,7 +44,7 @@ CREATE TABLE IF NOT EXISTS fact_orders (
     INDEX idx_source_id (source_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Таблица финансовых транзакций
+-- 4. Таблица финансовых транзакций
 CREATE TABLE IF NOT EXISTS fact_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     transaction_id VARCHAR(255) NOT NULL UNIQUE,
@@ -82,15 +61,15 @@ CREATE TABLE IF NOT EXISTS fact_transactions (
     INDEX idx_transaction_type (transaction_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Таблица сырых событий из API
+-- 5. Таблица сырых событий из API
 CREATE TABLE IF NOT EXISTS raw_events (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    event_id VARCHAR(255) NOT NULL,
+    ext_id VARCHAR(255) NOT NULL,         -- ИСПРАВЛЕНО: event_id -> ext_id
     event_type VARCHAR(100) NOT NULL,
-    event_data JSON NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_event (event_id, event_type),
+    payload JSON NOT NULL,                -- ИСПРАВЛЕНО: event_data -> payload
+    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- ИСПРАВЛЕНО: created_at -> ingested_at
+    UNIQUE KEY unique_event (ext_id, event_type),
     INDEX idx_event_type (event_type),
-    INDEX idx_event_id (event_id),
-    INDEX idx_created_at (created_at)
+    INDEX idx_ext_id (ext_id),
+    INDEX idx_ingested_at (ingested_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
