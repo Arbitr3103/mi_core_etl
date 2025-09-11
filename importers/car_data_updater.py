@@ -41,13 +41,27 @@ class CarDataUpdater:
         # Рабочий URL для получения версии (найден в результате тестирования)
         self.version_url = 'https://basebuy.ru/api/auto/v1/version'
         
-        # Возможные варианты базового URL API BaseBuy (для fallback)
-        self.possible_base_urls = [
-            'https://basebuy.ru/api/auto/v1',
-            'https://api.basebuy.ru/api/auto/v1',
-            'https://api.basebuy.ru/v1',
-            'https://basebuy.ru/api/v1'
-        ]
+        # Базовый URL для API endpoints
+        self.api_base_url = 'https://api.basebuy.ru/api/auto/v1'
+        
+        # Маппинг сущностей BaseBuy к нашим таблицам
+        self.entity_mapping = {
+            'mark': {
+                'table': 'brands',
+                'id_type': 1,  # легковые автомобили
+                'fields': ['id', 'name', 'name_rus']
+            },
+            'model': {
+                'table': 'car_models', 
+                'id_type': 1,
+                'fields': ['id', 'id_mark', 'name', 'name_rus']
+            },
+            'serie': {
+                'table': 'car_specifications',
+                'id_type': 1, 
+                'fields': ['id', 'id_model', 'name', 'year_start', 'year_end']
+            }
+        }
         
         # Настройки подключения к БД
         self.db_config = {
@@ -157,6 +171,206 @@ class CarDataUpdater:
             return self.version_url, {'version': version, 'source': 'HTML parsing'}
         else:
             return None, None
+    
+    def get_entity_update_date(self, entity_name: str) -> Optional[str]:
+        """Получает дату последнего обновления для сущности."""
+        if entity_name not in self.entity_mapping:
+            logger.error(f"Неизвестная сущность: {entity_name}")
+            return None
+        
+        entity_config = self.entity_mapping[entity_name]
+        id_type = entity_config['id_type']
+        
+        # URL для получения даты обновления
+        url = f"{self.api_base_url}/{entity_name}.getDateUpdate.timestamp"
+        params = {
+            'api_key': self.api_key,
+            'id_type': id_type
+        }
+        
+        try:
+            logger.info(f"Получаем дату обновления для {entity_name}: {url}")
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                # Ответ должен содержать timestamp
+                timestamp = response.text.strip()
+                logger.info(f"Дата обновления {entity_name}: {timestamp}")
+                return timestamp
+            else:
+                logger.error(f"Ошибка получения даты для {entity_name}: {response.status_code}")
+                logger.error(f"Ответ: {response.text[:200]}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Ошибка запроса даты для {entity_name}: {e}")
+            return None
+    
+    def download_entity_csv(self, entity_name: str) -> Optional[str]:
+        """Скачивает CSV данные для сущности."""
+        if entity_name not in self.entity_mapping:
+            logger.error(f"Неизвестная сущность: {entity_name}")
+            return None
+        
+        entity_config = self.entity_mapping[entity_name]
+        id_type = entity_config['id_type']
+        
+        # URL для получения CSV данных
+        url = f"{self.api_base_url}/{entity_name}.getAll.csv"
+        params = {
+            'api_key': self.api_key,
+            'id_type': id_type
+        }
+        
+        try:
+            logger.info(f"Скачиваем CSV для {entity_name}: {url}")
+            
+            response = requests.get(url, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                csv_data = response.text
+                logger.info(f"Получено {len(csv_data)} символов CSV для {entity_name}")
+                return csv_data
+            else:
+                logger.error(f"Ошибка скачивания CSV для {entity_name}: {response.status_code}")
+                logger.error(f"Ответ: {response.text[:200]}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Ошибка скачивания CSV для {entity_name}: {e}")
+            return None
+    
+    def update_entity_data(self, entity_name: str, csv_data: str) -> bool:
+        """Обновляет данные сущности в БД из CSV."""
+        if entity_name not in self.entity_mapping:
+            logger.error(f"Неизвестная сущность: {entity_name}")
+            return False
+        
+        entity_config = self.entity_mapping[entity_name]
+        table_name = entity_config['table']
+        
+        try:
+            import csv
+            import io
+            
+            # Парсим CSV
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            rows = list(csv_reader)
+            
+            if not rows:
+                logger.warning(f"Нет данных в CSV для {entity_name}")
+                return True
+            
+            logger.info(f"Обрабатываем {len(rows)} записей для {entity_name}")
+            
+            connection = self.connect_to_db()
+            cursor = connection.cursor()
+            
+            # Подготавливаем SQL для вставки/обновления
+            if entity_name == 'mark':
+                sql = """
+                    INSERT INTO brands (external_id, name, name_rus, source)
+                    VALUES (%s, %s, %s, 'basebuy')
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        name_rus = VALUES(name_rus),
+                        updated_at = CURRENT_TIMESTAMP
+                """
+                
+                for row in rows:
+                    cursor.execute(sql, (
+                        row.get('id'),
+                        row.get('name', ''),
+                        row.get('name_rus', row.get('name', ''))
+                    ))
+            
+            elif entity_name == 'model':
+                sql = """
+                    INSERT INTO car_models (external_id, brand_id, name, name_rus, source)
+                    VALUES (%s, %s, %s, %s, 'basebuy')
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        name_rus = VALUES(name_rus),
+                        updated_at = CURRENT_TIMESTAMP
+                """
+                
+                for row in rows:
+                    # Находим brand_id по external_id марки
+                    cursor.execute(
+                        "SELECT id FROM brands WHERE external_id = %s AND source = 'basebuy'",
+                        (row.get('id_mark'),)
+                    )
+                    brand_result = cursor.fetchone()
+                    
+                    if brand_result:
+                        brand_id = brand_result[0]
+                        cursor.execute(sql, (
+                            row.get('id'),
+                            brand_id,
+                            row.get('name', ''),
+                            row.get('name_rus', row.get('name', ''))
+                        ))
+                    else:
+                        logger.warning(f"Не найдена марка с external_id {row.get('id_mark')} для модели {row.get('id')}")
+            
+            elif entity_name == 'serie':
+                sql = """
+                    INSERT INTO car_specifications (external_id, car_model_id, name, year_start, year_end, source)
+                    VALUES (%s, %s, %s, %s, %s, 'basebuy')
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        year_start = VALUES(year_start),
+                        year_end = VALUES(year_end),
+                        updated_at = CURRENT_TIMESTAMP
+                """
+                
+                for row in rows:
+                    # Находим car_model_id по external_id модели
+                    cursor.execute(
+                        "SELECT id FROM car_models WHERE external_id = %s AND source = 'basebuy'",
+                        (row.get('id_model'),)
+                    )
+                    model_result = cursor.fetchone()
+                    
+                    if model_result:
+                        model_id = model_result[0]
+                        
+                        # Обрабатываем годы
+                        year_start = row.get('year_start')
+                        year_end = row.get('year_end')
+                        
+                        try:
+                            year_start = int(year_start) if year_start else None
+                            year_end = int(year_end) if year_end else None
+                        except (ValueError, TypeError):
+                            year_start = year_end = None
+                        
+                        # Пропускаем записи без year_start
+                        if year_start is None:
+                            logger.warning(f"Пропускаем спецификацию {row.get('id')}: отсутствует year_start")
+                            continue
+                        
+                        cursor.execute(sql, (
+                            row.get('id'),
+                            model_id,
+                            row.get('name', ''),
+                            year_start,
+                            year_end
+                        ))
+                    else:
+                        logger.warning(f"Не найдена модель с external_id {row.get('id_model')} для спецификации {row.get('id')}")
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            logger.info(f"✅ Данные {entity_name} успешно обновлены в таблице {table_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка обновления данных {entity_name}: {e}")
+            return False
     
     def get_current_db_version(self) -> Optional[str]:
         """Получает текущую версию БД из system_settings."""
@@ -297,15 +511,15 @@ class CarDataUpdater:
     
     def apply_updates(self, download_url: Optional[str] = None) -> bool:
         """
-        Применяет обновления к базе данных.
+        Применяет обновления к базе данных через API endpoints.
         
         Args:
-            download_url: URL для скачивания обновлений (если доступен)
+            download_url: URL для скачивания обновлений (не используется, оставлен для совместимости)
             
         Returns:
             True если обновления применены успешно
         """
-        logger.info("🔄 Начинаем применение обновлений...")
+        logger.info("🔄 Начинаем применение обновлений через API...")
         
         # Получаем информацию об обновлениях
         update_info = self.check_for_updates()
@@ -321,24 +535,90 @@ class CarDataUpdater:
         latest_version = update_info['latest_version']
         
         try:
-            # Пока что просто обновляем версию в БД без скачивания файлов
-            # TODO: Реализовать скачивание и применение SQL дампа когда будет доступен API ключ
-            logger.warning("⚠️ Автоматическое скачивание обновлений пока не реализовано")
-            logger.info("📝 Для применения обновлений необходимо:")
-            logger.info("   1. Получить у BaseBuy API ключ для скачивания дампов")
-            logger.info("   2. Скачать новый дамп вручную")
-            logger.info("   3. Запустить initial_load.py с новыми данными")
+            # Обновляем данные через API endpoints
+            entities_to_update = ['mark', 'model', 'serie']
+            success_count = 0
             
-            # Обновляем версию в БД (имитируем успешное обновление)
-            logger.info(f"🔄 Обновляем версию в БД до {latest_version}")
-            self.set_db_version(latest_version)
+            for entity in entities_to_update:
+                logger.info(f"🔄 Обновляем {entity}...")
+                
+                # Проверяем дату обновления сущности
+                entity_date = self.get_entity_update_date(entity)
+                if entity_date:
+                    logger.info(f"Дата обновления {entity}: {entity_date}")
+                
+                # Скачиваем CSV данные
+                csv_data = self.download_entity_csv(entity)
+                if not csv_data:
+                    logger.error(f"❌ Не удалось скачать данные для {entity}")
+                    continue
+                
+                # Обновляем данные в БД
+                if self.update_entity_data(entity, csv_data):
+                    success_count += 1
+                    logger.info(f"✅ {entity} обновлен успешно")
+                else:
+                    logger.error(f"❌ Ошибка обновления {entity}")
             
-            logger.info("✅ Версия в БД обновлена")
-            return True
+            if success_count == len(entities_to_update):
+                # Обновляем версию в БД только если все сущности обновились успешно
+                logger.info(f"🔄 Обновляем версию в БД до {latest_version}")
+                self.set_db_version(latest_version)
+                logger.info("✅ Все данные успешно обновлены")
+                return True
+            else:
+                logger.warning(f"⚠️ Обновлено только {success_count} из {len(entities_to_update)} сущностей")
+                return False
             
         except Exception as e:
             logger.error(f"❌ Ошибка при применении обновлений: {e}")
             return False
+    
+    def test_api_endpoints(self) -> Dict[str, Any]:
+        """Тестирует все API endpoints BaseBuy."""
+        logger.info("🧪 Тестируем API endpoints BaseBuy...")
+        
+        results = {
+            'api_key_valid': False,
+            'entities': {},
+            'errors': []
+        }
+        
+        if not self.api_key:
+            results['errors'].append('API ключ не настроен')
+            return results
+        
+        # Тестируем каждую сущность
+        for entity_name in self.entity_mapping.keys():
+            logger.info(f"Тестируем {entity_name}...")
+            
+            entity_result = {
+                'update_date': None,
+                'csv_available': False,
+                'csv_size': 0,
+                'error': None
+            }
+            
+            try:
+                # Тестируем получение даты обновления
+                update_date = self.get_entity_update_date(entity_name)
+                if update_date:
+                    entity_result['update_date'] = update_date
+                    results['api_key_valid'] = True
+                
+                # Тестируем скачивание CSV (только первые 1000 символов для теста)
+                csv_data = self.download_entity_csv(entity_name)
+                if csv_data:
+                    entity_result['csv_available'] = True
+                    entity_result['csv_size'] = len(csv_data)
+                    entity_result['csv_preview'] = csv_data[:200] + '...' if len(csv_data) > 200 else csv_data
+                
+            except Exception as e:
+                entity_result['error'] = str(e)
+            
+            results['entities'][entity_name] = entity_result
+        
+        return results
     
     def run_daily_check(self):
         """Запускает ежедневную проверку обновлений."""

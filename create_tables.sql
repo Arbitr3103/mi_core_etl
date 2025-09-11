@@ -126,27 +126,46 @@ CREATE TABLE IF NOT EXISTS regions (
 
 CREATE TABLE IF NOT EXISTS brands (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    name_rus VARCHAR(100) NULL,
+    external_id VARCHAR(50) NULL,
+    source VARCHAR(20) DEFAULT 'manual',
     region_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_brand_name (name),
+    UNIQUE KEY uk_brand_external (external_id, source),
     CONSTRAINT fk_brand_region_ref FOREIGN KEY (region_id) REFERENCES regions(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS car_models (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    name_rus VARCHAR(100) NULL,
+    external_id VARCHAR(50) NULL,
+    source VARCHAR(20) DEFAULT 'manual',
     brand_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_model_external (external_id, source),
     CONSTRAINT fk_model_brand_ref FOREIGN KEY (brand_id) REFERENCES brands(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS car_specifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     car_model_id INT NOT NULL,
+    name VARCHAR(100) NULL,
+    external_id VARCHAR(50) NULL,
+    source VARCHAR(20) DEFAULT 'manual',
     year_start SMALLINT NOT NULL,
     year_end SMALLINT NULL,
-    pcd VARCHAR(50) NOT NULL,
-    dia DECIMAL(5,1) NOT NULL,
-    fastener_type ENUM('болт', 'гайка') NOT NULL,
-    fastener_params VARCHAR(50) NOT NULL,
+    pcd VARCHAR(50) NULL,
+    dia DECIMAL(5,1) NULL,
+    fastener_type ENUM('болт', 'гайка') NULL,
+    fastener_params VARCHAR(50) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_spec_external (external_id, source),
     CONSTRAINT fk_spec_model_ref FOREIGN KEY (car_model_id) REFERENCES car_models(id)
 ) ENGINE=InnoDB;
 
