@@ -41,8 +41,8 @@ class CarDataUpdater:
         # Рабочий URL для получения версии (найден в результате тестирования)
         self.version_url = 'https://basebuy.ru/api/auto/v1/version'
         
-        # Базовый URL для API endpoints
-        self.api_base_url = 'https://api.basebuy.ru/api/auto/v1'
+        # Конфигурация API
+        self.api_base_url = "https://basebuy.ru/api/auto/v1"
         
         # Маппинг сущностей BaseBuy к нашим таблицам
         self.entity_mapping = {
