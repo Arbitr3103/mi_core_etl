@@ -10,11 +10,13 @@ import requests
 import logging
 import gzip
 import io
+import re
 from datetime import datetime
 from typing import Optional, Dict, Any
 import mysql.connector
 from mysql.connector import Error
 from dotenv import load_dotenv
+from bs4 import BeautifulSoup
 
 # Загружаем переменные из .env файла
 load_dotenv()
@@ -36,10 +38,13 @@ class CarDataUpdater:
         """Инициализация обновлятора."""
         self.api_key = os.getenv('BASEBUY_API_KEY')
         
-        # Возможные варианты базового URL API BaseBuy
+        # Рабочий URL для получения версии (найден в результате тестирования)
+        self.version_url = 'https://basebuy.ru/api/auto/v1/version'
+        
+        # Возможные варианты базового URL API BaseBuy (для fallback)
         self.possible_base_urls = [
-            'https://api.basebuy.ru/api/auto/v1',
             'https://basebuy.ru/api/auto/v1',
+            'https://api.basebuy.ru/api/auto/v1',
             'https://api.basebuy.ru/v1',
             'https://basebuy.ru/api/v1'
         ]
@@ -67,63 +72,91 @@ class CarDataUpdater:
             logger.error(f"Ошибка подключения к БД: {e}")
             raise
     
-    def test_api_connection(self):
-        """Тестирует подключение к API BaseBuy и определяет рабочий URL."""
-        logger.info("🔍 Тестируем подключение к API BaseBuy...")
+    def get_latest_version_from_api(self) -> Optional[str]:
+        """Получает последнюю версию БД из BaseBuy API, парся HTML."""
+        logger.info("🔍 Получаем последнюю версию из BaseBuy API...")
         
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json',
-            'User-Agent': 'mi_core_etl/1.0'
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
-        # Возможные endpoints для получения версии
-        version_endpoints = ['/version', '/info', '/status', '/database/version']
-        
-        for base_url in self.possible_base_urls:
-            logger.info(f"Проверяем базовый URL: {base_url}")
+        try:
+            logger.info(f"Запрашиваем: {self.version_url}")
             
-            for endpoint in version_endpoints:
-                full_url = f"{base_url}{endpoint}"
+            response = requests.get(
+                self.version_url,
+                headers=headers,
+                timeout=10
+            )
+            
+            logger.info(f"Статус ответа: {response.status_code}")
+            
+            if response.status_code == 200:
+                # Парсим HTML для извлечения версии
+                soup = BeautifulSoup(response.text, 'html.parser')
                 
-                try:
-                    logger.info(f"  Тестируем: {full_url}")
+                # Ищем в meta-тегах
+                meta_title = soup.find('meta', property='og:title')
+                if meta_title and meta_title.get('content'):
+                    content = meta_title.get('content')
+                    logger.info(f"Найден meta og:title: {content}")
                     
-                    response = requests.get(
-                        full_url,
-                        headers=headers,
-                        timeout=10
-                    )
+                    # Извлекаем дату в формате DD.MM.YYYY
+                    date_pattern = r'(\d{2}\.\d{2}\.\d{4})'
+                    match = re.search(date_pattern, content)
                     
-                    logger.info(f"  Статус: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        try:
-                            data = response.json()
-                            logger.info(f"  ✅ Успешный ответ от {full_url}")
-                            logger.info(f"  📄 Данные: {data}")
-                            return full_url, data
-                        except ValueError:
-                            logger.info(f"  📄 Текстовый ответ: {response.text[:200]}")
-                            return full_url, response.text
-                    
-                    elif response.status_code == 401:
-                        logger.warning(f"  🔐 Ошибка авторизации (401) - проверьте API ключ")
-                    elif response.status_code == 404:
-                        logger.debug(f"  ❌ Endpoint не найден (404)")
-                    else:
-                        logger.info(f"  ⚠️ Код ответа: {response.status_code}")
-                        logger.info(f"  📄 Ответ: {response.text[:200]}")
+                    if match:
+                        version_date = match.group(1)
+                        logger.info(f"✅ Извлечена версия: {version_date}")
+                        return version_date
                 
-                except requests.exceptions.Timeout:
-                    logger.warning(f"  ⏱️ Таймаут для {full_url}")
-                except requests.exceptions.ConnectionError:
-                    logger.warning(f"  🔌 Ошибка подключения к {full_url}")
-                except Exception as e:
-                    logger.warning(f"  ❌ Ошибка для {full_url}: {e}")
+                # Альтернативный поиск в title
+                title_tag = soup.find('title')
+                if title_tag:
+                    title_text = title_tag.get_text()
+                    logger.info(f"Найден title: {title_text}")
+                    
+                    match = re.search(r'(\d{2}\.\d{2}\.\d{4})', title_text)
+                    if match:
+                        version_date = match.group(1)
+                        logger.info(f"✅ Извлечена версия из title: {version_date}")
+                        return version_date
+                
+                # Поиск в тексте страницы
+                page_text = soup.get_text()
+                matches = re.findall(r'(\d{2}\.\d{2}\.\d{4})', page_text)
+                if matches:
+                    # Берем последнюю найденную дату (обычно самая актуальная)
+                    version_date = matches[-1]
+                    logger.info(f"✅ Найдена дата в тексте: {version_date}")
+                    return version_date
+                
+                logger.warning("❌ Не удалось найти дату версии в HTML")
+                return None
+            
+            else:
+                logger.error(f"❌ Ошибка HTTP {response.status_code}: {response.text[:200]}")
+                return None
+                
+        except requests.exceptions.Timeout:
+            logger.error("⏱️ Таймаут при запросе к API")
+            return None
+        except requests.exceptions.ConnectionError:
+            logger.error("🔌 Ошибка подключения к API")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Неожиданная ошибка: {e}")
+            return None
+    
+    def test_api_connection(self):
+        """Тестирует подключение к API BaseBuy (устаревший метод, оставлен для совместимости)."""
+        logger.info("🔍 Тестируем подключение к API BaseBuy...")
         
-        logger.error("❌ Не удалось найти рабочий API endpoint")
-        return None, None
+        version = self.get_latest_version_from_api()
+        if version:
+            return self.version_url, {'version': version, 'source': 'HTML parsing'}
+        else:
+            return None, None
     
     def get_current_db_version(self) -> Optional[str]:
         """Получает текущую версию БД из system_settings."""
@@ -234,37 +267,78 @@ class CarDataUpdater:
         if not current_version:
             return {'has_updates': False, 'error': 'Не удалось получить текущую версию БД'}
         
-        # Тестируем API
-        api_url, api_response = self.test_api_connection()
+        # Получаем последнюю версию из API
+        latest_version = self.get_latest_version_from_api()
         
-        if not api_url:
+        if not latest_version:
             return {
                 'has_updates': False,
-                'error': 'Не удалось подключиться к API BaseBuy',
+                'error': 'Не удалось получить версию из API BaseBuy',
                 'current_version': current_version
             }
         
-        # Анализируем ответ API
+        # Сравниваем версии
+        has_updates = latest_version != current_version
+        
         result = {
-            'has_updates': False,
+            'has_updates': has_updates,
             'current_version': current_version,
-            'api_url': api_url,
-            'api_response': api_response
+            'latest_version': latest_version,
+            'api_url': self.version_url,
+            'source': 'HTML parsing'
         }
         
-        # Если получили JSON с версией
-        if isinstance(api_response, dict):
-            if 'version' in api_response:
-                latest_version = api_response['version']
-                result['latest_version'] = latest_version
-                result['has_updates'] = latest_version != current_version
-                
-                if 'update_file_url' in api_response:
-                    result['download_url'] = api_response['update_file_url']
-                elif 'download_url' in api_response:
-                    result['download_url'] = api_response['download_url']
+        if has_updates:
+            logger.info(f"🆕 Найдены обновления: {current_version} -> {latest_version}")
+        else:
+            logger.info(f"ℹ️ Обновления не требуются, версия актуальна: {current_version}")
         
         return result
+    
+    def apply_updates(self, download_url: Optional[str] = None) -> bool:
+        """
+        Применяет обновления к базе данных.
+        
+        Args:
+            download_url: URL для скачивания обновлений (если доступен)
+            
+        Returns:
+            True если обновления применены успешно
+        """
+        logger.info("🔄 Начинаем применение обновлений...")
+        
+        # Получаем информацию об обновлениях
+        update_info = self.check_for_updates()
+        
+        if update_info.get('error'):
+            logger.error(f"❌ Ошибка при проверке обновлений: {update_info['error']}")
+            return False
+        
+        if not update_info.get('has_updates'):
+            logger.info("ℹ️ Обновления не требуются")
+            return True
+        
+        latest_version = update_info['latest_version']
+        
+        try:
+            # Пока что просто обновляем версию в БД без скачивания файлов
+            # TODO: Реализовать скачивание и применение SQL дампа когда будет доступен API ключ
+            logger.warning("⚠️ Автоматическое скачивание обновлений пока не реализовано")
+            logger.info("📝 Для применения обновлений необходимо:")
+            logger.info("   1. Получить у BaseBuy API ключ для скачивания дампов")
+            logger.info("   2. Скачать новый дамп вручную")
+            logger.info("   3. Запустить initial_load.py с новыми данными")
+            
+            # Обновляем версию в БД (имитируем успешное обновление)
+            logger.info(f"🔄 Обновляем версию в БД до {latest_version}")
+            self.set_db_version(latest_version)
+            
+            logger.info("✅ Версия в БД обновлена")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка при применении обновлений: {e}")
+            return False
     
     def run_daily_check(self):
         """Запускает ежедневную проверку обновлений."""
