@@ -105,6 +105,15 @@ CREATE TABLE IF NOT EXISTS metrics_daily (
   CONSTRAINT fk_metrics_client_ref FOREIGN KEY (client_id) REFERENCES clients(id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS system_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value TEXT NOT NULL,
+    description VARCHAR(255),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 
 -- ===================================================================
 -- БЛОК 3: ТАБЛИЦЫ ДЛЯ ФУНКЦИОНАЛА "ЗАКАЗ ПО АВТО"
