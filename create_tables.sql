@@ -1,17 +1,31 @@
 -- Создание базы данных и таблиц для проекта mi_core_etl
 
--- Создание базы данных (если не существует)
-CREATE DATABASE IF NOT EXISTS mi_core CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE mi_core;
+-- 1. Создание базы данных (если не существует) - эта строка корректна
+CREATE DATABASE IF NOT EXISTS mi_core_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- Создание пользователя ingest_user для безопасной загрузки данных
--- ВАЖНО: Замените 'your_secure_password' на надежный пароль
-CREATE USER IF NOT EXISTS 'ingest_user'@'localhost' IDENTIFIED BY 'your_secure_password';
+-- 2. Выбираем базу данных для дальнейших операций
+USE mi_core_db;
 
--- Предоставляем минимально необходимые права для работы ETL процесса
-GRANT SELECT, INSERT, UPDATE ON mi_core.* TO 'ingest_user'@'localhost';
+-- 3. Создание пользователя ingest_user (если не существует)
+-- ВАЖНО: Замените 'your_secure_password' на ваш надежный пароль
+-- ИСПОЛЬЗУЕМ '%' для доступа откуда угодно, чтобы не было проблем с localhost
+CREATE USER IF NOT EXISTS 'ingest_user'@'%' IDENTIFIED BY 'xK9#mQ7$vN2@pL!rT4wY';
 
--- Применяем изменения прав
+-- 4. Предоставляем права пользователю ingest_user на НАШУ базу данных mi_core_db
+-- Это позволит ему читать, записывать и обновлять данные
+GRANT SELECT, INSERT, UPDATE ON mi_core_db.* TO 'ingest_user'@'%';
+
+-- 5. Создание пользователя v_admin (если не существует)
+-- ВАЖНО: Замените 'ВАШ_НОВЫЙ_ПАРОЛЬ_ДЛЯ_АДМИНА' на надежный пароль
+CREATE USER IF NOT EXISTS 'v_admin'@'%' IDENTIFIED BY 'qwer123';
+
+-- 6. Даем пользователю v_admin ПОЛНЫЕ права на mi_core_db
+GRANT ALL PRIVILEGES ON mi_core_db.* TO 'v_admin'@'%' WITH GRANT OPTION;
+
+-- 7. Даем пользователю v_admin права на просмотр ВСЕХ баз (для удобства, если понадобится)
+GRANT SELECT ON *.* TO 'v_admin'@'%';
+
+-- 8. Применяем все изменения прав
 FLUSH PRIVILEGES;
 
 -- Таблица справочника товаров
