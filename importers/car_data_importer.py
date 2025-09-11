@@ -16,6 +16,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 import mysql.connector
 from mysql.connector import Error
+from dotenv import load_dotenv
+
+# Загружаем переменные из .env файла
+load_dotenv()
 
 # Добавляем путь к корневой директории проекта
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))

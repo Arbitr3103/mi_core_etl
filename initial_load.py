@@ -10,7 +10,11 @@ import csv
 import mysql.connector
 from mysql.connector import Error
 import logging
+from dotenv import load_dotenv
 from basebuy_mapping import BASEBUY_MAPPING
+
+# Загружаем переменные из .env файла
+load_dotenv()
 
 # Настройка логирования
 logging.basicConfig(
@@ -395,6 +399,13 @@ def main():
     if missing_vars:
         logger.error(f"Не заданы переменные окружения: {missing_vars}")
         logger.error("Создайте .env файл на основе .env.example")
+        
+        # Отладочная информация
+        logger.info("Отладка переменных окружения:")
+        for var in required_vars:
+            value = os.getenv(var)
+            logger.info(f"  {var} = {'***' if 'PASSWORD' in var and value else value}")
+        
         return 1
     
     # Запускаем загрузку
