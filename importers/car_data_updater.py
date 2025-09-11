@@ -183,6 +183,8 @@ class CarDataUpdater:
         
         # URL для получения даты обновления
         url = f"{self.api_base_url}/{entity_name}.getDateUpdate.timestamp"
+        
+        # Передаем API ключ только через параметры запроса
         params = {
             'api_key': self.api_key,
             'id_type': id_type
@@ -196,7 +198,7 @@ class CarDataUpdater:
             if response.status_code == 200:
                 # Ответ должен содержать timestamp
                 timestamp = response.text.strip()
-                logger.info(f"Дата обновления {entity_name}: {timestamp}")
+                logger.info(f"✅ Дата обновления {entity_name}: {timestamp}")
                 return timestamp
             else:
                 logger.error(f"Ошибка получения даты для {entity_name}: {response.status_code}")
@@ -218,6 +220,8 @@ class CarDataUpdater:
         
         # URL для получения CSV данных
         url = f"{self.api_base_url}/{entity_name}.getAll.csv"
+        
+        # Передаем API ключ только через параметры запроса
         params = {
             'api_key': self.api_key,
             'id_type': id_type
@@ -230,7 +234,7 @@ class CarDataUpdater:
             
             if response.status_code == 200:
                 csv_data = response.text
-                logger.info(f"Получено {len(csv_data)} символов CSV для {entity_name}")
+                logger.info(f"✅ Получено {len(csv_data)} символов CSV для {entity_name}")
                 return csv_data
             else:
                 logger.error(f"Ошибка скачивания CSV для {entity_name}: {response.status_code}")
