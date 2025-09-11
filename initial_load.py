@@ -285,6 +285,11 @@ class InitialCarDataLoader:
                     logger.warning(f"Некорректные годы для спецификации {basebuy_id}: {year_start}-{year_end}")
                     year_start = year_end = None
                 
+                # Пропускаем записи без year_start (критически важное поле)
+                if year_start is None:
+                    logger.warning(f"Пропускаем спецификацию {basebuy_id}: отсутствует year_start")
+                    continue
+                
                 # Проверяем, существует ли уже такая спецификация
                 cursor.execute("""
                     SELECT id FROM car_specifications 
