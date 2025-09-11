@@ -4,6 +4,7 @@
 
 Использование:
     python main.py                    # Импорт товаров и заказов за вчера
+    python main.py --last-7-days      # Импорт за последние 7 дней (для cron)
     python main.py --start-date 2024-01-01 --end-date 2024-01-31  # За указанный период
     python main.py --products-only    # Только товары
     python main.py --orders-only --start-date 2024-01-01  # Только заказы
@@ -55,6 +56,12 @@ def parse_arguments():
         help='Импортировать только транзакции'
     )
     
+    parser.add_argument(
+        '--last-7-days',
+        action='store_true',
+        help='Импортировать данные за последние 7 дней (для cron job)'
+    )
+    
     return parser.parse_args()
 
 
@@ -62,6 +69,14 @@ def get_default_dates():
     """Получает даты по умолчанию (вчерашний день)."""
     yesterday = datetime.now() - timedelta(days=1)
     return yesterday.strftime('%Y-%m-%d'), yesterday.strftime('%Y-%m-%d')
+
+
+def get_last_7_days_dates():
+    """Получает даты за последние 7 дней."""
+    today = datetime.now()
+    start_date = (today - timedelta(days=7)).strftime('%Y-%m-%d')
+    end_date = (today - timedelta(days=1)).strftime('%Y-%m-%d')
+    return start_date, end_date
 
 
 def validate_date(date_string):
@@ -81,7 +96,10 @@ def main():
     args = parse_arguments()
     
     # Определяем даты
-    if args.start_date or args.end_date:
+    if args.last_7_days:
+        start_date, end_date = get_last_7_days_dates()
+        logger.info("📅 Режим: последние 7 дней для cron job")
+    elif args.start_date or args.end_date:
         start_date = args.start_date
         end_date = args.end_date or args.start_date
         
