@@ -1,29 +1,65 @@
+-- ===================================================================
+-- ФИНАЛЬНЫЙ СКРИПТ СОЗДАНИЯ ВСЕЙ СТРУКТУРЫ БАЗЫ ДАННЫХ mi_core_db
+-- ===================================================================
+
 -- 1. Создание и выбор базы данных
 CREATE DATABASE IF NOT EXISTS mi_core_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE mi_core_db;
 
--- ПРАВА ВЫДАЮТСЯ ВРУЧНУЮ ПОСЛЕ СОЗДАНИЯ ПОЛЬЗОВАТЕЛЕЙ
--- GRANT SELECT, INSERT, UPDATE ON mi_core_db.* TO 'ingest_user'@'%';
--- GRANT ALL PRIVILEGES ON mi_core_db.* TO 'v_admin'@'%' WITH GRANT OPTION;
--- FLUSH PRIVILEGES;
+-- ===================================================================
+-- БЛОК 1: ОСНОВНЫЕ СПРАВОЧНИКИ И СЛУЖЕБНЫЕ ТАБЛИЦЫ
+-- ===================================================================
 
--- 2. Таблица справочника товаров
+CREATE TABLE IF NOT EXISTS clients (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(255) NOT NULL UNIQUE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS sources (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(255) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS job_runs (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  job_name      VARCHAR(100) NOT NULL,
+  client_id     INT NULL,
+  started_at    DATETIME NOT NULL,
+  finished_at   DATETIME NULL,
+  status        ENUM('success','failed','running') NOT NULL,
+  rows_in       INT DEFAULT 0,
+  rows_out      INT DEFAULT 0,
+  error_message TEXT NULL,
+  CONSTRAINT fk_job_client_ref FOREIGN KEY (client_id) REFERENCES clients(id)
+) ENGINE=InnoDB;
+
+-- ===================================================================
+-- БЛОК 2: ТАБЛИЦЫ ДЛЯ ETL (OZON, WB И Т.Д.)
+-- ===================================================================
+
 CREATE TABLE IF NOT EXISTS dim_products (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    sku_ozon VARCHAR(255) NOT NULL UNIQUE,
+    sku_ozon VARCHAR(255) UNIQUE,
     barcode VARCHAR(255),
     product_name VARCHAR(500),
     cost_price DECIMAL(10,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_sku_ozon (sku_ozon),
-    INDEX idx_barcode (barcode)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
--- 3. Таблица фактов заказов
+CREATE TABLE IF NOT EXISTS raw_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ext_id VARCHAR(255) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    payload JSON NOT NULL,
+    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_event (ext_id, event_type)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS fact_orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    product_id INT NULL,  -- ИСПРАВЛЕНО: Сделано необязательным (NULL)
+    product_id INT NULL,
     order_id VARCHAR(255) NOT NULL,
     transaction_type VARCHAR(100) NOT NULL,
     sku VARCHAR(255) NOT NULL,
@@ -31,20 +67,16 @@ CREATE TABLE IF NOT EXISTS fact_orders (
     price DECIMAL(10,2) NOT NULL,
     order_date DATE NOT NULL,
     cost_price DECIMAL(10,2),
-    client_id INT NOT NULL DEFAULT 1,
-    source_id INT NOT NULL DEFAULT 1,
+    client_id INT NOT NULL,
+    source_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY unique_order_product (order_id, sku),
-    FOREIGN KEY (product_id) REFERENCES dim_products(id),
-    INDEX idx_order_id (order_id),
-    INDEX idx_order_date (order_date),
-    INDEX idx_sku (sku),
-    INDEX idx_client_id (client_id),
-    INDEX idx_source_id (source_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    CONSTRAINT fk_fo_product FOREIGN KEY (product_id) REFERENCES dim_products(id),
+    CONSTRAINT fk_fo_client FOREIGN KEY (client_id) REFERENCES clients(id),
+    CONSTRAINT fk_fo_source FOREIGN KEY (source_id) REFERENCES sources(id)
+) ENGINE=InnoDB;
 
--- 4. Таблица финансовых транзакций
 CREATE TABLE IF NOT EXISTS fact_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     transaction_id VARCHAR(255) NOT NULL UNIQUE,
@@ -53,23 +85,85 @@ CREATE TABLE IF NOT EXISTS fact_transactions (
     amount DECIMAL(10,2) NOT NULL,
     transaction_date DATE NOT NULL,
     description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_transaction_id (transaction_id),
-    INDEX idx_order_id (order_id),
-    INDEX idx_transaction_date (transaction_date),
-    INDEX idx_transaction_type (transaction_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
--- 5. Таблица сырых событий из API
-CREATE TABLE IF NOT EXISTS raw_events (
+CREATE TABLE IF NOT EXISTS metrics_daily (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NOT NULL,
+  metric_date DATE NOT NULL,
+  orders_cnt INT NOT NULL DEFAULT 0,
+  revenue_sum DECIMAL(18,4) NOT NULL DEFAULT 0,
+  returns_sum DECIMAL(18,4) NOT NULL DEFAULT 0,
+  cogs_sum DECIMAL(18,4) NULL,
+  shipping_sum DECIMAL(18,4) NOT NULL DEFAULT 0,
+  commission_sum DECIMAL(18,4) NOT NULL DEFAULT 0,
+  other_expenses_sum DECIMAL(18,4) NOT NULL DEFAULT 0,
+  profit_sum DECIMAL(18,4) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_metrics (client_id, metric_date),
+  CONSTRAINT fk_metrics_client_ref FOREIGN KEY (client_id) REFERENCES clients(id)
+) ENGINE=InnoDB;
+
+
+-- ===================================================================
+-- БЛОК 3: ТАБЛИЦЫ ДЛЯ ФУНКЦИОНАЛА "ЗАКАЗ ПО АВТО"
+-- ===================================================================
+
+CREATE TABLE IF NOT EXISTS regions (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    ext_id VARCHAR(255) NOT NULL,         -- ИСПРАВЛЕНО: event_id -> ext_id
-    event_type VARCHAR(100) NOT NULL,
-    payload JSON NOT NULL,                -- ИСПРАВЛЕНО: event_data -> payload
-    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- ИСПРАВЛЕНО: created_at -> ingested_at
-    UNIQUE KEY unique_event (ext_id, event_type),
-    INDEX idx_event_type (event_type),
-    INDEX idx_ext_id (ext_id),
-    INDEX idx_ingested_at (ingested_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    name VARCHAR(100) NOT NULL UNIQUE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS brands (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    region_id INT NULL,
+    CONSTRAINT fk_brand_region_ref FOREIGN KEY (region_id) REFERENCES regions(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS car_models (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    brand_id INT NOT NULL,
+    CONSTRAINT fk_model_brand_ref FOREIGN KEY (brand_id) REFERENCES brands(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS car_specifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    car_model_id INT NOT NULL,
+    year_start SMALLINT NOT NULL,
+    year_end SMALLINT NULL,
+    pcd VARCHAR(50) NOT NULL,
+    dia DECIMAL(5,1) NOT NULL,
+    fastener_type ENUM('болт', 'гайка') NOT NULL,
+    fastener_params VARCHAR(50) NOT NULL,
+    CONSTRAINT fk_spec_model_ref FOREIGN KEY (car_model_id) REFERENCES car_models(id)
+) ENGINE=InnoDB;
+
+
+-- ===================================================================
+-- БЛОК 4: ПРЕДСТАВЛЕНИЯ (VIEWS)
+-- ===================================================================
+
+CREATE OR REPLACE VIEW v_metrics_by_client_day AS
+SELECT
+  c.name AS client_name,
+  m.*
+FROM metrics_daily m
+JOIN clients c ON c.id = m.client_id;
+
+CREATE OR REPLACE VIEW v_metrics_all_clients_day AS
+SELECT
+  m.metric_date,
+  SUM(m.orders_cnt) AS orders_cnt,
+  SUM(m.revenue_sum) AS revenue_sum,
+  SUM(m.returns_sum) AS returns_sum,
+  SUM(COALESCE(m.cogs_sum,0)) AS cogs_sum,
+  SUM(m.shipping_sum) AS shipping_sum,
+  SUM(m.commission_sum) AS commission_sum,
+  SUM(m.other_expenses_sum) AS other_expenses_sum,
+  SUM(COALESCE(m.profit_sum,0)) AS profit_sum
+FROM metrics_daily m
+GROUP BY m.metric_date
+ORDER BY m.metric_date;
