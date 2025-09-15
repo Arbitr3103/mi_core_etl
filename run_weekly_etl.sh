@@ -65,26 +65,15 @@ cd "$PROJECT_DIR" || exit 1
         echo "✅ Виртуальное окружение активировано"
     fi
 
-    # Запускаем основной скрипт импорта для Ozon
+    # Запускаем основной скрипт импорта для всех источников
     echo ""
-    echo "--- Запускаем импорт данных Ozon ---"
-    $PYTHON_PATH main.py --last-7-days --source=ozon
-    OZON_EXIT_CODE=$?
-    if [ $OZON_EXIT_CODE -eq 0 ]; then
-        echo "✅ ETL процесс Ozon завершен успешно"
+    echo "--- Запускаем импорт данных из всех источников ---"
+    $PYTHON_PATH main.py --last-7-days
+    ETL_EXIT_CODE=$?
+    if [ $ETL_EXIT_CODE -eq 0 ]; then
+        echo "✅ ETL процесс завершен успешно"
     else
-        echo "❌ ОШИБКА: ETL процесс Ozon завершился с кодом $OZON_EXIT_CODE"
-    fi
-
-    # Запускаем основной скрипт импорта для Wildberries
-    echo ""
-    echo "--- Запускаем импорт данных Wildberries ---"
-    $PYTHON_PATH main.py --last-7-days --source=wb
-    WB_EXIT_CODE=$?
-    if [ $WB_EXIT_CODE -eq 0 ]; then
-        echo "✅ ETL процесс Wildberries завершен успешно"
-    else
-        echo "❌ ОШИБКА: ETL процесс Wildberries завершился с кодом $WB_EXIT_CODE"
+        echo "❌ ОШИБКА: ETL процесс завершился с кодом $ETL_EXIT_CODE"
     fi
     
     # Запускаем скрипт агрегации метрик
@@ -108,15 +97,14 @@ cd "$PROJECT_DIR" || exit 1
     echo "Завершение еженедельного ETL: $(date)"
     echo "Коды выхода:"
     echo "  Git pull: $GIT_EXIT_CODE"
-    echo "  Ozon ETL: $OZON_EXIT_CODE"
-    echo "  WB ETL: $WB_EXIT_CODE"
+    echo "  ETL процесс: $ETL_EXIT_CODE"
     echo "  Агрегация: $AGGREGATION_EXIT_CODE"
     echo "==================================================="
 
 } >> "$LOG_FILE" 2>&1
 
 # Выходим с кодом ошибки если хотя бы один процесс упал
-if [ $OZON_EXIT_CODE -ne 0 ] || [ $WB_EXIT_CODE -ne 0 ] || [ $AGGREGATION_EXIT_CODE -ne 0 ]; then
+if [ $ETL_EXIT_CODE -ne 0 ] || [ $AGGREGATION_EXIT_CODE -ne 0 ]; then
     exit 1
 fi
 
