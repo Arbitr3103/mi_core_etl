@@ -152,34 +152,46 @@ def get_source_id_by_code(source_code: str) -> Optional[int]:
         connection.close()
 
 
-def make_wb_request(endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+def make_wb_request(endpoint: str, params: Dict[str, Any] = None, method: str = 'GET', data: Dict[str, Any] = None) -> Dict[str, Any]:
     """
-    Выполняет GET-запрос к API Wildberries.
+    Выполняет запрос к API Wildberries.
     
     Args:
         endpoint (str): Конечная точка API (например, '/api/v1/supplier/sales')
-        params (Dict[str, Any], optional): Параметры запроса
+        params (Dict[str, Any], optional): Параметры запроса для GET
+        method (str): HTTP метод ('GET' или 'POST')
+        data (Dict[str, Any], optional): Данные для POST запроса
     
     Returns:
         Dict[str, Any]: Ответ от API в формате JSON
     """
     config = load_config()
     
-    url = f"{config['WB_API_URL']}{endpoint}"
+    # Для Content API используем другой базовый URL
+    if endpoint.startswith('/content/'):
+        base_url = 'https://content-api.wildberries.ru'
+    else:
+        base_url = config['WB_API_URL']
+    
+    url = f"{base_url}{endpoint}"
     headers = {
         'Authorization': config['WB_API_KEY'],
         'Content-Type': 'application/json'
     }
     
     try:
-        response = requests.get(url, headers=headers, params=params or {}, timeout=30)
+        if method.upper() == 'POST':
+            response = requests.post(url, headers=headers, json=data or {}, timeout=30)
+        else:
+            response = requests.get(url, headers=headers, params=params or {}, timeout=30)
+            
         response.raise_for_status()
         
-        logger.info(f"Успешный запрос к {endpoint}")
+        logger.info(f"Успешный {method} запрос к {endpoint}")
         return response.json()
         
     except requests.exceptions.RequestException as e:
-        logger.error(f"Ошибка запроса к API Wildberries {endpoint}: {e}")
+        logger.error(f"Ошибка {method} запроса к API Wildberries {endpoint}: {e}")
         raise
 
 
@@ -705,4 +717,223 @@ def import_financial_details(start_date: str, end_date: str) -> None:
         
     except Exception as e:
         logger.error(f"Ошибка при импорте финансовых деталей WB: {e}")
+        raise
+
+
+def get_wb_products_from_api() -> List[Dict[str, Any]]:
+    """
+    Получает список всех товаров из Content API Wildberries с пагинацией.
+    
+    Returns:
+        List[Dict[str, Any]]: Список товаров
+    """
+    logger.info("Начинаем загрузку товаров из WB Content API")
+    
+    all_products = []
+    cursor = None
+    
+    while True:
+        # Формируем запрос для получения товаров
+        request_data = {
+            "settings": {
+                "filter": {
+                    "withPhoto": -1  # Все товары (с фото и без)
+                },
+                "cursor": {
+                    "limit": 100  # Максимум за один запрос
+                }
+            }
+        }
+        
+        # Добавляем cursor для пагинации если есть
+        if cursor:
+            request_data["settings"]["cursor"].update(cursor)
+        
+        logger.info(f"Запрашиваем товары, лимит: {request_data['settings']['cursor']['limit']}")
+        
+        try:
+            # Делаем POST запрос к Content API
+            response = make_wb_request('/content/v2/get/cards/list', method='POST', data=request_data)
+            
+            # Проверяем структуру ответа
+            if not isinstance(response, dict) or 'data' not in response:
+                logger.warning(f"Неожиданный формат ответа API: {response}")
+                break
+            
+            products_batch = response.get('data', [])
+            
+            if not products_batch:
+                logger.info("Получен пустой ответ, завершаем загрузку")
+                break
+            
+            all_products.extend(products_batch)
+            logger.info(f"Загружено {len(products_batch)} товаров, всего: {len(all_products)}")
+            
+            # Проверяем, есть ли еще данные для загрузки
+            cursor_info = response.get('cursor')
+            if not cursor_info or len(products_batch) < 100:
+                logger.info("Достигнут конец списка товаров")
+                break
+            
+            # Обновляем cursor для следующего запроса
+            cursor = {
+                'updatedAt': cursor_info.get('updatedAt'),
+                'nmID': cursor_info.get('nmID')
+            }
+            
+            logger.info(f"Продолжаем с cursor: {cursor}")
+            
+            # Ограничение API: 100 запросов в минуту (600ms интервал)
+            logger.info("Ожидание 700ms согласно ограничениям API...")
+            time.sleep(0.7)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при получении товаров: {e}")
+            break
+    
+    logger.info(f"Загрузка товаров завершена. Всего записей: {len(all_products)}")
+    return all_products
+
+
+def transform_wb_product_data(product_item: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Преобразует данные товара из WB Content API в формат для таблицы dim_products.
+    
+    Args:
+        product_item (Dict[str, Any]): Данные товара из API
+    
+    Returns:
+        Dict[str, Any]: Запись для dim_products
+    """
+    try:
+        # Извлекаем основные поля
+        nm_id = product_item.get('nmID')  # Артикул WB
+        vendor_code = product_item.get('vendorCode', '')  # Артикул продавца
+        
+        # Получаем название товара
+        title = ''
+        if 'title' in product_item:
+            title = product_item['title']
+        elif 'object' in product_item:
+            title = product_item['object']
+        
+        # Получаем бренд
+        brand = product_item.get('brand', '')
+        
+        # Получаем штрихкоды из размеров
+        barcodes = []
+        sizes = product_item.get('sizes', [])
+        for size in sizes:
+            barcode = size.get('skus', [])
+            if barcode:
+                barcodes.extend(barcode)
+        
+        # Берем первый штрихкод как основной
+        main_barcode = barcodes[0] if barcodes else ''
+        
+        # Получаем категорию
+        category = product_item.get('object', '')
+        
+        # Формируем запись для dim_products
+        product_record = {
+            'sku_wb': str(nm_id) if nm_id else '',  # Артикул WB
+            'sku_ozon': vendor_code,  # Артикул продавца (может совпадать с Ozon)
+            'name': title,
+            'brand': brand,
+            'category': category,
+            'barcode': main_barcode,
+            'cost_price': None,  # Будет заполнено позже или из других источников
+            'created_at': datetime.now(),
+            'updated_at': datetime.now()
+        }
+        
+        logger.debug(f"Преобразован товар WB: {nm_id}, артикул: {vendor_code}")
+        return product_record
+        
+    except Exception as e:
+        logger.error(f"Ошибка преобразования данных товара WB: {e}")
+        logger.error(f"Данные товара: {product_item}")
+        raise
+
+
+def load_wb_products_to_db(products_list: List[Dict[str, Any]]) -> None:
+    """
+    Загружает список товаров WB в таблицу dim_products.
+    Использует barcode для поиска дубликатов и обновления sku_wb.
+    
+    Args:
+        products_list (List[Dict[str, Any]]): Список товаров для загрузки
+    """
+    if not products_list:
+        logger.warning("Нет товаров WB для загрузки в базу данных")
+        return
+    
+    connection = connect_to_db()
+    
+    try:
+        cursor = connection.cursor(dictionary=True)
+        
+        # SQL запрос с логикой поиска по barcode и обновления sku_wb
+        sql = """
+        INSERT INTO dim_products (sku_wb, sku_ozon, name, brand, category, barcode, cost_price, created_at, updated_at)
+        VALUES (%(sku_wb)s, %(sku_ozon)s, %(name)s, %(brand)s, %(category)s, %(barcode)s, %(cost_price)s, %(created_at)s, %(updated_at)s)
+        ON DUPLICATE KEY UPDATE
+            sku_wb = VALUES(sku_wb),
+            name = COALESCE(NULLIF(name, ''), VALUES(name)),
+            brand = COALESCE(NULLIF(brand, ''), VALUES(brand)),
+            category = COALESCE(NULLIF(category, ''), VALUES(category)),
+            updated_at = VALUES(updated_at)
+        """
+        
+        # Выполняем массовую вставку
+        cursor.executemany(sql, products_list)
+        affected_rows = cursor.rowcount
+        cursor.close()
+        
+        logger.info(f"Успешно обработано {affected_rows} записей товаров WB в dim_products")
+            
+    except Exception as e:
+        logger.error(f"Ошибка загрузки товаров WB в базу данных: {e}")
+        raise
+    finally:
+        connection.close()
+
+
+def import_wb_products() -> None:
+    """
+    Полный цикл импорта товаров WB: получение из Content API, преобразование и загрузка в БД.
+    """
+    logger.info("=== Начинаем импорт товаров WB ===")
+    
+    try:
+        # Получаем товары из Content API
+        products = get_wb_products_from_api()
+        
+        if not products:
+            logger.warning("Не получено товаров из WB API")
+            return
+        
+        # Преобразуем каждый товар
+        transformed_products = []
+        for product in products:
+            try:
+                product_record = transform_wb_product_data(product)
+                # Пропускаем товары без штрихкода
+                if product_record.get('barcode'):
+                    transformed_products.append(product_record)
+                else:
+                    logger.debug(f"Пропущен товар без штрихкода: {product.get('nmID')}")
+            except Exception as e:
+                logger.warning(f"Ошибка обработки товара {product.get('nmID', 'unknown')}: {e}")
+                continue
+        
+        logger.info(f"Подготовлено {len(transformed_products)} товаров для загрузки")
+        
+        # Загружаем в базу данных
+        load_wb_products_to_db(transformed_products)
+        
+        logger.info("=== Импорт товаров WB завершен успешно ===")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при импорте товаров WB: {e}")
         raise

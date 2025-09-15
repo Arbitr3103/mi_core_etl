@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.join(os.path.dirname(__file__), 'importers'))
 
 from ozon_importer import import_products, import_orders, import_transactions, logger
-from wb_importer import import_sales, import_financial_details
+from wb_importer import import_sales, import_financial_details, import_wb_products
 
 
 def parse_arguments():
@@ -134,14 +134,30 @@ def main():
             if source == "wb":
                 logger.info("--- Запускаем импорт данных Wildberries ---")
                 
-                # Для WB импортируем только продажи и финансовые детали
-                import_orders_flag = not args.transactions_only
-                import_transactions_flag = not args.orders_only
+                # Определяем, что импортировать
+                import_products_flag = not (args.orders_only or args.transactions_only)
+                import_orders_flag = not (args.products_only or args.transactions_only)
+                import_transactions_flag = not (args.products_only or args.orders_only)
                 
-                # Товары для WB не импортируем отдельно (они должны быть уже в dim_products)
+                # Если указаны специальные флаги, переопределяем
                 if args.products_only:
-                    logger.warning("⚠️ Импорт товаров для Wildberries не поддерживается. Товары должны быть загружены через Ozon.")
-                    continue
+                    import_products_flag = True
+                    import_orders_flag = False
+                    import_transactions_flag = False
+                elif args.orders_only:
+                    import_products_flag = False
+                    import_orders_flag = True
+                    import_transactions_flag = False
+                elif args.transactions_only:
+                    import_products_flag = False
+                    import_orders_flag = False
+                    import_transactions_flag = True
+                
+                # Импорт товаров WB
+                if import_products_flag:
+                    logger.info("📦 Начинаем импорт товаров WB...")
+                    import_wb_products()
+                    logger.info("✅ Импорт товаров WB завершен")
                 
                 # Импорт продаж (заказов)
                 if import_orders_flag:
