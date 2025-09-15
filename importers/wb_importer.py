@@ -184,7 +184,7 @@ def make_wb_request(endpoint: str, params: Dict[str, Any] = None, method: str = 
     
     url = f"{base_url}{endpoint}"
     headers = {
-        'Authorization': config['WB_API_KEY'],
+        'Authorization': f"Bearer {config['WB_API_KEY']}",
         'Content-Type': 'application/json'
     }
     
