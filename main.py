@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Главный модуль для запуска импорта данных из API Ozon.
+Главный модуль для запуска импорта данных из API маркетплейсов (Ozon, Wildberries).
 
 Использование:
-    python main.py                    # Импорт товаров и заказов за вчера
+    python main.py                    # Импорт товаров и заказов за вчера (Ozon)
+    python main.py --source=wb        # Импорт данных из Wildberries
     python main.py --last-7-days      # Импорт за последние 7 дней (для cron)
     python main.py --start-date 2024-01-01 --end-date 2024-01-31  # За указанный период
-    python main.py --products-only    # Только товары
+    python main.py --products-only    # Только товары (только для Ozon)
     python main.py --orders-only --start-date 2024-01-01  # Только заказы
     python main.py --transactions-only --start-date 2024-01-01  # Только транзакции
 """
@@ -20,11 +21,12 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.join(os.path.dirname(__file__), 'importers'))
 
 from ozon_importer import import_products, import_orders, import_transactions, logger
+from wb_importer import import_sales, import_financial_details
 
 
 def parse_arguments():
     """Парсинг аргументов командной строки."""
-    parser = argparse.ArgumentParser(description='Импорт данных из API Ozon')
+    parser = argparse.ArgumentParser(description='Импорт данных из API маркетплейсов (Ozon, Wildberries)')
     
     parser.add_argument(
         '--start-date',
@@ -62,6 +64,14 @@ def parse_arguments():
         help='Импортировать данные за последние 7 дней (для cron job)'
     )
     
+    parser.add_argument(
+        '--source',
+        type=str,
+        choices=['ozon', 'wb'],
+        default='ozon',
+        help='Источник данных: ozon (по умолчанию) или wb (Wildberries)'
+    )
+    
     return parser.parse_args()
 
 
@@ -90,10 +100,13 @@ def validate_date(date_string):
 
 def main():
     """Главная функция."""
-    logger.info("🚀 Запуск импорта данных из API Ozon")
-    
     # Парсим аргументы
     args = parse_arguments()
+    
+    # Определяем источник данных
+    source = args.source
+    source_name = "Ozon" if source == "ozon" else "Wildberries"
+    logger.info(f"🚀 Запуск импорта данных из API {source_name}")
     
     # Определяем даты
     if args.last_7_days:
@@ -117,42 +130,67 @@ def main():
     logger.info(f"📅 Период импорта: с {start_date} по {end_date}")
     
     try:
-        # Определяем, что импортировать
-        import_products_flag = not (args.orders_only or args.transactions_only)
-        import_orders_flag = not (args.products_only or args.transactions_only)
-        import_transactions_flag = not (args.products_only or args.orders_only)
+        if source == "wb":
+            # Импорт из Wildberries
+            # Для WB импортируем только продажи и финансовые детали
+            import_orders_flag = not args.transactions_only
+            import_transactions_flag = not args.orders_only
+            
+            # Товары для WB не импортируем отдельно (они должны быть уже в dim_products)
+            if args.products_only:
+                logger.warning("⚠️ Импорт товаров для Wildberries не поддерживается. Товары должны быть загружены через Ozon.")
+                return 0
+            
+            # Импорт продаж (заказов)
+            if import_orders_flag:
+                logger.info("🛒 Начинаем импорт продаж WB...")
+                import_sales(start_date, end_date)
+                logger.info("✅ Импорт продаж WB завершен")
+            
+            # Импорт финансовых деталей (транзакций)
+            if import_transactions_flag:
+                logger.info("💰 Начинаем импорт финансовых деталей WB...")
+                import_financial_details(start_date, end_date)
+                logger.info("✅ Импорт финансовых деталей WB завершен")
         
-        # Если указаны специальные флаги, переопределяем
-        if args.products_only:
-            import_products_flag = True
-            import_orders_flag = False
-            import_transactions_flag = False
-        elif args.orders_only:
-            import_products_flag = False
-            import_orders_flag = True
-            import_transactions_flag = False
-        elif args.transactions_only:
-            import_products_flag = False
-            import_orders_flag = False
-            import_transactions_flag = True
-        
-        # Импорт товаров
-        if import_products_flag:
-            logger.info("📦 Начинаем импорт товаров...")
-            import_products()
-            logger.info("✅ Импорт товаров завершен")
-        
-        # Импорт заказов
-        if import_orders_flag:
-            logger.info("🛒 Начинаем импорт заказов...")
-            import_orders(start_date, end_date)
-            logger.info("✅ Импорт заказов завершен")
-        
-        # Импорт транзакций
-        if import_transactions_flag:
-            logger.info("💰 Начинаем импорт транзакций...")
-            import_transactions(start_date, end_date)
-            logger.info("✅ Импорт транзакций завершен")
+        else:
+            # Импорт из Ozon (существующая логика)
+            # Определяем, что импортировать
+            import_products_flag = not (args.orders_only or args.transactions_only)
+            import_orders_flag = not (args.products_only or args.transactions_only)
+            import_transactions_flag = not (args.products_only or args.orders_only)
+            
+            # Если указаны специальные флаги, переопределяем
+            if args.products_only:
+                import_products_flag = True
+                import_orders_flag = False
+                import_transactions_flag = False
+            elif args.orders_only:
+                import_products_flag = False
+                import_orders_flag = True
+                import_transactions_flag = False
+            elif args.transactions_only:
+                import_products_flag = False
+                import_orders_flag = False
+                import_transactions_flag = True
+            
+            # Импорт товаров
+            if import_products_flag:
+                logger.info("📦 Начинаем импорт товаров...")
+                import_products()
+                logger.info("✅ Импорт товаров завершен")
+            
+            # Импорт заказов
+            if import_orders_flag:
+                logger.info("🛒 Начинаем импорт заказов...")
+                import_orders(start_date, end_date)
+                logger.info("✅ Импорт заказов завершен")
+            
+            # Импорт транзакций
+            if import_transactions_flag:
+                logger.info("💰 Начинаем импорт транзакций...")
+                import_transactions(start_date, end_date)
+                logger.info("✅ Импорт транзакций завершен")
         
         logger.info("🎉 Все операции импорта завершены успешно!")
         return 0
