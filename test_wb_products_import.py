@@ -112,20 +112,28 @@ def check_wb_api_connection():
             }
         }
         
+        logger.info("Отправляем тестовый запрос к Content API...")
         response = make_wb_request('/content/v2/get/cards/list', method='POST', data=test_data)
         
-        if isinstance(response, dict) and 'data' in response:
-            products_count = len(response.get('data', []))
-            logger.info(f"✅ Подключение к WB Content API успешно!")
-            logger.info(f"📦 Получено товаров в тестовом запросе: {products_count}")
-            
-            if products_count > 0:
-                product = response['data'][0]
-                logger.info(f"Пример товара: nmID={product.get('nmID')}, vendorCode={product.get('vendorCode')}")
-            
-            return True
+        if isinstance(response, dict):
+            if 'data' in response:
+                products_count = len(response.get('data', []))
+                logger.info(f"✅ Подключение к WB Content API успешно!")
+                logger.info(f"📦 Получено товаров в тестовом запросе: {products_count}")
+                
+                if products_count > 0:
+                    product = response['data'][0]
+                    logger.info(f"Пример товара: nmID={product.get('nmID')}, vendorCode={product.get('vendorCode')}")
+                
+                return True
+            elif 'error' in response:
+                logger.error(f"❌ Ошибка от WB API: {response.get('error')}")
+                return False
+            else:
+                logger.warning(f"⚠️ Неожиданный формат ответа от WB API: {response}")
+                return False
         else:
-            logger.error(f"❌ Неожиданный формат ответа от WB API: {response}")
+            logger.error(f"❌ Неожиданный тип ответа от WB API: {type(response)}")
             return False
             
     except Exception as e:

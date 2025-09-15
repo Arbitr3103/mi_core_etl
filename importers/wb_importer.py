@@ -154,7 +154,7 @@ def get_source_id_by_code(source_code: str) -> Optional[int]:
 
 def make_wb_request(endpoint: str, params: Dict[str, Any] = None, method: str = 'GET', data: Dict[str, Any] = None) -> Dict[str, Any]:
     """
-    Выполняет запрос к API Wildberries.
+    Выполняет запрос к API Wildberries с автоматическим выбором правильного базового URL.
     
     Args:
         endpoint (str): Конечная точка API (например, '/api/v1/supplier/sales')
@@ -167,17 +167,28 @@ def make_wb_request(endpoint: str, params: Dict[str, Any] = None, method: str = 
     """
     config = load_config()
     
-    # Для Content API используем другой базовый URL
+    # Определяем правильный базовый URL в зависимости от типа API
     if endpoint.startswith('/content/'):
         base_url = 'https://content-api.wildberries.ru'
+        logger.info(f"Используем Content API: {base_url}")
+    elif endpoint.startswith('/marketplace/'):
+        base_url = 'https://marketplace-api.wildberries.ru'
+        logger.info(f"Используем Marketplace API: {base_url}")
+    elif endpoint.startswith('/analytics/'):
+        base_url = 'https://analytics-api.wildberries.ru'
+        logger.info(f"Используем Analytics API: {base_url}")
     else:
+        # Statistics API (по умолчанию)
         base_url = config['WB_API_URL']
+        logger.info(f"Используем Statistics API: {base_url}")
     
     url = f"{base_url}{endpoint}"
     headers = {
         'Authorization': config['WB_API_KEY'],
         'Content-Type': 'application/json'
     }
+    
+    logger.info(f"Выполняем {method} запрос к {url}")
     
     try:
         if method.upper() == 'POST':
@@ -192,6 +203,8 @@ def make_wb_request(endpoint: str, params: Dict[str, Any] = None, method: str = 
         
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка {method} запроса к API Wildberries {endpoint}: {e}")
+        logger.error(f"URL: {url}")
+        logger.error(f"Headers: {dict(headers)}")
         raise
 
 
