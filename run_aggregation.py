@@ -24,11 +24,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def aggregate_daily_metrics(date_to_process: str) -> bool:
+def aggregate_daily_metrics(connection, date_to_process: str) -> bool:
     """
     Выполняет агрегацию метрик за указанную дату.
     
     Args:
+        connection: Подключение к базе данных
         date_to_process (str): Дата для обработки в формате 'YYYY-MM-DD'
         
     Returns:
@@ -36,12 +37,9 @@ def aggregate_daily_metrics(date_to_process: str) -> bool:
     """
     logger.info(f"Начинаем агрегацию метрик за дату: {date_to_process}")
     
-    connection = None
     cursor = None
     
     try:
-        # Устанавливаем соединение с базой данных
-        connection = connect_to_db()
         cursor = connection.cursor()
         
         # SQL запрос для агрегации метрик
@@ -77,32 +75,26 @@ def aggregate_daily_metrics(date_to_process: str) -> bool:
         
     except Exception as e:
         logger.error(f"Ошибка при агрегации метрик за дату {date_to_process}: {e}")
-        if connection:
-            connection.rollback()
+        connection.rollback()
         return False
         
     finally:
-        # Закрываем соединение
+        # Закрываем только cursor, connection остается открытым
         if cursor:
             cursor.close()
-        if connection:
-            connection.close()
 
 
-def get_last_metrics_date() -> Optional[str]:
+def get_last_aggregated_date(cursor) -> Optional[str]:
     """
     Получает последнюю дату из таблицы metrics_daily.
+    
+    Args:
+        cursor: Курсор базы данных
     
     Returns:
         Optional[str]: Последняя дата в формате 'YYYY-MM-DD' или None если таблица пуста
     """
-    connection = None
-    cursor = None
-    
     try:
-        connection = connect_to_db()
-        cursor = connection.cursor()
-        
         cursor.execute("SELECT MAX(metric_date) FROM metrics_daily")
         result = cursor.fetchone()
         
@@ -113,28 +105,19 @@ def get_last_metrics_date() -> Optional[str]:
     except Exception as e:
         logger.error(f"Ошибка при получении последней даты из metrics_daily: {e}")
         return None
-        
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
 
 
-def get_last_orders_date() -> Optional[str]:
+def get_last_order_date(cursor) -> Optional[str]:
     """
     Получает последнюю дату из таблицы fact_orders.
+    
+    Args:
+        cursor: Курсор базы данных
     
     Returns:
         Optional[str]: Последняя дата в формате 'YYYY-MM-DD' или None если таблица пуста
     """
-    connection = None
-    cursor = None
-    
     try:
-        connection = connect_to_db()
-        cursor = connection.cursor()
-        
         cursor.execute("SELECT MAX(order_date) FROM fact_orders")
         result = cursor.fetchone()
         
@@ -145,43 +128,51 @@ def get_last_orders_date() -> Optional[str]:
     except Exception as e:
         logger.error(f"Ошибка при получении последней даты из fact_orders: {e}")
         return None
-        
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
 
 
-def get_dates_to_process() -> List[str]:
+def get_dates_to_process(cursor) -> List[str]:
     """
     Определяет список дат, которые нужно обработать.
+    
+    Args:
+        cursor: Курсор базы данных
     
     Returns:
         List[str]: Список дат в формате 'YYYY-MM-DD'
     """
-    last_metrics_date = get_last_metrics_date()
-    last_orders_date = get_last_orders_date()
+    last_agg_date = get_last_aggregated_date(cursor)
+    last_ord_date = get_last_order_date(cursor)
     
-    if not last_orders_date:
+    if not last_ord_date:
         logger.warning("Нет данных в таблице fact_orders")
         return []
     
-    # Если в metrics_daily нет данных, начинаем с самой ранней даты в fact_orders
-    if not last_metrics_date:
-        logger.info("Таблица metrics_daily пуста, начинаем с самой ранней даты")
-        # Для начала обработаем только последнюю дату
-        return [last_orders_date]
+    # Определяем начальную дату для цикла
+    if last_agg_date:
+        # Начинаем со следующего дня после последней агрегации
+        last_agg_datetime = datetime.strptime(last_agg_date, '%Y-%m-%d')
+        start_date = last_agg_datetime + timedelta(days=1)
+    else:
+        # Если в metrics_daily еще ничего нет, начинаем с самой первой даты в заказах
+        logger.info("Таблица metrics_daily пуста, ищем самую раннюю дату в fact_orders")
+        cursor.execute("SELECT MIN(order_date) FROM fact_orders")
+        result = cursor.fetchone()
+        if result and result[0]:
+            start_date = result[0]
+        else:
+            logger.warning("Нет данных в fact_orders")
+            return []
     
-    # Определяем следующую дату после последней обработанной
-    last_metrics_datetime = datetime.strptime(last_metrics_date, '%Y-%m-%d')
-    next_date = last_metrics_datetime + timedelta(days=1)
-    last_orders_datetime = datetime.strptime(last_orders_date, '%Y-%m-%d')
-    
+    # Проходим в цикле от начальной даты до последней даты с заказами
     dates_to_process = []
-    current_date = next_date
+    last_ord_datetime = datetime.strptime(last_ord_date, '%Y-%m-%d')
     
-    while current_date <= last_orders_datetime:
+    if isinstance(start_date, str):
+        current_date = datetime.strptime(start_date, '%Y-%m-%d')
+    else:
+        current_date = start_date
+    
+    while current_date <= last_ord_datetime:
         dates_to_process.append(current_date.strftime('%Y-%m-%d'))
         current_date += timedelta(days=1)
     
@@ -194,27 +185,45 @@ def main():
     """
     logger.info("Запуск скрипта агрегации ежедневных метрик")
     
-    # Определяем даты для обработки
-    dates_to_process = get_dates_to_process()
+    connection = None
+    cursor = None
     
-    if not dates_to_process:
-        logger.info("Нет дат для обработки")
-        return
-    
-    logger.info(f"Найдено дат для обработки: {len(dates_to_process)}")
-    logger.info(f"Даты: {', '.join(dates_to_process)}")
-    
-    # Обрабатываем каждую дату
-    success_count = 0
-    for date_str in dates_to_process:
-        if aggregate_daily_metrics(date_str):
-            success_count += 1
-        else:
-            logger.error(f"Не удалось обработать дату: {date_str}")
-    
-    logger.info(f"Обработка завершена. Успешно: {success_count}/{len(dates_to_process)}")
+    try:
+        # Устанавливаем соединение с базой данных
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        
+        # Определяем даты для обработки
+        dates_to_process = get_dates_to_process(cursor)
+        
+        if not dates_to_process:
+            logger.info("Нет дат для обработки")
+            return
+        
+        logger.info(f"Найдено дат для обработки: {len(dates_to_process)}")
+        logger.info(f"Даты: {', '.join(dates_to_process)}")
+        
+        # Обрабатываем каждую дату
+        success_count = 0
+        for date_str in dates_to_process:
+            logger.info(f"--- Запускаем агрегацию для {date_str} ---")
+            if aggregate_daily_metrics(connection, date_str):
+                success_count += 1
+            else:
+                logger.error(f"Не удалось обработать дату: {date_str}")
+        
+        logger.info(f"Обработка завершена. Успешно: {success_count}/{len(dates_to_process)}")
+        
+    except Exception as e:
+        logger.error(f"Критическая ошибка в main(): {e}")
+        
+    finally:
+        # Закрываем соединение
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 if __name__ == "__main__":
-    # Тестируем для одной даты, за которую мы ТОЧНО загрузили данные
-    aggregate_daily_metrics('2025-09-03')
+    main()
