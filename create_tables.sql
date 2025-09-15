@@ -79,13 +79,17 @@ CREATE TABLE IF NOT EXISTS fact_orders (
 
 CREATE TABLE IF NOT EXISTS fact_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NOT NULL,
+    source_id INT NOT NULL,
     transaction_id VARCHAR(255) NOT NULL UNIQUE,
     order_id VARCHAR(255),
     transaction_type VARCHAR(255) NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
     transaction_date DATE NOT NULL,
     description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ft_client FOREIGN KEY (client_id) REFERENCES clients(id),
+    CONSTRAINT fk_ft_source FOREIGN KEY (source_id) REFERENCES sources(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS metrics_daily (
