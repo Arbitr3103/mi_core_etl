@@ -769,11 +769,11 @@ def get_wb_products_from_api() -> List[Dict[str, Any]]:
             response = make_wb_request('/content/v2/get/cards/list', method='POST', data=request_data)
             
             # Проверяем структуру ответа
-            if not isinstance(response, dict) or 'data' not in response:
+            if not isinstance(response, dict) or 'cards' not in response:
                 logger.warning(f"Неожиданный формат ответа API: {response}")
                 break
             
-            products_batch = response.get('data', [])
+            products_batch = response.get('cards', [])
             
             if not products_batch:
                 logger.info("Получен пустой ответ, завершаем загрузку")

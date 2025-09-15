@@ -116,13 +116,13 @@ def check_wb_api_connection():
         response = make_wb_request('/content/v2/get/cards/list', method='POST', data=test_data)
         
         if isinstance(response, dict):
-            if 'data' in response:
-                products_count = len(response.get('data', []))
+            if 'cards' in response:
+                products_count = len(response.get('cards', []))
                 logger.info(f"✅ Подключение к WB Content API успешно!")
                 logger.info(f"📦 Получено товаров в тестовом запросе: {products_count}")
                 
                 if products_count > 0:
-                    product = response['data'][0]
+                    product = response['cards'][0]
                     logger.info(f"Пример товара: nmID={product.get('nmID')}, vendorCode={product.get('vendorCode')}")
                 
                 return True
