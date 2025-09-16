@@ -25,20 +25,26 @@
 ## Формат Excel файла
 
 ### Обязательные колонки:
-- `barcode` - штрихкод товара (текст)
+- `product_id` - идентификатор товара (артикул или штрихкод)
 - `cost_price` - себестоимость (число > 0)
 
 ### Пример структуры:
 ```
-barcode         | cost_price
-4607034370237   | 150.50
+product_id      | cost_price
+SKU123456       | 150.50
 4607034370244   | 200.00
-4607034370251   | 175.25
+OZON789012      | 175.25
 ```
+
+### Каскадный поиск товаров:
+Система автоматически ищет товары в следующем порядке:
+1. **По артикулу** (`sku_ozon`) - приоритетный способ
+2. **По штрихкоду** (`barcode`) - если не найден по артикулу
 
 ### Требования к данным:
 - Файл должен называться `cost_price.xlsx`
-- Штрихкоды должны существовать в таблице `dim_products`
+- В `product_id` можно указывать артикул или штрихкод
+- Товары должны существовать в таблице `dim_products`
 - Цены должны быть положительными числами
 - Пустые строки автоматически пропускаются
 
@@ -128,8 +134,8 @@ python3 cost_importer.py
 import pandas as pd
 
 data = {
-    'barcode': ['4607034370237', '4607034370244'],
-    'cost_price': [150.50, 200.00]
+    'product_id': ['SKU123456', '4607034370244', 'OZON789012'],
+    'cost_price': [150.50, 200.00, 175.25]
 }
 
 df = pd.DataFrame(data)
@@ -138,9 +144,16 @@ df.to_excel('uploads/cost_price.xlsx', index=False)
 
 ### Проверка результатов
 ```sql
+-- Проверка обновленных товаров по артикулу
+SELECT sku_ozon, cost_price, updated_at 
+FROM dim_products 
+WHERE sku_ozon IN ('SKU123456', 'OZON789012')
+ORDER BY updated_at DESC;
+
+-- Проверка обновленных товаров по штрихкоду
 SELECT barcode, cost_price, updated_at 
 FROM dim_products 
-WHERE barcode IN ('4607034370237', '4607034370244')
+WHERE barcode IN ('4607034370244')
 ORDER BY updated_at DESC;
 ```
 
