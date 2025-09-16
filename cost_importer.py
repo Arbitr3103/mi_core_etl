@@ -33,9 +33,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Константы
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
-ARCHIVE_DIR = os.path.join(BASE_DIR, "uploads", "archive")
+# Путь к папке проекта
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Путь к папке с данными, которая лежит РЯДОМ с проектом, а не ВНУТРИ
+DATA_DIR = os.path.join(os.path.dirname(PROJECT_DIR), 'project_data')
+UPLOADS_DIR = DATA_DIR
+ARCHIVE_DIR = os.path.join(DATA_DIR, "archive")
 COST_FILE_NAME = "cost_price.xlsx"
 EXPECTED_COLUMNS = ['баркод', 'артикул', 'СС без НДС']
 

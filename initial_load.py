@@ -37,7 +37,10 @@ class InitialCarDataLoader:
             'connection_timeout': 5
         }
         
-        self.basebuy_data_dir = './basebuy_data/auto_20250901'
+        # Путь к папке с данными, которая лежит РЯДОМ с проектом, а не ВНУТРИ
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(os.path.dirname(project_dir), 'project_data')
+        self.basebuy_data_dir = os.path.join(data_dir, 'basebuy_data', 'auto_20250901')
         
         # Маппинг BaseBuy ID -> mi_core_db ID для связей
         self.id_mappings = {

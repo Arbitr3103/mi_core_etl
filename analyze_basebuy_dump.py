@@ -20,7 +20,10 @@ class BaseBuyDumpAnalyzer:
     def __init__(self):
         self.mysql_url = "https://yadi.sk/d/8wvOhKEXtQDYEg"
         self.csv_url = "https://yadi.sk/d/IaStb5-Kl_96Iw"
-        self.download_dir = "./basebuy_data"
+        # Путь к папке с данными, которая лежит РЯДОМ с проектом, а не ВНУТРИ
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(os.path.dirname(project_dir), 'project_data')
+        self.download_dir = os.path.join(data_dir, "basebuy_data")
         
         # Создаем директорию для загрузки
         os.makedirs(self.download_dir, exist_ok=True)
@@ -41,7 +44,7 @@ class BaseBuyDumpAnalyzer:
    MySQL: https://yadi.sk/d/8wvOhKEXtQDYEg
    CSV: https://yadi.sk/d/IaStb5-Kl_96Iw
 
-2. Скачайте файлы в папку: ./basebuy_data/
+2. Скачайте файлы в папку: ../project_data/basebuy_data/
 
 3. Запустите анализ повторно: python3 analyze_basebuy_dump.py --analyze
 
