@@ -165,21 +165,22 @@ def read_cost_file(file_path: str) -> Optional[pd.DataFrame]:
         return None
 
 
-def update_product_costs(df: pd.DataFrame) -> Tuple[int, int]:
+def update_product_costs(df: pd.DataFrame) -> Tuple[int, int, int]:
     """
-    Обновляет себестоимость товаров в базе данных с каскадным поиском.
-    Сначала ищет по артикулу (sku_ozon), затем по штрихкоду (barcode).
+    Обновляет/создает товары в справочнике dim_products с UPSERT логикой.
+    Основной ключ - штрихкод (barcode). Если товар найден - обновляет, если нет - создает.
     
     Args:
         df: DataFrame с данными (артикул, баркод, СС без НДС)
         
     Returns:
-        Tuple[int, int]: (количество обновленных, количество не найденных)
+        Tuple[int, int, int]: (количество обновленных, количество созданных, количество ошибок)
     """
     connection = None
     cursor = None
     updated_count = 0
-    not_found_count = 0
+    created_count = 0
+    error_count = 0
     
     # Определяем доступные колонки
     has_barcode = 'баркод' in df.columns
@@ -191,61 +192,65 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int]:
         connection = connect_to_db()
         cursor = connection.cursor()
         
-        logger.info(f"🔄 Начинаем обновление себестоимости для {len(df)} товаров")
+        logger.info(f"🔄 Начинаем UPSERT обработку для {len(df)} товаров")
         
         # Обрабатываем каждую строку
         for index, row in df.iterrows():
             cost_price = row[price_col]
-            updated = False
+            barcode = str(row['баркод']).strip() if has_barcode and pd.notna(row['баркод']) else None
+            article = str(row['артикул']).strip() if has_article and pd.notna(row['артикул']) else None
+            
+            # Штрихкод - основной ключ, без него не обрабатываем
+            if not barcode:
+                logger.warning(f"⚠️ Пропускаем строку без штрихкода: артикул={article}")
+                error_count += 1
+                continue
             
             try:
-                # Каскадный поиск: сначала по артикулу (sku_ozon), если есть
-                if has_article and pd.notna(row['артикул']) and str(row['артикул']).strip():
-                    article = str(row['артикул']).strip()
-                    sql_sku = "UPDATE dim_products SET cost_price = %s, updated_at = CURRENT_TIMESTAMP WHERE sku_ozon = %s"
-                    cursor.execute(sql_sku, (cost_price, article))
-                    
-                    if cursor.rowcount > 0:
-                        updated_count += 1
-                        logger.info(f"✅ Обновлен товар по артикулу {article}: {cost_price}")
-                        updated = True
+                # Шаг 1: Ищем товар по штрихкоду
+                cursor.execute("SELECT id FROM dim_products WHERE barcode = %s", (barcode,))
+                existing_product = cursor.fetchone()
                 
-                # Если не найден по артикулу, ищем по штрихкоду
-                if not updated and has_barcode and pd.notna(row['баркод']) and str(row['баркод']).strip():
-                    barcode = str(row['баркод']).strip()
-                    sql_barcode = "UPDATE dim_products SET cost_price = %s, updated_at = CURRENT_TIMESTAMP WHERE barcode = %s"
-                    cursor.execute(sql_barcode, (cost_price, barcode))
+                if existing_product:
+                    # Товар найден - обновляем
+                    product_id = existing_product['id']
+                    update_sql = """
+                        UPDATE dim_products 
+                        SET cost_price = %s, 
+                            sku_internal = %s,
+                            updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = %s
+                    """
+                    cursor.execute(update_sql, (cost_price, article, product_id))
+                    updated_count += 1
+                    logger.info(f"✅ Обновлен товар {barcode} (ID: {product_id}): цена={cost_price}, артикул={article}")
                     
-                    if cursor.rowcount > 0:
-                        updated_count += 1
-                        logger.info(f"✅ Обновлен товар по штрихкоду {barcode}: {cost_price}")
-                        updated = True
-                
-                # Если товар не найден ни по одному критерию
-                if not updated:
-                    not_found_count += 1
-                    identifiers = []
-                    if has_article and pd.notna(row['артикул']):
-                        identifiers.append(f"артикул: {row['артикул']}")
-                    if has_barcode and pd.notna(row['баркод']):
-                        identifiers.append(f"баркод: {row['баркод']}")
-                    logger.warning(f"⚠️ Товар не найден ({', '.join(identifiers)})")
+                else:
+                    # Товар не найден - создаем новый
+                    insert_sql = """
+                        INSERT INTO dim_products (barcode, sku_internal, cost_price, created_at, updated_at)
+                        VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+                    cursor.execute(insert_sql, (barcode, article, cost_price))
+                    new_product_id = cursor.lastrowid
+                    created_count += 1
+                    logger.info(f"🆕 Создан новый товар {barcode} (ID: {new_product_id}): цена={cost_price}, артикул={article}")
                 
             except Exception as e:
-                logger.error(f"❌ Ошибка обновления товара: {e}")
-                not_found_count += 1
+                logger.error(f"❌ Ошибка обработки товара {barcode}: {e}")
+                error_count += 1
         
         # Фиксируем изменения
         connection.commit()
         
-        logger.info(f"✅ Обновление завершено. Обновлено: {updated_count}, не найдено: {not_found_count}")
-        return updated_count, not_found_count
+        logger.info(f"✅ UPSERT завершен. Обновлено: {updated_count}, создано: {created_count}, ошибок: {error_count}")
+        return updated_count, created_count, error_count
         
     except Exception as e:
         logger.error(f"❌ Ошибка при обновлении БД: {e}")
         if connection:
             connection.rollback()
-        return 0, len(df)
+        return 0, 0, len(df)
         
     finally:
         if cursor:
@@ -305,20 +310,21 @@ def main():
             logger.error("❌ Не удалось прочитать данные из файла")
             return
         
-        # Обновляем себестоимость в БД
-        updated_count, not_found_count = update_product_costs(df)
+        # Обновляем/создаем товары в БД с UPSERT логикой
+        updated_count, created_count, error_count = update_product_costs(df)
         
-        # Если обновления были успешны, архивируем файл
-        if updated_count > 0:
+        # Если были успешные операции, архивируем файл
+        total_success = updated_count + created_count
+        if total_success > 0:
             if archive_processed_file(cost_file_path):
                 logger.info("✅ Импорт себестоимости завершен успешно")
             else:
                 logger.warning("⚠️ Импорт выполнен, но файл не удалось заархивировать")
         else:
-            logger.warning("⚠️ Ни одного товара не было обновлено. Файл не архивирован.")
+            logger.warning("⚠️ Ни одного товара не было обработано. Файл не архивирован.")
         
         # Итоговая статистика
-        logger.info(f"📊 ИТОГО: обновлено {updated_count} товаров, не найдено {not_found_count}")
+        logger.info(f"📊 ИТОГО: обновлено {updated_count}, создано {created_count}, ошибок {error_count}")
         
     except Exception as e:
         logger.error(f"❌ Критическая ошибка в main(): {e}")
