@@ -33,10 +33,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Константы
-# Путь к папке проекта
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Путь к папке с данными, которая лежит РЯДОМ с проектом, а не ВНУТРИ
-DATA_DIR = os.path.join(os.path.dirname(PROJECT_DIR), 'project_data')
+# Определяем путь к директории, где лежит сам скрипт
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Указываем, что данные лежат в папке 'data' внутри нашего проекта
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 UPLOADS_DIR = DATA_DIR
 ARCHIVE_DIR = os.path.join(DATA_DIR, "archive")
 COST_FILE_NAME = "cost_price.xlsx"
