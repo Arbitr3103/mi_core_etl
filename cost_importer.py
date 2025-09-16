@@ -220,24 +220,55 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int, int]:
                     update_sql = """
                         UPDATE dim_products 
                         SET cost_price = %s, 
-                            sku_internal = %s,
                             updated_at = CURRENT_TIMESTAMP 
                         WHERE id = %s
                     """
-                    cursor.execute(update_sql, (cost_price, article, product_id))
+                    cursor.execute(update_sql, (cost_price, product_id))
                     updated_count += 1
                     logger.info(f"✅ Обновлен товар {barcode} (ID: {product_id}): цена={cost_price}, артикул={article}")
                     
                 else:
-                    # Товар не найден - создаем новый
-                    insert_sql = """
-                        INSERT INTO dim_products (barcode, sku_internal, cost_price, created_at, updated_at)
-                        VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """
-                    cursor.execute(insert_sql, (barcode, article, cost_price))
-                    new_product_id = cursor.lastrowid
-                    created_count += 1
-                    logger.info(f"🆕 Создан новый товар {barcode} (ID: {new_product_id}): цена={cost_price}, артикул={article}")
+                    # Товар не найден по штрихкоду - ищем по артикулу в sku_ozon или sku_wb
+                    if article:
+                        cursor.execute("""
+                            SELECT id FROM dim_products 
+                            WHERE sku_ozon = %s OR sku_wb = %s
+                        """, (article, article))
+                        existing_by_sku = cursor.fetchone()
+                        
+                        if existing_by_sku:
+                            # Товар найден по артикулу - обновляем и добавляем штрихкод
+                            product_id = existing_by_sku['id']
+                            update_sql = """
+                                UPDATE dim_products 
+                                SET cost_price = %s, 
+                                    barcode = %s,
+                                    updated_at = CURRENT_TIMESTAMP 
+                                WHERE id = %s
+                            """
+                            cursor.execute(update_sql, (cost_price, barcode, product_id))
+                            updated_count += 1
+                            logger.info(f"✅ Обновлен товар по артикулу {article} (ID: {product_id}): цена={cost_price}, добавлен штрихкод={barcode}")
+                        else:
+                            # Товар не найден ни по штрихкоду, ни по артикулу - создаем новый
+                            insert_sql = """
+                                INSERT INTO dim_products (barcode, sku_ozon, cost_price, created_at, updated_at)
+                                VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            """
+                            cursor.execute(insert_sql, (barcode, article, cost_price))
+                            new_product_id = cursor.lastrowid
+                            created_count += 1
+                            logger.info(f"🆕 Создан новый товар {barcode} (ID: {new_product_id}): цена={cost_price}, артикул={article}")
+                    else:
+                        # Нет артикула - создаем только с штрихкодом
+                        insert_sql = """
+                            INSERT INTO dim_products (barcode, cost_price, created_at, updated_at)
+                            VALUES (%s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """
+                        cursor.execute(insert_sql, (barcode, cost_price))
+                        new_product_id = cursor.lastrowid
+                        created_count += 1
+                        logger.info(f"🆕 Создан новый товар {barcode} (ID: {new_product_id}): цена={cost_price}")
                 
             except Exception as e:
                 logger.error(f"❌ Ошибка обработки товара {barcode}: {e}")
