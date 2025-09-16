@@ -37,7 +37,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 ARCHIVE_DIR = os.path.join(BASE_DIR, "uploads", "archive")
 COST_FILE_NAME = "cost_price.xlsx"
-EXPECTED_COLUMNS = ['product_id', 'cost_price']
+EXPECTED_COLUMNS = ['баркод', 'артикул', 'СС без НДС']
 
 
 def ensure_directories():
@@ -74,10 +74,19 @@ def validate_excel_structure(df: pd.DataFrame) -> bool:
     Returns:
         bool: True если структура корректна
     """
-    # Проверяем наличие обязательных колонок
-    missing_columns = set(EXPECTED_COLUMNS) - set(df.columns)
-    if missing_columns:
-        logger.error(f"❌ Отсутствуют обязательные колонки: {missing_columns}")
+    # Проверяем наличие обязательных колонок (нужны баркод ИЛИ артикул + цена)
+    required_price_col = 'СС без НДС'
+    has_barcode = 'баркод' in df.columns
+    has_article = 'артикул' in df.columns
+    has_price = required_price_col in df.columns
+    
+    if not has_price:
+        logger.error(f"❌ Отсутствует обязательная колонка: {required_price_col}")
+        logger.error(f"Найденные колонки: {list(df.columns)}")
+        return False
+    
+    if not (has_barcode or has_article):
+        logger.error("❌ Отсутствуют колонки идентификации товара: нужен 'баркод' или 'артикул'")
         logger.error(f"Найденные колонки: {list(df.columns)}")
         return False
     
@@ -87,16 +96,22 @@ def validate_excel_structure(df: pd.DataFrame) -> bool:
         return False
     
     # Проверяем наличие пустых значений в ключевых колонках
-    null_product_ids = df['product_id'].isnull().sum()
-    null_prices = df['cost_price'].isnull().sum()
+    if has_barcode:
+        null_barcodes = df['баркод'].isnull().sum()
+        if null_barcodes > 0:
+            logger.warning(f"⚠️ Найдено {null_barcodes} пустых штрихкодов")
     
-    if null_product_ids > 0:
-        logger.warning(f"⚠️ Найдено {null_product_ids} пустых идентификаторов товаров (будут пропущены)")
+    if has_article:
+        null_articles = df['артикул'].isnull().sum()
+        if null_articles > 0:
+            logger.warning(f"⚠️ Найдено {null_articles} пустых артикулов")
     
+    null_prices = df[required_price_col].isnull().sum()
     if null_prices > 0:
         logger.warning(f"⚠️ Найдено {null_prices} пустых цен (будут пропущены)")
     
     logger.info(f"📊 Структура файла корректна. Строк данных: {len(df)}")
+    logger.info(f"📋 Доступные колонки: баркод={has_barcode}, артикул={has_article}, цена={has_price}")
     return True
 
 
@@ -120,16 +135,27 @@ def read_cost_file(file_path: str) -> Optional[pd.DataFrame]:
         if not validate_excel_structure(df):
             return None
         
-        # Очищаем данные от пустых значений
-        df_clean = df.dropna(subset=['product_id', 'cost_price'])
+        # Определяем доступные колонки
+        has_barcode = 'баркод' in df.columns
+        has_article = 'артикул' in df.columns
+        price_col = 'СС без НДС'
         
-        # Конвертируем типы данных
-        df_clean['product_id'] = df_clean['product_id'].astype(str).str.strip()
-        df_clean['cost_price'] = pd.to_numeric(df_clean['cost_price'], errors='coerce')
+        # Очищаем данные от пустых значений цены
+        df_clean = df.dropna(subset=[price_col])
         
-        # Удаляем строки с некорректными ценами
-        df_clean = df_clean.dropna(subset=['cost_price'])
-        df_clean = df_clean[df_clean['cost_price'] > 0]
+        # Конвертируем цену в числовой формат
+        df_clean[price_col] = pd.to_numeric(df_clean[price_col], errors='coerce')
+        
+        # Очищаем строки с некорректными ценами
+        df_clean = df_clean.dropna(subset=[price_col])
+        df_clean = df_clean[df_clean[price_col] > 0]
+        
+        # Обрабатываем идентификаторы товаров
+        if has_barcode:
+            df_clean['баркод'] = df_clean['баркод'].astype(str).str.strip()
+        if has_article:
+            df_clean['артикул'] = df_clean['артикул'].astype(str).str.strip()
+        
         
         logger.info(f"✅ Файл успешно прочитан. Валидных записей: {len(df_clean)}")
         return df_clean
@@ -145,7 +171,7 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int]:
     Сначала ищет по артикулу (sku_ozon), затем по штрихкоду (barcode).
     
     Args:
-        df: DataFrame с данными (product_id, cost_price)
+        df: DataFrame с данными (артикул, баркод, СС без НДС)
         
     Returns:
         Tuple[int, int]: (количество обновленных, количество не найденных)
@@ -154,6 +180,11 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int]:
     cursor = None
     updated_count = 0
     not_found_count = 0
+    
+    # Определяем доступные колонки
+    has_barcode = 'баркод' in df.columns
+    has_article = 'артикул' in df.columns
+    price_col = 'СС без НДС'
     
     try:
         # Подключаемся к базе данных
@@ -164,31 +195,44 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int]:
         
         # Обрабатываем каждую строку
         for index, row in df.iterrows():
-            product_id = row['product_id']
-            cost_price = row['cost_price']
+            cost_price = row[price_col]
+            updated = False
             
             try:
-                # Каскадный поиск: сначала по артикулу (sku_ozon)
-                sql_sku = "UPDATE dim_products SET cost_price = %s, updated_at = CURRENT_TIMESTAMP WHERE sku_ozon = %s"
-                cursor.execute(sql_sku, (cost_price, product_id))
-                
-                if cursor.rowcount > 0:
-                    updated_count += 1
-                    logger.info(f"✅ Обновлен товар по артикулу {product_id}: {cost_price}")
-                else:
-                    # Если не найден по артикулу, ищем по штрихкоду
-                    sql_barcode = "UPDATE dim_products SET cost_price = %s, updated_at = CURRENT_TIMESTAMP WHERE barcode = %s"
-                    cursor.execute(sql_barcode, (cost_price, product_id))
+                # Каскадный поиск: сначала по артикулу (sku_ozon), если есть
+                if has_article and pd.notna(row['артикул']) and str(row['артикул']).strip():
+                    article = str(row['артикул']).strip()
+                    sql_sku = "UPDATE dim_products SET cost_price = %s, updated_at = CURRENT_TIMESTAMP WHERE sku_ozon = %s"
+                    cursor.execute(sql_sku, (cost_price, article))
                     
                     if cursor.rowcount > 0:
                         updated_count += 1
-                        logger.info(f"✅ Обновлен товар по штрихкоду {product_id}: {cost_price}")
-                    else:
-                        not_found_count += 1
-                        logger.warning(f"⚠️ Товар {product_id} не найден ни по артикулу, ни по штрихкоду")
+                        logger.info(f"✅ Обновлен товар по артикулу {article}: {cost_price}")
+                        updated = True
+                
+                # Если не найден по артикулу, ищем по штрихкоду
+                if not updated and has_barcode and pd.notna(row['баркод']) and str(row['баркод']).strip():
+                    barcode = str(row['баркод']).strip()
+                    sql_barcode = "UPDATE dim_products SET cost_price = %s, updated_at = CURRENT_TIMESTAMP WHERE barcode = %s"
+                    cursor.execute(sql_barcode, (cost_price, barcode))
+                    
+                    if cursor.rowcount > 0:
+                        updated_count += 1
+                        logger.info(f"✅ Обновлен товар по штрихкоду {barcode}: {cost_price}")
+                        updated = True
+                
+                # Если товар не найден ни по одному критерию
+                if not updated:
+                    not_found_count += 1
+                    identifiers = []
+                    if has_article and pd.notna(row['артикул']):
+                        identifiers.append(f"артикул: {row['артикул']}")
+                    if has_barcode and pd.notna(row['баркод']):
+                        identifiers.append(f"баркод: {row['баркод']}")
+                    logger.warning(f"⚠️ Товар не найден ({', '.join(identifiers)})")
                 
             except Exception as e:
-                logger.error(f"❌ Ошибка обновления товара {product_id}: {e}")
+                logger.error(f"❌ Ошибка обновления товара: {e}")
                 not_found_count += 1
         
         # Фиксируем изменения
