@@ -213,6 +213,8 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int, int]:
                 # Шаг 1: Ищем товар по штрихкоду
                 cursor.execute("SELECT id FROM dim_products WHERE barcode = %s", (barcode,))
                 existing_product = cursor.fetchone()
+                # Очищаем оставшиеся результаты
+                cursor.fetchall()
                 
                 if existing_product:
                     # Товар найден - обновляем
@@ -235,6 +237,8 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int, int]:
                             WHERE sku_ozon = %s OR sku_wb = %s
                         """, (article, article))
                         existing_by_sku = cursor.fetchone()
+                        # Очищаем оставшиеся результаты
+                        cursor.fetchall()
                         
                         if existing_by_sku:
                             # Товар найден по артикулу - обновляем и добавляем штрихкод
