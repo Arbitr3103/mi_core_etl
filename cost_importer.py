@@ -193,7 +193,7 @@ def update_product_costs(df: pd.DataFrame) -> Tuple[int, int, int]:
     try:
         # Подключаемся к базе данных
         connection = connect_to_db()
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         
         logger.info(f"🔄 Начинаем UPSERT обработку для {len(df)} товаров")
         
