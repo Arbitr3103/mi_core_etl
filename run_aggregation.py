@@ -42,22 +42,25 @@ def aggregate_daily_metrics(connection, date_to_process: str) -> bool:
     try:
         cursor = connection.cursor()
         
-        # SQL запрос для агрегации метрик
+        # SQL запрос для агрегации метрик с расчетом маржинальности
         sql_query = """
-        INSERT INTO metrics_daily (client_id, metric_date, orders_cnt, revenue_sum, cogs_sum)
+        INSERT INTO metrics_daily (client_id, metric_date, orders_cnt, revenue_sum, cogs_sum, profit_sum)
         SELECT
             client_id,
             %(date_param)s AS metric_date,
             COUNT(CASE WHEN transaction_type = 'продажа' THEN id END) AS orders_cnt,
             SUM(CASE WHEN transaction_type = 'продажа' THEN (qty * price) ELSE 0 END) AS revenue_sum,
-            SUM(cost_price) AS cogs_sum
+            SUM(CASE WHEN transaction_type = 'продажа' THEN cost_price ELSE 0 END) AS cogs_sum,
+            SUM(CASE WHEN transaction_type = 'продажа' THEN (qty * price) ELSE 0 END) - 
+            SUM(CASE WHEN transaction_type = 'продажа' THEN COALESCE(cost_price, 0) ELSE 0 END) AS profit_sum
         FROM fact_orders
         WHERE order_date = %(date_param)s
         GROUP BY client_id
         ON DUPLICATE KEY UPDATE
             orders_cnt = VALUES(orders_cnt),
             revenue_sum = VALUES(revenue_sum),
-            cogs_sum = VALUES(cogs_sum);
+            cogs_sum = VALUES(cogs_sum),
+            profit_sum = VALUES(profit_sum);
         """
         
         # Параметры для запроса
