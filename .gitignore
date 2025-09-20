@@ -71,4 +71,14 @@ log/
 *key*
 credentials.json
 config.json
+config.py
 basebuy_data/
+
+# Lock файлы системы управления складом
+inventory_update.lock
+movements_update.lock
+
+# Архивы данных
+archive/
+*.xlsx.bak
+data/*.xlsx
