@@ -45,81 +45,77 @@ class StockImporter:
         self.connection = None
         
     def get_ozon_inventory(self):
-        """Получение остатков товаров с Ozon через правильный API"""
+        """Получение остатков товаров с Ozon через API отчетов"""
         logger.info("🔄 Начинаем получение остатков с Ozon...")
         
-        # Правильный эндпоинт для получения остатков товаров
-        url = f"{config.OZON_API_BASE_URL}/v2/products/stocks"
-        headers = {
-            "Client-Id": config.OZON_CLIENT_ID,
-            "Api-Key": config.OZON_API_KEY,
-            "Content-Type": "application/json"
-        }
-        
-        inventory_data = []
-        last_id = ""
-        limit = 1000  # Максимальное количество товаров за один запрос
-        
         try:
-            while True:
-                # Формируем тело запроса с пагинацией
-                payload = {
-                    "limit": limit,
-                    "filter": {
-                        "visibility": "ALL"
-                    }
-                }
+            # Импортируем функцию из рабочего модуля
+            sys.path.append(os.path.join(os.path.dirname(__file__), 'importers'))
+            from ozon_importer import get_products_from_api
+            
+            # Получаем товары с остатками через рабочий API
+            products = get_products_from_api()
+            logger.info(f"Получено {len(products)} товаров из Ozon API")
+            
+            inventory_data = []
+            
+            # Обрабатываем каждый товар
+            for product in products:
+                # Извлекаем остатки FBO
+                fbo_present = int(product.get('Доступно к продаже по схеме FBO, шт.', 0) or 0)
+                fbo_reserved = int(product.get('Зарезервировано, шт', 0) or 0)
                 
-                # Добавляем параметр last_id для пагинации, если он есть
-                if last_id:
-                    payload["last_id"] = last_id
-                
-                logger.info(f"Запрашиваем товары с last_id={last_id}, limit={limit}")
-                response = requests.post(url, headers=headers, json=payload, timeout=(10, 60))
-                response.raise_for_status()
-                
-                data = response.json()
-                
-                # Проверяем наличие данных в ответе
-                if not data.get('result'):
-                    logger.info("Нет данных в ответе API")
-                    break
-                
-                # Получаем список товаров из ответа
-                items = data['result'].get('items', [])
-                logger.info(f"Получено {len(items)} товаров")
-                
-                # Обрабатываем каждый товар
-                for item in items:
-                    if not item.get('stocks'):
-                        continue
-                        
-                    # Создаем запись об остатках для каждого товара
+                if fbo_present > 0 or fbo_reserved > 0:
                     inventory_record = {
-                        'product_id': str(item.get('product_id')),
-                        'offer_id': item.get('offer_id', ''),
-                        'name': item.get('name', 'Неизвестный товар'),
-                        'warehouse_name': 'Ozon Warehouse',  # Ozon не возвращает название склада в этом эндпоинте
-                        'stock_type': 'FBO',  # По умолчанию FBO
-                        'quantity_present': item['stocks'].get('present', 0),
-                        'quantity_reserved': item['stocks'].get('reserved', 0),
-                        'quantity_coming': item['stocks'].get('coming', 0),
+                        'product_id': str(product.get('Ozon Product ID', '')),
+                        'offer_id': product.get('Артикул', ''),
+                        'name': product.get('Название товара', 'Неизвестный товар'),
+                        'warehouse_name': 'Ozon FBO',
+                        'stock_type': 'FBO',
+                        'quantity_present': fbo_present,
+                        'quantity_reserved': fbo_reserved,
+                        'quantity_coming': 0,
                         'source': 'Ozon'
                     }
-                    
                     inventory_data.append(inventory_record)
                 
-                # Проверяем, есть ли еще данные
-                last_id = data['result'].get('last_id')
-                if not last_id or len(items) < limit:
-                    logger.info("Достигнут конец списка товаров")
-                    break
+                # Извлекаем остатки FBS
+                fbs_present = int(product.get('Доступно к продаже по схеме FBS, шт.', 0) or 0)
+                fbs_reserved = int(product.get('Зарезервировано на моих складах, шт', 0) or 0)
                 
-                # Небольшая пауза между запросами
-                time.sleep(1)
+                if fbs_present > 0 or fbs_reserved > 0:
+                    inventory_record = {
+                        'product_id': str(product.get('Ozon Product ID', '')),
+                        'offer_id': product.get('Артикул', ''),
+                        'name': product.get('Название товара', 'Неизвестный товар'),
+                        'warehouse_name': 'Ozon FBS',
+                        'stock_type': 'FBS',
+                        'quantity_present': fbs_present,
+                        'quantity_reserved': fbs_reserved,
+                        'quantity_coming': 0,
+                        'source': 'Ozon'
+                    }
+                    inventory_data.append(inventory_record)
                 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Ошибка при запросе к Ozon API: {e}")
+                # Извлекаем остатки realFBS
+                real_fbs_present = int(product.get('Доступно к продаже по схеме realFBS, шт.', 0) or 0)
+                
+                if real_fbs_present > 0:
+                    inventory_record = {
+                        'product_id': str(product.get('Ozon Product ID', '')),
+                        'offer_id': product.get('Артикул', ''),
+                        'name': product.get('Название товара', 'Неизвестный товар'),
+                        'warehouse_name': 'Ozon realFBS',
+                        'stock_type': 'realFBS',
+                        'quantity_present': real_fbs_present,
+                        'quantity_reserved': 0,
+                        'quantity_coming': 0,
+                        'source': 'Ozon'
+                    }
+                    inventory_data.append(inventory_record)
+                    
+        except Exception as e:
+            logger.error(f"Ошибка при получении остатков с Ozon: {e}")
             raise
         
         logger.info(f"Получено {len(inventory_data)} записей остатков с Ozon")
@@ -130,9 +126,9 @@ class StockImporter:
         logger.info("🔄 Начинаем получение остатков с Wildberries...")
         
         # Для WB используем API складов
-        url = f"{config.WB_API_BASE_URL}/api/v1/supplier/stocks"
+        url = f"{config.WB_SUPPLIERS_API_URL}/api/v1/supplier/stocks"
         headers = {
-            "Authorization": config.WB_API_KEY
+            "Authorization": config.WB_API_TOKEN
         }
         
         inventory_data = []
@@ -266,13 +262,17 @@ class StockImporter:
             ozon_inventory = self.get_ozon_inventory()
             self.load_inventory_to_db(ozon_inventory)
             
-            # Получаем остатки с WB
+            # Получаем остатки с WB (опционально)
             logger.info("=" * 50)
             logger.info("ОБНОВЛЕНИЕ ОСТАТКОВ WILDBERRIES")
             logger.info("=" * 50)
             
-            wb_inventory = self.get_wb_inventory()
-            self.load_inventory_to_db(wb_inventory)
+            try:
+                wb_inventory = self.get_wb_inventory()
+                self.load_inventory_to_db(wb_inventory)
+            except Exception as wb_error:
+                logger.warning(f"⚠️ Не удалось получить остатки с Wildberries: {wb_error}")
+                logger.info("Продолжаем работу без данных WB...")
             
             logger.info("✅ Обновление остатков завершено успешно")
             
