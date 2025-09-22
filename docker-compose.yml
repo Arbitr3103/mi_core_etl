@@ -1,0 +1,100 @@
+version: "3.8"
+
+services:
+  # База данных MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: replenishment_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: replenishment_root_password
+      MYSQL_DATABASE: replenishment_db
+      MYSQL_USER: replenishment_user
+      MYSQL_PASSWORD: replenishment_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./create_replenishment_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - replenishment_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Основное приложение
+  replenishment_app:
+    build: .
+    container_name: replenishment_app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=mysql
+      - DB_USER=replenishment_user
+      - DB_PASSWORD=replenishment_password
+      - DB_NAME=replenishment_db
+    volumes:
+      - ./logs:/home/replenishment/logs
+      - ./reports:/home/replenishment/reports
+    networks:
+      - replenishment_network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Планировщик задач
+  replenishment_scheduler:
+    build: .
+    container_name: replenishment_scheduler
+    command: ["python3", "schedule_replenishment.py", "--mode", "schedule"]
+    environment:
+      - DB_HOST=mysql
+      - DB_USER=replenishment_user
+      - DB_PASSWORD=replenishment_password
+      - DB_NAME=replenishment_db
+    volumes:
+      - ./logs:/home/replenishment/logs
+      - ./reports:/home/replenishment/reports
+    networks:
+      - replenishment_network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Nginx для проксирования (опционально)
+  nginx:
+    image: nginx:alpine
+    container_name: replenishment_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - replenishment_network
+    depends_on:
+      - replenishment_app
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  replenishment_network:
+    driver: bridge
