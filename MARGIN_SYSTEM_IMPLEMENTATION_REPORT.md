@@ -292,5 +292,4 @@ python3 validate_margin_calculations.py
 ---
 
 _Отчет подготовлен: 22 сентября 2025 г._  
-_Разработчик: AI Assistant (Kiro)_  
 _Статус: Готово к развертыванию_ ✅
