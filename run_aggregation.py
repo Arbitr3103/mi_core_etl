@@ -24,9 +24,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def calculate_margin_percentage(profit_sum: float, revenue_sum: float) -> Optional[float]:
+    """
+    Рассчитывает процент маржинальности.
+    
+    Args:
+        profit_sum: Чистая прибыль
+        revenue_sum: Общая выручка
+        
+    Returns:
+        Процент маржинальности или None если выручка равна 0
+    """
+    if revenue_sum == 0 or revenue_sum is None:
+        return None
+    return (profit_sum / revenue_sum) * 100
+
+
 def aggregate_daily_metrics(connection, date_to_process: str) -> bool:
     """
-    Выполняет агрегацию метрик за указанную дату.
+    Выполняет агрегацию метрик за указанную дату с полным расчетом маржинальности.
     
     Args:
         connection: Подключение к базе данных
@@ -42,25 +58,148 @@ def aggregate_daily_metrics(connection, date_to_process: str) -> bool:
     try:
         cursor = connection.cursor()
         
-        # SQL запрос для агрегации метрик с расчетом маржинальности
+        # Улучшенный SQL запрос для агрегации метрик с полным расчетом маржинальности
         sql_query = """
-        INSERT INTO metrics_daily (client_id, metric_date, orders_cnt, revenue_sum, cogs_sum, profit_sum)
+        INSERT INTO metrics_daily (
+            client_id, metric_date, orders_cnt, revenue_sum, returns_sum, 
+            cogs_sum, commission_sum, shipping_sum, other_expenses_sum, 
+            profit_sum, margin_percent
+        )
         SELECT
-            client_id,
+            fo.client_id,
             %(date_param)s AS metric_date,
-            COUNT(CASE WHEN transaction_type = 'продажа' THEN id END) AS orders_cnt,
-            SUM(CASE WHEN transaction_type = 'продажа' THEN (qty * price) ELSE 0 END) AS revenue_sum,
-            SUM(CASE WHEN transaction_type = 'продажа' THEN cost_price ELSE 0 END) AS cogs_sum,
-            SUM(CASE WHEN transaction_type = 'продажа' THEN (qty * price) ELSE 0 END) - 
-            SUM(CASE WHEN transaction_type = 'продажа' THEN COALESCE(cost_price, 0) ELSE 0 END) AS profit_sum
-        FROM fact_orders
-        WHERE order_date = %(date_param)s
-        GROUP BY client_id
+            
+            -- Базовые метрики продаж
+            COUNT(CASE WHEN fo.transaction_type = 'продажа' THEN fo.id END) AS orders_cnt,
+            SUM(CASE WHEN fo.transaction_type = 'продажа' THEN (fo.qty * fo.price) ELSE 0 END) AS revenue_sum,
+            SUM(CASE WHEN fo.transaction_type = 'возврат' THEN (fo.qty * fo.price) ELSE 0 END) AS returns_sum,
+            
+            -- Себестоимость проданных товаров (COGS)
+            SUM(CASE 
+                WHEN fo.transaction_type = 'продажа' AND dp.cost_price IS NOT NULL 
+                THEN COALESCE(dp.cost_price * fo.qty, 0) 
+                ELSE 0 
+            END) AS cogs_sum,
+            
+            -- Комиссии маркетплейса и эквайринг
+            COALESCE(commission_data.commission_sum, 0) AS commission_sum,
+            
+            -- Расходы на логистику и доставку
+            COALESCE(logistics_data.shipping_sum, 0) AS shipping_sum,
+            
+            -- Прочие расходы
+            COALESCE(other_data.other_expenses_sum, 0) AS other_expenses_sum,
+            
+            -- Расчет чистой прибыли
+            (
+                SUM(CASE WHEN fo.transaction_type = 'продажа' THEN (fo.qty * fo.price) ELSE 0 END) - -- Выручка
+                SUM(CASE WHEN fo.transaction_type = 'возврат' THEN (fo.qty * fo.price) ELSE 0 END) - -- Возвраты
+                SUM(CASE 
+                    WHEN fo.transaction_type = 'продажа' AND dp.cost_price IS NOT NULL 
+                    THEN COALESCE(dp.cost_price * fo.qty, 0) 
+                    ELSE 0 
+                END) - -- Себестоимость
+                COALESCE(commission_data.commission_sum, 0) - -- Комиссии
+                COALESCE(logistics_data.shipping_sum, 0) - -- Логистика
+                COALESCE(other_data.other_expenses_sum, 0) -- Прочие расходы
+            ) AS profit_sum,
+            
+            -- Расчет процента маржинальности
+            CASE 
+                WHEN SUM(CASE WHEN fo.transaction_type = 'продажа' THEN (fo.qty * fo.price) ELSE 0 END) > 0 
+                THEN (
+                    (
+                        SUM(CASE WHEN fo.transaction_type = 'продажа' THEN (fo.qty * fo.price) ELSE 0 END) - -- Выручка
+                        SUM(CASE WHEN fo.transaction_type = 'возврат' THEN (fo.qty * fo.price) ELSE 0 END) - -- Возвраты
+                        SUM(CASE 
+                            WHEN fo.transaction_type = 'продажа' AND dp.cost_price IS NOT NULL 
+                            THEN COALESCE(dp.cost_price * fo.qty, 0) 
+                            ELSE 0 
+                        END) - -- Себестоимость
+                        COALESCE(commission_data.commission_sum, 0) - -- Комиссии
+                        COALESCE(logistics_data.shipping_sum, 0) - -- Логистика
+                        COALESCE(other_data.other_expenses_sum, 0) -- Прочие расходы
+                    ) / SUM(CASE WHEN fo.transaction_type = 'продажа' THEN (fo.qty * fo.price) ELSE 0 END)
+                ) * 100
+                ELSE NULL 
+            END AS margin_percent
+
+        FROM fact_orders fo
+
+        -- JOIN с таблицей товаров для получения себестоимости
+        LEFT JOIN dim_products dp ON fo.product_id = dp.id
+
+        -- Подзапрос для агрегации комиссий и эквайринга
+        LEFT JOIN (
+            SELECT 
+                ft.client_id,
+                SUM(ABS(ft.amount)) AS commission_sum
+            FROM fact_transactions ft
+            WHERE ft.transaction_date = %(date_param)s
+                AND (
+                    ft.transaction_type LIKE '%%комиссия%%' OR
+                    ft.transaction_type LIKE '%%эквайринг%%' OR
+                    ft.transaction_type LIKE '%%commission%%' OR
+                    ft.transaction_type LIKE '%%fee%%' OR
+                    ft.transaction_type LIKE '%%OperationMarketplaceServiceItemFulfillment%%'
+                )
+            GROUP BY ft.client_id
+        ) commission_data ON fo.client_id = commission_data.client_id
+
+        -- Подзапрос для агрегации логистических расходов
+        LEFT JOIN (
+            SELECT 
+                ft.client_id,
+                SUM(ABS(ft.amount)) AS shipping_sum
+            FROM fact_transactions ft
+            WHERE ft.transaction_date = %(date_param)s
+                AND (
+                    ft.transaction_type LIKE '%%логистика%%' OR
+                    ft.transaction_type LIKE '%%доставка%%' OR
+                    ft.transaction_type LIKE '%%delivery%%' OR
+                    ft.transaction_type LIKE '%%shipping%%' OR
+                    ft.transaction_type LIKE '%%OperationMarketplaceServiceItemDeliveryToCustomer%%'
+                )
+            GROUP BY ft.client_id
+        ) logistics_data ON fo.client_id = logistics_data.client_id
+
+        -- Подзапрос для прочих расходов
+        LEFT JOIN (
+            SELECT 
+                ft.client_id,
+                SUM(ABS(ft.amount)) AS other_expenses_sum
+            FROM fact_transactions ft
+            WHERE ft.transaction_date = %(date_param)s
+                AND ft.transaction_type NOT LIKE '%%комиссия%%'
+                AND ft.transaction_type NOT LIKE '%%эквайринг%%'
+                AND ft.transaction_type NOT LIKE '%%commission%%'
+                AND ft.transaction_type NOT LIKE '%%fee%%'
+                AND ft.transaction_type NOT LIKE '%%логистика%%'
+                AND ft.transaction_type NOT LIKE '%%доставка%%'
+                AND ft.transaction_type NOT LIKE '%%delivery%%'
+                AND ft.transaction_type NOT LIKE '%%shipping%%'
+                AND ft.transaction_type NOT LIKE '%%возврат%%'
+                AND ft.transaction_type NOT LIKE '%%return%%'
+                AND ft.transaction_type NOT LIKE '%%OperationMarketplaceServiceItemFulfillment%%'
+                AND ft.transaction_type NOT LIKE '%%OperationMarketplaceServiceItemDeliveryToCustomer%%'
+                AND ft.transaction_type NOT LIKE '%%OperationMarketplaceServiceItemReturn%%'
+                AND ft.amount < 0 -- Только расходные операции
+            GROUP BY ft.client_id
+        ) other_data ON fo.client_id = other_data.client_id
+
+        WHERE fo.order_date = %(date_param)s
+        GROUP BY fo.client_id
+        
         ON DUPLICATE KEY UPDATE
             orders_cnt = VALUES(orders_cnt),
             revenue_sum = VALUES(revenue_sum),
+            returns_sum = VALUES(returns_sum),
             cogs_sum = VALUES(cogs_sum),
-            profit_sum = VALUES(profit_sum);
+            commission_sum = VALUES(commission_sum),
+            shipping_sum = VALUES(shipping_sum),
+            other_expenses_sum = VALUES(other_expenses_sum),
+            profit_sum = VALUES(profit_sum),
+            margin_percent = VALUES(margin_percent);
         """
         
         # Параметры для запроса
@@ -74,10 +213,31 @@ def aggregate_daily_metrics(connection, date_to_process: str) -> bool:
         connection.commit()
         
         logger.info(f"Агрегация завершена успешно. Обработано записей: {affected_rows}")
+        
+        # Логируем детали для отладки
+        if affected_rows > 0:
+            cursor.execute("""
+                SELECT 
+                    client_id, 
+                    revenue_sum, 
+                    profit_sum, 
+                    margin_percent,
+                    cogs_sum,
+                    commission_sum,
+                    shipping_sum
+                FROM metrics_daily 
+                WHERE metric_date = %s
+            """, (date_to_process,))
+            
+            results = cursor.fetchall()
+            for result in results:
+                logger.info(f"Клиент {result[0]}: Выручка={result[1]:.2f}, Прибыль={result[2]:.2f}, Маржа={result[3]:.2f}%")
+        
         return True
         
     except Exception as e:
         logger.error(f"Ошибка при агрегации метрик за дату {date_to_process}: {e}")
+        logger.error(f"Детали ошибки: {str(e)}")
         connection.rollback()
         return False
         
