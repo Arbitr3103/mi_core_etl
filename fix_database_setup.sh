@@ -49,43 +49,27 @@ print_success "MySQL доступен"
 
 print_info "2. Создание базы данных и пользователя..."
 
-# Запрашиваем пароль root для MySQL
-echo -n "Введите пароль root для MySQL: "
-read -s MYSQL_ROOT_PASSWORD
-echo
-
 # Генерируем случайный пароль для пользователя
 REPLENISHMENT_PASSWORD=$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-12)
 
 print_info "Создание базы данных replenishment_db..."
+# Используем sudo mysql (без пароля) для современных Ubuntu
+sudo mysql -e "CREATE DATABASE IF NOT EXISTS replenishment_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-# Создаем базу данных и пользователя
-mysql -u root -p"$MYSQL_ROOT_PASSWORD" << EOF
--- Удаляем существующую базу если есть (осторожно!)
--- DROP DATABASE IF EXISTS replenishment_db;
+print_info "Удаление существующего пользователя (если есть)..."
+sudo mysql -e "DROP USER IF EXISTS 'replenishment_user'@'localhost';" 2>/dev/null || true
 
--- Создаем базу данных
-CREATE DATABASE IF NOT EXISTS replenishment_db 
-    CHARACTER SET utf8mb4 
-    COLLATE utf8mb4_unicode_ci;
+print_info "Создание пользователя replenishment_user..."
+sudo mysql -e "CREATE USER 'replenishment_user'@'localhost' IDENTIFIED BY '$REPLENISHMENT_PASSWORD';"
 
--- Удаляем пользователя если существует
-DROP USER IF EXISTS 'replenishment_user'@'localhost';
+print_info "Предоставление прав доступа..."
+sudo mysql -e "GRANT ALL PRIVILEGES ON replenishment_db.* TO 'replenishment_user'@'localhost';"
 
--- Создаем нового пользователя
-CREATE USER 'replenishment_user'@'localhost' 
-    IDENTIFIED BY '$REPLENISHMENT_PASSWORD';
+print_info "Применение изменений..."
+sudo mysql -e "FLUSH PRIVILEGES;"
 
--- Даем полные права на базу replenishment_db
-GRANT ALL PRIVILEGES ON replenishment_db.* 
-    TO 'replenishment_user'@'localhost';
-
--- Применяем изменения
-FLUSH PRIVILEGES;
-
--- Показываем созданную базу
-SHOW DATABASES LIKE 'replenishment_db';
-EOF
+print_info "Проверка созданной базы данных..."
+sudo mysql -e "SHOW DATABASES LIKE 'replenishment_db';"
 
 if [ $? -eq 0 ]; then
     print_success "База данных и пользователь созданы успешно"
