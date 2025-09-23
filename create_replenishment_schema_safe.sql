@@ -109,6 +109,8 @@ CREATE TABLE replenishment_alerts (
 -- ===================================================================
 
 DROP TABLE IF EXISTS dim_products;
+-- Включаем обратно проверку внешних ключей
+SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE dim_products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     sku VARCHAR(255) NOT NULL UNIQUE,
@@ -144,6 +146,8 @@ CREATE TABLE dim_products (
 -- 4. СОЗДАНИЕ ТАБЛИЦЫ ПРОДАЖ
 -- ===================================================================
 
+-- Отключаем проверку внешних ключей для безопасного удаления
+SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS sales_data;
 CREATE TABLE sales_data (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
