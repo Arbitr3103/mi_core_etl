@@ -34,11 +34,14 @@ echo "✅ База данных настроена!"
 
 # Применяем схему
 echo "📋 Применение схемы базы данных..."
-if [ -f "create_replenishment_schema_clean.sql" ]; then
+if [ -f "create_replenishment_schema_safe.sql" ]; then
+    mysql -u replenishment_user -p"$REPLENISHMENT_PASSWORD" replenishment_db < create_replenishment_schema_safe.sql
+    echo "✅ Безопасная схема применена!"
+elif [ -f "create_replenishment_schema_clean.sql" ]; then
     mysql -u replenishment_user -p"$REPLENISHMENT_PASSWORD" replenishment_db < create_replenishment_schema_clean.sql
     echo "✅ Схема применена!"
 else
-    echo "⚠️  Файл create_replenishment_schema_clean.sql не найден"
+    echo "⚠️  SQL файлы схемы не найдены"
 fi
 
 # Создаем конфигурацию

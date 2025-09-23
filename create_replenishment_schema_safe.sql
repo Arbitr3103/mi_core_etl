@@ -1,16 +1,14 @@
 -- ===================================================================
--- СОЗДАНИЕ СХЕМЫ ДЛЯ СИСТЕМЫ ПОПОЛНЕНИЯ СКЛАДА
--- Отдельная база данных: replenishment_db
+-- БЕЗОПАСНАЯ СХЕМА ДЛЯ СИСТЕМЫ ПОПОЛНЕНИЯ СКЛАДА
+-- Совместима со всеми версиями MySQL 5.7+
 -- ===================================================================
-
--- Убираем USE - будем подключаться напрямую к нужной БД
--- USE replenishment_db; -- Не нужно, так как подключаемся через mysql -u user -p database
 
 -- ===================================================================
 -- 1. СОЗДАНИЕ ОСНОВНОЙ ТАБЛИЦЫ РЕКОМЕНДАЦИЙ ПО ПОПОЛНЕНИЮ
 -- ===================================================================
 
-CREATE TABLE IF NOT EXISTS replenishment_recommendations (
+DROP TABLE IF EXISTS replenishment_recommendations;
+CREATE TABLE replenishment_recommendations (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     
     -- Информация о товаре
@@ -54,14 +52,14 @@ CREATE TABLE IF NOT EXISTS replenishment_recommendations (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    -- Индексы
-    INDEX idx_product_analysis (product_id, analysis_date),
-    INDEX idx_sku_analysis (sku, analysis_date),
-    INDEX idx_priority_urgency (priority_level, urgency_score DESC),
-    INDEX idx_source_analysis (source, analysis_date),
-    INDEX idx_stockout_days (days_until_stockout),
+    -- Основные индексы
+    KEY idx_product_analysis (product_id, analysis_date),
+    KEY idx_sku_analysis (sku, analysis_date),
+    KEY idx_priority_urgency (priority_level, urgency_score),
+    KEY idx_source_analysis (source, analysis_date),
+    KEY idx_stockout_days (days_until_stockout),
     
-    -- Уникальный ключ для предотвращения дублей
+    -- Уникальный ключ
     UNIQUE KEY uk_product_analysis_date (product_id, analysis_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -69,7 +67,8 @@ CREATE TABLE IF NOT EXISTS replenishment_recommendations (
 -- 2. СОЗДАНИЕ ТАБЛИЦЫ АЛЕРТОВ
 -- ===================================================================
 
-CREATE TABLE IF NOT EXISTS replenishment_alerts (
+DROP TABLE IF EXISTS replenishment_alerts;
+CREATE TABLE replenishment_alerts (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     
     -- Информация о товаре
@@ -96,20 +95,21 @@ CREATE TABLE IF NOT EXISTS replenishment_alerts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    -- Индексы
-    INDEX idx_product_alerts (product_id),
-    INDEX idx_sku_alerts (sku),
-    INDEX idx_alert_level_status (alert_level, status),
-    INDEX idx_alert_type (alert_type),
-    INDEX idx_created_date (created_at),
-    INDEX idx_status_acknowledged (status, acknowledged_at)
+    -- Основные индексы
+    KEY idx_product_alerts (product_id),
+    KEY idx_sku_alerts (sku),
+    KEY idx_alert_level_status (alert_level, status),
+    KEY idx_alert_type (alert_type),
+    KEY idx_created_date (created_at),
+    KEY idx_status_acknowledged (status, acknowledged_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===================================================================
--- 3. СОЗДАНИЕ ТАБЛИЦЫ ТОВАРОВ (упрощенная версия)
+-- 3. СОЗДАНИЕ ТАБЛИЦЫ ТОВАРОВ
 -- ===================================================================
 
-CREATE TABLE IF NOT EXISTS dim_products (
+DROP TABLE IF EXISTS dim_products;
+CREATE TABLE dim_products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     sku VARCHAR(255) NOT NULL UNIQUE,
     product_name VARCHAR(500),
@@ -134,17 +134,18 @@ CREATE TABLE IF NOT EXISTS dim_products (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    -- Индексы
-    INDEX idx_sku (sku),
-    INDEX idx_source_active (source, is_active),
-    INDEX idx_active_products (is_active)
+    -- Основные индексы
+    KEY idx_sku (sku),
+    KEY idx_source_active (source, is_active),
+    KEY idx_active_products (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===================================================================
--- 4. СОЗДАНИЕ ТАБЛИЦЫ ПРОДАЖ (для анализа)
+-- 4. СОЗДАНИЕ ТАБЛИЦЫ ПРОДАЖ
 -- ===================================================================
 
-CREATE TABLE IF NOT EXISTS sales_data (
+DROP TABLE IF EXISTS sales_data;
+CREATE TABLE sales_data (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     
     -- Информация о товаре
@@ -161,21 +162,19 @@ CREATE TABLE IF NOT EXISTS sales_data (
     -- Метаданные
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    -- Индексы
-    INDEX idx_product_date (product_id, sale_date),
-    INDEX idx_sku_date (sku, sale_date),
-    INDEX idx_source_date (source, sale_date),
-    INDEX idx_sale_date (sale_date),
-    
-    -- Внешний ключ
-    FOREIGN KEY (product_id) REFERENCES dim_products(product_id) ON DELETE CASCADE
+    -- Основные индексы
+    KEY idx_product_date (product_id, sale_date),
+    KEY idx_sku_date (sku, sale_date),
+    KEY idx_source_date (source, sale_date),
+    KEY idx_sale_date (sale_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===================================================================
--- 5. СОЗДАНИЕ ТАБЛИЦЫ ОСТАТКОВ (для анализа)
+-- 5. СОЗДАНИЕ ТАБЛИЦЫ ОСТАТКОВ
 -- ===================================================================
 
-CREATE TABLE IF NOT EXISTS inventory_data (
+DROP TABLE IF EXISTS inventory_data;
+CREATE TABLE inventory_data (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     
     -- Информация о товаре
@@ -192,24 +191,22 @@ CREATE TABLE IF NOT EXISTS inventory_data (
     -- Метаданные
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    -- Индексы
-    INDEX idx_product_snapshot (product_id, snapshot_date),
-    INDEX idx_sku_snapshot (sku, snapshot_date),
-    INDEX idx_source_snapshot (source, snapshot_date),
-    INDEX idx_snapshot_date (snapshot_date),
+    -- Основные индексы
+    KEY idx_product_snapshot (product_id, snapshot_date),
+    KEY idx_sku_snapshot (sku, snapshot_date),
+    KEY idx_source_snapshot (source, snapshot_date),
+    KEY idx_snapshot_date (snapshot_date),
     
     -- Уникальный ключ
-    UNIQUE KEY uk_product_snapshot (product_id, snapshot_date),
-    
-    -- Внешний ключ
-    FOREIGN KEY (product_id) REFERENCES dim_products(product_id) ON DELETE CASCADE
+    UNIQUE KEY uk_product_snapshot (product_id, snapshot_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===================================================================
 -- 6. СОЗДАНИЕ ТАБЛИЦЫ НАСТРОЕК СИСТЕМЫ
 -- ===================================================================
 
-CREATE TABLE IF NOT EXISTS replenishment_settings (
+DROP TABLE IF EXISTS replenishment_settings;
+CREATE TABLE replenishment_settings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     
     -- Категория и ключ настройки
@@ -231,16 +228,16 @@ CREATE TABLE IF NOT EXISTS replenishment_settings (
     -- Уникальный ключ
     UNIQUE KEY uk_category_key (category, setting_key),
     
-    -- Индексы
-    INDEX idx_category (category),
-    INDEX idx_active_settings (is_active)
+    -- Основные индексы
+    KEY idx_category (category),
+    KEY idx_active_settings (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===================================================================
 -- 7. ВСТАВКА БАЗОВЫХ НАСТРОЕК
 -- ===================================================================
 
-INSERT IGNORE INTO replenishment_settings (category, setting_key, setting_value, setting_type, description) VALUES
+INSERT INTO replenishment_settings (category, setting_key, setting_value, setting_type, description) VALUES
 -- Настройки анализа
 ('ANALYSIS', 'critical_stockout_threshold', '3', 'INTEGER', 'Критический порог дней до исчерпания запасов'),
 ('ANALYSIS', 'high_priority_threshold', '7', 'INTEGER', 'Высокий приоритет - дней до исчерпания'),
@@ -251,8 +248,6 @@ INSERT IGNORE INTO replenishment_settings (category, setting_key, setting_value,
 -- Настройки уведомлений
 ('NOTIFICATIONS', 'enable_email_alerts', 'false', 'BOOLEAN', 'Включить email уведомления'),
 ('NOTIFICATIONS', 'alert_email_recipients', '[]', 'JSON', 'Список получателей email уведомлений'),
-('NOTIFICATIONS', 'email_smtp_host', '', 'STRING', 'SMTP сервер для отправки email'),
-('NOTIFICATIONS', 'email_smtp_port', '587', 'INTEGER', 'Порт SMTP сервера'),
 
 -- Настройки системы
 ('SYSTEM', 'max_analysis_products', '10000', 'INTEGER', 'Максимальное количество товаров для анализа'),
@@ -261,106 +256,52 @@ INSERT IGNORE INTO replenishment_settings (category, setting_key, setting_value,
 ('SYSTEM', 'data_retention_days', '90', 'INTEGER', 'Срок хранения данных анализа (дни)');
 
 -- ===================================================================
--- 8. СОЗДАНИЕ ПРЕДСТАВЛЕНИЙ ДЛЯ УДОБСТВА
+-- 8. ДОБАВЛЕНИЕ ТЕСТОВЫХ ДАННЫХ
 -- ===================================================================
 
--- Представление для активных критических рекомендаций
-CREATE OR REPLACE VIEW v_critical_recommendations AS
+-- Добавляем тестовые товары
+INSERT INTO dim_products (sku, product_name, source, cost_price, selling_price, min_stock_level, is_active) VALUES
+('TEST-001', 'Тестовый товар 1', 'test', 100.00, 150.00, 10, TRUE),
+('TEST-002', 'Тестовый товар 2', 'test', 200.00, 280.00, 15, TRUE),
+('TEST-003', 'Тестовый товар 3', 'test', 50.00, 75.00, 20, TRUE),
+('DEMO-001', 'Демо товар 1', 'demo', 300.00, 450.00, 5, TRUE),
+('DEMO-002', 'Демо товар 2', 'demo', 150.00, 225.00, 8, TRUE);
+
+-- Добавляем тестовые остатки
+INSERT INTO inventory_data (product_id, sku, source, snapshot_date, current_stock, available_stock) 
+SELECT product_id, sku, source, CURDATE(), 
+    CASE 
+        WHEN sku LIKE 'TEST%' THEN 5 
+        ELSE 3 
+    END,
+    CASE 
+        WHEN sku LIKE 'TEST%' THEN 5 
+        ELSE 3 
+    END
+FROM dim_products;
+
+-- Добавляем тестовые продажи за последние 30 дней
+INSERT INTO sales_data (product_id, sku, source, sale_date, quantity_sold, sale_price) 
 SELECT 
-    rr.*,
-    dp.cost_price,
-    dp.selling_price
-FROM replenishment_recommendations rr
-LEFT JOIN dim_products dp ON rr.product_id = dp.product_id
-WHERE rr.priority_level IN ('CRITICAL', 'HIGH')
-    AND rr.analysis_date = (
-        SELECT MAX(analysis_date) 
-        FROM replenishment_recommendations rr2 
-        WHERE rr2.product_id = rr.product_id
-    )
-    AND dp.is_active = TRUE
-ORDER BY rr.urgency_score DESC, rr.days_until_stockout ASC;
-
--- Представление для активных алертов
-CREATE OR REPLACE VIEW v_active_alerts AS
-SELECT 
-    ra.*,
-    dp.cost_price,
-    dp.selling_price
-FROM replenishment_alerts ra
-LEFT JOIN dim_products dp ON ra.product_id = dp.product_id
-WHERE ra.status = 'NEW'
-    AND ra.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-    AND dp.is_active = TRUE
-ORDER BY 
-    CASE ra.alert_level
-        WHEN 'CRITICAL' THEN 4
-        WHEN 'HIGH' THEN 3
-        WHEN 'MEDIUM' THEN 2
-        WHEN 'LOW' THEN 1
-        ELSE 0
-    END DESC,
-    ra.created_at DESC;
-
--- ===================================================================
--- 9. СОЗДАНИЕ ПРОЦЕДУР ДЛЯ ОЧИСТКИ СТАРЫХ ДАННЫХ
--- ===================================================================
-
-DELIMITER //
-
-CREATE PROCEDURE CleanOldRecommendations(IN retention_days INT)
-BEGIN
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        ROLLBACK;
-        RESIGNAL;
-    END;
-    
-    START TRANSACTION;
-    
-    -- Удаляем старые рекомендации
-    DELETE FROM replenishment_recommendations 
-    WHERE analysis_date < DATE_SUB(CURDATE(), INTERVAL retention_days DAY);
-    
-    -- Удаляем старые алерты
-    DELETE FROM replenishment_alerts 
-    WHERE created_at < DATE_SUB(NOW(), INTERVAL retention_days DAY)
-        AND status IN ('RESOLVED', 'IGNORED');
-    
-    COMMIT;
-    
-    SELECT ROW_COUNT() as deleted_rows;
-END //
-
-DELIMITER ;
-
--- ===================================================================
--- 10. СОЗДАНИЕ ИНДЕКСОВ ДЛЯ ПРОИЗВОДИТЕЛЬНОСТИ
--- ===================================================================
-
--- Дополнительные индексы для оптимизации запросов
--- Используем обычный CREATE INDEX (без IF NOT EXISTS для совместимости)
-
--- Индекс для приоритета и даты анализа
-CREATE INDEX idx_recommendations_priority_date 
-    ON replenishment_recommendations(priority_level, analysis_date DESC);
-
--- Индекс для сортировки по срочности
-CREATE INDEX idx_recommendations_urgency 
-    ON replenishment_recommendations(urgency_score DESC);
-
--- Индекс для алертов по уровню и дате
-CREATE INDEX idx_alerts_level_created 
-    ON replenishment_alerts(alert_level, created_at DESC);
-
--- Индекс для активных товаров по источнику
-CREATE INDEX idx_products_active_source 
-    ON dim_products(is_active, source);
+    p.product_id, 
+    p.sku, 
+    p.source, 
+    DATE_SUB(CURDATE(), INTERVAL FLOOR(RAND() * 30) DAY),
+    FLOOR(RAND() * 3) + 1,
+    p.selling_price
+FROM dim_products p
+CROSS JOIN (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) AS numbers;
 
 -- ===================================================================
 -- ЗАВЕРШЕНИЕ СОЗДАНИЯ СХЕМЫ
 -- ===================================================================
 
 -- Показываем созданные таблицы
-SELECT 'Schema created successfully!' as status;
-SHOW TABLES;
+SELECT 'Безопасная схема создана успешно!' as status;
+
+SELECT 
+    TABLE_NAME as 'Таблица',
+    TABLE_ROWS as 'Строк'
+FROM information_schema.TABLES 
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME;
