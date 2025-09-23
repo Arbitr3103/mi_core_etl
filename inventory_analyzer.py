@@ -14,7 +14,7 @@ from dataclasses import dataclass
 # Добавляем путь к модулю importers
 sys.path.append(os.path.join(os.path.dirname(__file__), 'importers'))
 
-from ozon_importer import connect_to_db
+from replenishment_db_connector import connect_to_replenishment_db as connect_to_db
 
 # Настройка логирования
 logging.basicConfig(

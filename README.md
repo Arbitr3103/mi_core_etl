@@ -369,3 +369,122 @@ sudo systemctl start replenishment
 ---
 
 📞 **Поддержка**: Если у вас есть вопросы или проблемы, создайте issue в репозитории или свяжитесь с командой разработки.
+
+## 🚀 Развертывание
+
+### Локальная разработка (macOS)
+
+1. **Клонируйте репозиторий:**
+
+```bash
+git clone <repository-url>
+cd mi_core_etl
+```
+
+2. **Установите MySQL через Homebrew:**
+
+```bash
+brew install mysql
+brew services start mysql
+```
+
+3. **Настройте базу данных:**
+
+```bash
+# Создайте базу данных и пользователя
+mysql -u root < setup_mysql_user.sql
+
+# Примените схему
+mysql -u replenishment_user -p'K9#mP2$vQx!8LbN&wZr4FjD7sHq' replenishment_db < create_replenishment_schema_safe.sql
+```
+
+4. **Установите зависимости:**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install mysql-connector-python requests
+```
+
+5. **Запустите систему:**
+
+```bash
+python3 simple_api_server.py
+```
+
+6. **Проверьте работу:**
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+### Развертывание на облачном сервере (Ubuntu)
+
+1. **Клонируйте репозиторий на сервере:**
+
+```bash
+git clone <repository-url>
+cd mi_core_etl
+```
+
+2. **Запустите автоматическое развертывание:**
+
+```bash
+chmod +x deploy_cloud_server.sh
+./deploy_cloud_server.sh
+```
+
+Скрипт автоматически:
+
+- Установит MySQL и Python зависимости
+- Создаст базу данных и пользователя с безопасным паролем
+- Настроит systemd сервис для автозапуска
+- Настроит nginx как reverse proxy (если установлен)
+- Настроит firewall для безопасности
+
+3. **Проверьте статус сервиса:**
+
+```bash
+sudo systemctl status replenishment-api
+curl http://localhost:8000/api/health
+```
+
+## 🔧 Управление сервисом на сервере
+
+```bash
+# Статус сервиса
+sudo systemctl status replenishment-api
+
+# Перезапуск сервиса
+sudo systemctl restart replenishment-api
+
+# Просмотр логов
+sudo journalctl -u replenishment-api -f
+
+# Остановка сервиса
+sudo systemctl stop replenishment-api
+```
+
+## 🌐 API Endpoints
+
+После запуска система доступна по следующим адресам:
+
+- **Веб-интерфейс**: http://localhost:8000
+- **Проверка здоровья**: http://localhost:8000/api/health
+- **Рекомендации**: http://localhost:8000/api/recommendations
+- **Алерты**: http://localhost:8000/api/alerts
+- **Отчеты**: http://localhost:8000/api/reports
+- **Быстрый анализ**: http://localhost:8000/api/analysis/run
+
+## 📊 Тестирование
+
+```bash
+# Тестирование подключения к БД
+python3 replenishment_db_connector.py
+
+# Тестирование компонентов
+python3 test_components_init.py
+
+# Тестирование API
+curl http://localhost:8000/api/health
+```
