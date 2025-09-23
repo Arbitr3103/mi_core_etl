@@ -92,7 +92,21 @@ echo "✅ Конфигурация создана!"
 
 # Применяем схему базы данных
 echo "📋 Применение схемы базы данных..."
-if [ -f "create_replenishment_schema_safe.sql" ]; then
+if [ -f "create_replenishment_schema_clean.sql" ]; then
+    mysql -u replenishment_user -p"$REPLENISHMENT_PASSWORD" replenishment_db < create_replenishment_schema_clean.sql
+    echo "✅ Схема базы данных применена!"
+elif [ -f "create_replenishment_schema_safe.sql" ]; then
+    echo "⚠️  Используем безопасную схему, но сначала очистим БД..."
+    mysql -u replenishment_user -p"$REPLENISHMENT_PASSWORD" replenishment_db -e "
+    SET FOREIGN_KEY_CHECKS = 0;
+    DROP TABLE IF EXISTS replenishment_recommendations;
+    DROP TABLE IF EXISTS replenishment_alerts;
+    DROP TABLE IF EXISTS replenishment_settings;
+    DROP TABLE IF EXISTS sales_data;
+    DROP TABLE IF EXISTS inventory_data;
+    DROP TABLE IF EXISTS dim_products;
+    SET FOREIGN_KEY_CHECKS = 1;
+    "
     mysql -u replenishment_user -p"$REPLENISHMENT_PASSWORD" replenishment_db < create_replenishment_schema_safe.sql
     echo "✅ Схема базы данных применена!"
 else
