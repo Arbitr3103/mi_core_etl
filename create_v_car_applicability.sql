@@ -10,14 +10,13 @@ SELECT
     -- Идентификаторы
     cs.id as specification_id,
     cs.car_model_id,
-    cm.brand_id,
+    b.id as brand_id,
     r.id as region_id,
     
     -- Информация о регионе
     r.name as region_name,
     
     -- Информация о марке
-    b.id as brand_id,
     b.name as brand_name,
     
     -- Информация о модели
