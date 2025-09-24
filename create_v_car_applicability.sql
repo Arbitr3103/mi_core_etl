@@ -19,15 +19,12 @@ SELECT
     -- Информация о марке
     b.id as brand_id,
     b.name as brand_name,
-    b.name_rus as brand_name_rus,
     
     -- Информация о модели
     cm.id as model_id,
     cm.name as model_name,
-    cm.name_rus as model_name_rus,
     
-    -- Информация о спецификации
-    cs.name as specification_name,
+    -- Информация о спецификации (годы производства)
     cs.year_start,
     cs.year_end,
     
@@ -37,13 +34,8 @@ SELECT
     cs.fastener_type,
     cs.fastener_params,
     
-    -- Дополнительная информация
-    cs.source as spec_source,
-    cs.external_id as spec_external_id,
-    
     -- Удобные поля для фильтрации
     CONCAT(b.name, ' ', cm.name) as full_car_name,
-    CONCAT(b.name_rus, ' ', cm.name_rus) as full_car_name_rus,
     
     -- Период производства в удобном формате
     CASE 
@@ -55,11 +47,7 @@ SELECT
     -- Флаги для удобной фильтрации
     CASE WHEN cs.pcd IS NOT NULL AND cs.pcd != '' THEN 1 ELSE 0 END as has_pcd,
     CASE WHEN cs.dia IS NOT NULL THEN 1 ELSE 0 END as has_dia,
-    CASE WHEN cs.fastener_type IS NOT NULL THEN 1 ELSE 0 END as has_fastener_info,
-    
-    -- Временные метки
-    cs.created_at,
-    cs.updated_at
+    CASE WHEN cs.fastener_type IS NOT NULL THEN 1 ELSE 0 END as has_fastener_info
 
 FROM car_specifications cs
 JOIN car_models cm ON cs.car_model_id = cm.id
