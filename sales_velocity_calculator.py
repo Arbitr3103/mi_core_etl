@@ -476,7 +476,7 @@ class SalesVelocityCalculator:
                     ROUND(SUM(fo.qty) / %s, 2) as daily_rate,
                     SUM(fo.qty * fo.price) as total_revenue
                 FROM fact_orders fo
-                LEFT JOIN dim_products dp ON fo.product_id = dp.id
+                LEFT JOIN dim_products dp ON fo.product_id = dp.product_id
                 WHERE fo.order_date >= %s 
                     AND fo.order_date <= %s
                     AND fo.transaction_type = 'продажа'

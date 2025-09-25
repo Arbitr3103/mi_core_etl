@@ -139,7 +139,7 @@ class InventoryAnalyzer:
                     i.updated_at as last_updated,
                     dp.cost_price
                 FROM inventory i
-                LEFT JOIN dim_products dp ON i.product_id = dp.id
+                LEFT JOIN dim_products dp ON i.product_id = dp.product_id
                 WHERE i.quantity_present >= 0
             """
             
