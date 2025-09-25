@@ -469,7 +469,7 @@ class SalesVelocityCalculator:
             cursor.execute("""
                 SELECT 
                     fo.product_id,
-                    dp.sku_ozon as sku,
+                    dp.sku as sku,
                     dp.product_name,
                     SUM(fo.qty) as total_sales,
                     COUNT(DISTINCT DATE(fo.order_date)) as active_days,
@@ -480,7 +480,7 @@ class SalesVelocityCalculator:
                 WHERE fo.order_date >= %s 
                     AND fo.order_date <= %s
                     AND fo.transaction_type = 'продажа'
-                GROUP BY fo.product_id, dp.sku_ozon, dp.product_name
+                GROUP BY fo.product_id, dp.sku, dp.product_name
                 HAVING total_sales > 0
                 ORDER BY total_sales DESC
                 LIMIT %s
@@ -511,18 +511,18 @@ class SalesVelocityCalculator:
             
             cursor.execute("""
                 SELECT 
-                    dp.id as product_id,
-                    dp.sku_ozon as sku,
+                    dp.product_id as product_id,
+                    dp.sku as sku,
                     dp.product_name,
                     MAX(fo.order_date) as last_sale_date,
                     DATEDIFF(CURDATE(), MAX(fo.order_date)) as days_since_last_sale,
                     SUM(i.quantity_present) as current_stock
                 FROM dim_products dp
-                LEFT JOIN fact_orders fo ON dp.id = fo.product_id 
+                LEFT JOIN fact_orders fo ON dp.product_id = fo.product_id 
                     AND fo.transaction_type = 'продажа'
-                LEFT JOIN inventory i ON dp.id = i.product_id
-                WHERE dp.is_active_for_replenishment = TRUE
-                GROUP BY dp.id, dp.sku_ozon, dp.product_name
+                LEFT JOIN inventory i ON dp.product_id = i.product_id
+                WHERE dp.is_active = TRUE
+                GROUP BY dp.product_id, dp.sku, dp.product_name
                 HAVING (days_since_last_sale > %s OR last_sale_date IS NULL)
                     AND current_stock > 0
                 ORDER BY days_since_last_sale DESC, current_stock DESC

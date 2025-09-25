@@ -130,7 +130,7 @@ class InventoryAnalyzer:
             sql = """
                 SELECT 
                     i.product_id,
-                    COALESCE(dp.sku_ozon, i.sku, 'UNKNOWN') as sku,
+                    COALESCE(dp.sku, 'UNKNOWN') as sku,
                     COALESCE(dp.product_name, 'Unknown Product') as product_name,
                     i.source,
                     i.quantity_present as current_stock,
