@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Полная интеграция фильтров с поддержкой страны</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/country-filter.css" />
+    <style>
+      .integration-demo {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .filter-section {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .filter-group {
+        margin-bottom: 20px;
+      }
+
+      .filter-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 8px;
+        display: block;
+      }
+
+      .form-select,
+      .form-control {
+        border-radius: 8px;
+        border: 2px solid #dee2e6;
+        transition: all 0.3s ease;
+      }
+
+      .form-select:focus,
+      .form-control:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+      }
+
+      .btn-outline-secondary {
+        border-radius: 8px;
+        border: 2px solid #6c757d;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+
+      .status-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #0d6efd;
+      }
+
+      .results-section {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .product-item {
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        transition: all 0.3s ease;
+      }
+
+      .product-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      }
+
+      .product-name {
+        color: #0d6efd;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+        font-weight: 600;
+      }
+
+      .product-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 15px;
+      }
+
+      .product-details span {
+        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        font-weight: 500;
+      }
+
+      .product-price {
+        font-weight: bold;
+        color: #198754;
+        font-size: 1.2em;
+      }
+
+      .no-results {
+        text-align: center;
+        padding: 60px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+      }
+
+      .no-results h4 {
+        color: #6c757d;
+        margin-bottom: 20px;
+      }
+
+      .filter-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 0.85em;
+        margin: 2px;
+        font-weight: 500;
+      }
+
+      .loading-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        color: #6c757d;
+      }
+
+      .loading-spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #0d6efd;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 10px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .demo-actions {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 20px;
+      }
+
+      .demo-actions .btn {
+        margin: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="integration-demo">
+      <div class="text-center mb-5">
+        <h1 class="display-4 text-primary mb-3">🚗 Система фильтров ZUZ</h1>
+        <p class="lead text-muted">
+          Полная интеграция фильтра по стране изготовления с существующими
+          фильтрами
+        </p>
+      </div>
+
+      <!-- Статус интеграции -->
+      <div class="status-card">
+        <div class="row align-items-center">
+          <div class="col-md-8">
+            <h5 class="mb-2">📊 Статус интеграции</h5>
+            <p class="mb-0" id="integration-status">
+              <span class="text-warning"
+                >⏳ Инициализация системы фильтров...</span
+              >
+            </p>
+          </div>
+          <div class="col-md-4 text-end">
+            <div id="results-counter" class="h5 text-primary mb-0">
+              Загрузка...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Секция фильтров -->
+      <div class="filter-section">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h3 class="mb-0">🔍 Фильтры поиска</h3>
+          <button id="reset-filters" class="btn btn-outline-secondary">
+            🔄 Сбросить все фильтры
+          </button>
+        </div>
+
+        <div class="row">
+          <div class="col-lg-3 col-md-6">
+            <div class="filter-group">
+              <label for="brand-select" class="filter-label"
+                >🏭 Марка автомобиля</label
+              >
+              <select id="brand-select" class="form-select">
+                <option value="">Выберите марку</option>
+                <option value="1">BMW</option>
+                <option value="2">Mercedes-Benz</option>
+                <option value="3">Audi</option>
+                <option value="4">Toyota</option>
+                <option value="5">Honda</option>
+                <option value="6">Volkswagen</option>
+                <option value="7">Ford</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="col-lg-3 col-md-6">
+            <div class="filter-group">
+              <label for="model-select" class="filter-label">🚙 Модель</label>
+              <select id="model-select" class="form-select">
+                <option value="">Выберите модель</option>
+                <option value="1">X5</option>
+                <option value="2">3 Series</option>
+                <option value="3">E-Class</option>
+                <option value="4">A4</option>
+                <option value="5">Camry</option>
+                <option value="6">Civic</option>
+                <option value="7">Golf</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="col-lg-2 col-md-6">
+            <div class="filter-group">
+              <label for="year-select" class="filter-label"
+                >📅 Год выпуска</label
+              >
+              <select id="year-select" class="form-select">
+                <option value="">Любой год</option>
+                <option value="2024">2024</option>
+                <option value="2023">2023</option>
+                <option value="2022">2022</option>
+                <option value="2021">2021</option>
+                <option value="2020">2020</option>
+                <option value="2019">2019</option>
+                <option value="2018">2018</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="col-lg-4 col-md-6">
+            <!-- Контейнер для фильтра по стране -->
+            <div id="country-filter-container"></div>
+          </div>
+        </div>
+
+        <!-- Активные фильтры -->
+        <div class="mt-4">
+          <h6 class="text-muted mb-2">Активные фильтры:</h6>
+          <div id="active-filters">
+            <span class="text-muted fst-italic">Нет активных фильтров</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Секция результатов -->
+      <div class="results-section">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h3 class="mb-0">📦 Результаты поиска</h3>
+          <div class="text-muted">
+            <small id="search-info">Готов к поиску</small>
+          </div>
+        </div>
+
+        <div id="products-list">
+          <div class="loading-indicator">
+            <div class="loading-spinner"></div>
+            <span>Инициализация системы фильтров...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Демо-действия -->
+      <div class="demo-actions">
+        <h6 class="mb-3">🧪 Демо-действия для тестирования:</h6>
+        <button
+          class="btn btn-outline-primary btn-sm"
+          onclick="demoSelectBMW()"
+        >
+          Выбрать BMW
+        </button>
+        <button
+          class="btn btn-outline-primary btn-sm"
+          onclick="demoSelectToyota()"
+        >
+          Выбрать Toyota
+        </button>
+        <button
+          class="btn btn-outline-success btn-sm"
+          onclick="demoFullFilter()"
+        >
+          Полный фильтр
+        </button>
+        <button class="btn btn-outline-info btn-sm" onclick="showFilterInfo()">
+          Информация о фильтрах
+        </button>
+        <button class="btn btn-outline-warning btn-sm" onclick="clearCache()">
+          Очистить кэш
+        </button>
+      </div>
+    </div>
+
+    <!-- Подключение скриптов -->
+    <script src="../js/CountryFilter.js"></script>
+    <script src="../js/FilterManager.js"></script>
+    <script src="../js/FilterManagerIntegration.js"></script>
+
+    <script>
+      // Расширенная интеграция с демо-функциями
+      class DemoFilterIntegration extends FilterManagerIntegration {
+        constructor(options) {
+          super(options);
+          this.searchTimeout = null;
+        }
+
+        onFiltersChangeCustom(result, filters) {
+          // Обновляем отображение активных фильтров
+          this.updateActiveFiltersDisplay(filters);
+
+          // Обновляем информацию о поиске
+          this.updateSearchInfo(result, filters);
+
+          // Обновляем статус интеграции
+          this.updateIntegrationStatus();
+
+          // Имитируем задержку поиска для демонстрации
+          this.simulateSearchDelay();
+        }
+
+        updateActiveFiltersDisplay(filters) {
+          const activeFiltersElement =
+            document.getElementById("active-filters");
+          if (!activeFiltersElement) return;
+
+          const activeFilters = this.getActiveFilters();
+
+          if (Object.keys(activeFilters).length === 0) {
+            activeFiltersElement.innerHTML =
+              '<span class="text-muted fst-italic">Нет активных фильтров</span>';
+            return;
+          }
+
+          const filterLabels = {
+            brand_id: "🏭 Марка",
+            model_id: "🚙 Модель",
+            year: "📅 Год",
+            country_id: "🌍 Страна",
+          };
+
+          const filtersHtml = Object.keys(activeFilters)
+            .map((key) => {
+              const label = filterLabels[key] || key;
+              const value = this.getFilterDisplayValue(key, activeFilters[key]);
+              return `<span class="filter-badge">${label}: ${value}</span>`;
+            })
+            .join("");
+
+          activeFiltersElement.innerHTML = filtersHtml;
+        }
+
+        getFilterDisplayValue(filterKey, value) {
+          // Получаем читаемые значения для фильтров
+          const displayMaps = {
+            brand_id: {
+              1: "BMW",
+              2: "Mercedes-Benz",
+              3: "Audi",
+              4: "Toyota",
+              5: "Honda",
+              6: "Volkswagen",
+              7: "Ford",
+            },
+            model_id: {
+              1: "X5",
+              2: "3 Series",
+              3: "E-Class",
+              4: "A4",
+              5: "Camry",
+              6: "Civic",
+              7: "Golf",
+            },
+          };
+
+          if (
+            filterKey === "country_id" &&
+            this.getFilterManager().countryFilter
+          ) {
+            const countryInfo =
+              this.getFilterManager().getSelectedCountryInfo();
+            return countryInfo ? countryInfo.name : value;
+          }
+
+          return displayMaps[filterKey]
+            ? displayMaps[filterKey][value] || value
+            : value;
+        }
+
+        updateSearchInfo(result, filters) {
+          const searchInfoElement = document.getElementById("search-info");
+          if (!searchInfoElement) return;
+
+          const activeCount = Object.keys(this.getActiveFilters()).length;
+          const resultCount = result.data ? result.data.length : 0;
+
+          if (activeCount === 0) {
+            searchInfoElement.textContent = "Готов к поиску";
+          } else {
+            searchInfoElement.textContent = `Найдено ${resultCount} товаров по ${activeCount} фильтрам`;
+          }
+        }
+
+        updateIntegrationStatus() {
+          const statusElement = document.getElementById("integration-status");
+          if (!statusElement) return;
+
+          const isReady = this.isReady();
+          const hasFilters = this.hasActiveFilters();
+
+          let statusHtml = "";
+          if (!isReady) {
+            statusHtml =
+              '<span class="text-warning">⏳ Инициализация системы фильтров...</span>';
+          } else if (hasFilters) {
+            statusHtml =
+              '<span class="text-success">✅ Фильтры активны, поиск выполнен</span>';
+          } else {
+            statusHtml =
+              '<span class="text-info">🔍 Система готова к работе</span>';
+          }
+
+          statusElement.innerHTML = statusHtml;
+        }
+
+        simulateSearchDelay() {
+          const productsElement = document.getElementById("products-list");
+          if (!productsElement) return;
+
+          // Показываем индикатор загрузки
+          productsElement.innerHTML = `
+                    <div class="loading-indicator">
+                        <div class="loading-spinner"></div>
+                        <span>Поиск товаров...</span>
+                    </div>
+                `;
+
+          // Имитируем задержку
+          clearTimeout(this.searchTimeout);
+          this.searchTimeout = setTimeout(() => {
+            this.showDemoResults();
+          }, 800);
+        }
+
+        showDemoResults() {
+          const activeFilters = this.getActiveFilters();
+          const hasFilters = Object.keys(activeFilters).length > 0;
+
+          if (!hasFilters) {
+            this.showWelcomeMessage();
+            return;
+          }
+
+          // Генерируем демо-результаты на основе фильтров
+          const demoProducts = this.generateDemoProducts(activeFilters);
+          this.updateResults({
+            data: demoProducts,
+            pagination: { total: demoProducts.length },
+          });
+        }
+
+        showWelcomeMessage() {
+          const productsElement = document.getElementById("products-list");
+          if (!productsElement) return;
+
+          productsElement.innerHTML = `
+                    <div class="no-results">
+                        <h4>👋 Добро пожаловать в систему фильтров ZUZ!</h4>
+                        <p class="text-muted mb-4">Выберите фильтры выше, чтобы найти подходящие проставки для вашего автомобиля.</p>
+                        <div class="demo-actions">
+                            <button class="btn btn-primary" onclick="demoSelectBMW()">
+                                🚗 Попробовать с BMW
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="demoSelectToyota()">
+                                🚙 Попробовать с Toyota
+                            </button>
+                        </div>
+                    </div>
+                `;
+        }
+
+        generateDemoProducts(filters) {
+          const products = [];
+          const brandNames = {
+            1: "BMW",
+            2: "Mercedes-Benz",
+            3: "Audi",
+            4: "Toyota",
+            5: "Honda",
+            6: "Volkswagen",
+            7: "Ford",
+          };
+          const modelNames = {
+            1: "X5",
+            2: "3 Series",
+            3: "E-Class",
+            4: "A4",
+            5: "Camry",
+            6: "Civic",
+            7: "Golf",
+          };
+
+          const brandName = brandNames[filters.brand_id] || "Универсальная";
+          const modelName = modelNames[filters.model_id] || "модель";
+          const year = filters.year || "2020-2024";
+          const country = filters.country_id ? "Германия" : "Различные страны";
+
+          // Генерируем 3-5 товаров
+          const productCount = Math.floor(Math.random() * 3) + 3;
+
+          for (let i = 1; i <= productCount; i++) {
+            products.push({
+              id: i,
+              product_name: `ZUZ Проставка ${brandName} ${modelName} ${year} - Комплект ${i}`,
+              brand_name: brandName,
+              model_name: modelName,
+              country_name: country,
+              year: year,
+              cost_price: Math.floor(Math.random() * 5000) + 2000,
+              description: `Высококачественная проставка для ${brandName} ${modelName}. Изготовлена из прочного алюминиевого сплава.`,
+            });
+          }
+
+          return products;
+        }
+      }
+
+      // Глобальные переменные
+      let demoIntegration = null;
+
+      // Инициализация при загрузке страницы
+      document.addEventListener("DOMContentLoaded", function () {
+        demoIntegration = new DemoFilterIntegration({
+          apiBaseUrl: "/api",
+        });
+
+        window.demoIntegration = demoIntegration;
+        window.filterIntegration = demoIntegration;
+
+        // Обновляем статус через небольшую задержку
+        setTimeout(() => {
+          demoIntegration.updateIntegrationStatus();
+          demoIntegration.showWelcomeMessage();
+        }, 1000);
+      });
+
+      // Демо-функции
+      function demoSelectBMW() {
+        if (!demoIntegration) return;
+
+        document.getElementById("brand-select").value = "1";
+        demoIntegration.setFilter("brand_id", "1");
+
+        setTimeout(() => {
+          document.getElementById("model-select").value = "1";
+          demoIntegration.setFilter("model_id", "1");
+        }, 500);
+      }
+
+      function demoSelectToyota() {
+        if (!demoIntegration) return;
+
+        document.getElementById("brand-select").value = "4";
+        demoIntegration.setFilter("brand_id", "4");
+
+        setTimeout(() => {
+          document.getElementById("model-select").value = "5";
+          demoIntegration.setFilter("model_id", "5");
+        }, 500);
+      }
+
+      function demoFullFilter() {
+        if (!demoIntegration) return;
+
+        document.getElementById("brand-select").value = "3";
+        document.getElementById("model-select").value = "4";
+        document.getElementById("year-select").value = "2023";
+
+        demoIntegration.setFilter("brand_id", "3");
+        setTimeout(() => demoIntegration.setFilter("model_id", "4"), 200);
+        setTimeout(() => demoIntegration.setFilter("year", "2023"), 400);
+        setTimeout(() => demoIntegration.setFilter("country_id", "1"), 600);
+      }
+
+      function showFilterInfo() {
+        if (!demoIntegration) return;
+
+        const info = {
+          ready: demoIntegration.isReady(),
+          currentFilters: demoIntegration.getCurrentFilters(),
+          activeFilters: demoIntegration.getActiveFilters(),
+          hasActiveFilters: demoIntegration.hasActiveFilters(),
+          availableCountries: demoIntegration
+            .getFilterManager()
+            .getAvailableCountries().length,
+        };
+
+        alert(
+          "📊 Информация о системе фильтров:\n\n" +
+            JSON.stringify(info, null, 2)
+        );
+      }
+
+      function clearCache() {
+        if (!demoIntegration) return;
+
+        demoIntegration.getFilterManager().clearCache();
+        alert("🗑️ Кэш очищен успешно!");
+      }
+
+      // Обработка ошибок
+      window.addEventListener("error", function (e) {
+        console.error("Ошибка на странице:", e.error);
+      });
+    </script>
+  </body>
+</html>

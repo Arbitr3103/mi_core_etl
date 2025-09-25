@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>Мобильная демо: Фильтр по стране изготовления</title>
+
+    <!-- Bootstrap CSS для базовых стилей -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Стили фильтра -->
+    <link href="../css/country-filter.css" rel="stylesheet" />
+
+    <style>
+      body {
+        background-color: #f8f9fa;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        padding: 0;
+        margin: 0;
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .mobile-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .mobile-header h1 {
+        font-size: 1.25rem;
+        margin: 0;
+        font-weight: 600;
+      }
+
+      .mobile-header p {
+        font-size: 0.85rem;
+        margin: 0.25rem 0 0 0;
+        opacity: 0.9;
+      }
+
+      .mobile-container {
+        padding: 1rem;
+        max-width: 100%;
+      }
+
+      .mobile-section {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .mobile-section h2 {
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+        color: #333;
+        font-weight: 600;
+      }
+
+      .mobile-filters {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .mobile-filter-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      @media (min-width: 576px) {
+        .mobile-filter-row {
+          flex-direction: row;
+          gap: 0.75rem;
+        }
+
+        .mobile-filter-row > div {
+          flex: 1;
+        }
+      }
+
+      .mobile-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .mobile-actions .btn {
+        flex: 1;
+        min-width: 120px;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+        border-radius: 0.5rem;
+        touch-action: manipulation;
+      }
+
+      .connection-info {
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+      }
+
+      .device-info {
+        background: #f3e5f5;
+        border: 1px solid #e1bee7;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+      }
+
+      .test-results {
+        background: #e8f5e8;
+        border: 1px solid #c8e6c9;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin-top: 1rem;
+        font-size: 0.85rem;
+      }
+
+      .performance-metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+
+      .metric-item {
+        background: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+        text-align: center;
+        border: 1px solid #e9ecef;
+      }
+
+      .metric-value {
+        font-weight: 600;
+        color: #007bff;
+        font-size: 1.1rem;
+      }
+
+      .metric-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+      }
+
+      .touch-test-area {
+        background: #fff3cd;
+        border: 2px dashed #ffc107;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+        margin: 1rem 0;
+        min-height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        touch-action: manipulation;
+      }
+
+      .touch-test-area.active {
+        background: #d4edda;
+        border-color: #28a745;
+        color: #155724;
+      }
+
+      .loading-test {
+        text-align: center;
+        padding: 1rem;
+      }
+
+      .loading-indicator {
+        display: inline-block;
+        width: 2rem;
+        height: 2rem;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Стили для улучшения touch взаимодействия */
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .filter-select:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+      }
+
+      /* Стили для landscape ориентации */
+      @media (orientation: landscape) and (max-height: 500px) {
+        .mobile-header {
+          padding: 0.5rem 1rem;
+        }
+
+        .mobile-header h1 {
+          font-size: 1.1rem;
+        }
+
+        .mobile-container {
+          padding: 0.75rem;
+        }
+
+        .mobile-section {
+          padding: 0.75rem;
+          margin-bottom: 0.75rem;
+        }
+      }
+
+      /* Стили для очень маленьких экранов */
+      @media (max-width: 360px) {
+        .mobile-container {
+          padding: 0.75rem;
+        }
+
+        .mobile-actions .btn {
+          font-size: 0.8rem;
+          padding: 0.6rem 0.8rem;
+        }
+
+        .performance-metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Мобильный заголовок -->
+    <div class="mobile-header">
+      <h1>📱 Мобильная демо: Фильтр по стране</h1>
+      <p>Тестирование на сенсорных устройствах</p>
+    </div>
+
+    <div class="mobile-container">
+      <!-- Информация об устройстве -->
+      <div class="device-info">
+        <strong>Устройство:</strong> <span id="device-type">Определение...</span
+        ><br />
+        <strong>Экран:</strong> <span id="screen-size">Определение...</span
+        ><br />
+        <strong>Touch:</strong> <span id="touch-support">Определение...</span
+        ><br />
+        <strong>Ориентация:</strong>
+        <span id="orientation">Определение...</span>
+      </div>
+
+      <!-- Информация о соединении -->
+      <div class="connection-info">
+        <strong>Соединение:</strong>
+        <span id="connection-type">Определение...</span><br />
+        <strong>Скорость:</strong>
+        <span id="connection-speed">Определение...</span>
+      </div>
+
+      <!-- Основные фильтры -->
+      <div class="mobile-section">
+        <h2>🎯 Фильтры автомобиля</h2>
+
+        <div class="mobile-filters">
+          <div class="mobile-filter-row">
+            <div>
+              <label for="mobile-brand" class="form-label">Марка:</label>
+              <select id="mobile-brand" class="form-select">
+                <option value="">Выберите марку</option>
+                <option value="1">BMW</option>
+                <option value="2">Mercedes-Benz</option>
+                <option value="3">Audi</option>
+                <option value="4">Toyota</option>
+                <option value="5">Honda</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="mobile-model" class="form-label">Модель:</label>
+              <select id="mobile-model" class="form-select" disabled>
+                <option value="">Сначала выберите марку</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mobile-filter-row">
+            <div>
+              <div id="mobile-country-filter"></div>
+            </div>
+
+            <div>
+              <label for="mobile-year" class="form-label">Год:</label>
+              <select id="mobile-year" class="form-select">
+                <option value="">Любой год</option>
+                <option value="2023">2023</option>
+                <option value="2022">2022</option>
+                <option value="2021">2021</option>
+                <option value="2020">2020</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="mobile-actions">
+          <button id="apply-mobile-filters" class="btn btn-primary">
+            Применить
+          </button>
+          <button id="reset-mobile-filters" class="btn btn-outline-secondary">
+            Сбросить
+          </button>
+        </div>
+      </div>
+
+      <!-- Тест производительности -->
+      <div class="mobile-section">
+        <h2>⚡ Тест производительности</h2>
+
+        <div class="performance-metrics">
+          <div class="metric-item">
+            <div class="metric-value" id="load-time">-</div>
+            <div class="metric-label">Время загрузки (мс)</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-value" id="response-time">-</div>
+            <div class="metric-label">Отклик API (мс)</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-value" id="cache-hits">-</div>
+            <div class="metric-label">Попадания в кэш</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-value" id="memory-usage">-</div>
+            <div class="metric-label">Использование памяти</div>
+          </div>
+        </div>
+
+        <button id="run-performance-test" class="btn btn-info w-100 mt-2">
+          Запустить тест производительности
+        </button>
+      </div>
+
+      <!-- Тест touch взаимодействия -->
+      <div class="mobile-section">
+        <h2>👆 Тест touch взаимодействия</h2>
+
+        <div class="touch-test-area" id="touch-test-area">
+          Коснитесь этой области для тестирования
+        </div>
+
+        <div class="test-results" id="touch-results" style="display: none">
+          <strong>Результаты touch теста:</strong><br />
+          <span id="touch-details"></span>
+        </div>
+
+        <button id="test-touch-responsiveness" class="btn btn-warning w-100">
+          Тест отзывчивости touch
+        </button>
+      </div>
+
+      <!-- Тест загрузки -->
+      <div class="mobile-section">
+        <h2>📡 Тест загрузки данных</h2>
+
+        <div class="loading-test" id="loading-test">
+          <p>Тестирование скорости загрузки данных на мобильном устройстве</p>
+        </div>
+
+        <div class="mobile-actions">
+          <button id="test-load-countries" class="btn btn-success">
+            Загрузить страны
+          </button>
+          <button id="test-load-by-brand" class="btn btn-info">По марке</button>
+        </div>
+      </div>
+
+      <!-- Информация о текущем выборе -->
+      <div class="mobile-section">
+        <h2>ℹ️ Текущий выбор</h2>
+        <div id="mobile-selection-info">
+          <em>Параметры не выбраны</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- Подключение скриптов -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/CountryFilter.js"></script>
+
+    <script>
+      // Глобальные переменные
+      let mobileCountryFilter;
+      let performanceMetrics = {
+        loadTime: 0,
+        responseTime: 0,
+        cacheHits: 0,
+        memoryUsage: 0,
+      };
+
+      // Моковые данные
+      const mockData = {
+        countries: [
+          { id: 1, name: "Германия" },
+          { id: 2, name: "Япония" },
+          { id: 3, name: "США" },
+          { id: 4, name: "Южная Корея" },
+          { id: 5, name: "Франция" },
+        ],
+        models: {
+          1: [
+            { id: 1, name: "X5" },
+            { id: 2, name: "X3" },
+          ],
+          2: [
+            { id: 3, name: "GLE" },
+            { id: 4, name: "C-Class" },
+          ],
+          3: [
+            { id: 5, name: "Q5" },
+            { id: 6, name: "A4" },
+          ],
+          4: [
+            { id: 7, name: "Camry" },
+            { id: 8, name: "RAV4" },
+          ],
+          5: [
+            { id: 9, name: "Civic" },
+            { id: 10, name: "CR-V" },
+          ],
+        },
+      };
+
+      // Инициализация при загрузке
+      document.addEventListener("DOMContentLoaded", function () {
+        initializeMobileDemo();
+        updateDeviceInfo();
+        updateConnectionInfo();
+        setupMockAPI();
+        bindMobileEvents();
+      });
+
+      /**
+       * Инициализация мобильной демо
+       */
+      function initializeMobileDemo() {
+        const startTime = performance.now();
+
+        // Создание фильтра
+        mobileCountryFilter = new CountryFilter(
+          "mobile-country-filter",
+          onMobileCountryChange
+        );
+
+        const endTime = performance.now();
+        performanceMetrics.loadTime = Math.round(endTime - startTime);
+        updatePerformanceMetrics();
+
+        console.log("Мобильная демо инициализирована");
+      }
+
+      /**
+       * Обновление информации об устройстве
+       */
+      function updateDeviceInfo() {
+        const deviceType = detectDeviceType();
+        const screenSize = `${window.innerWidth}x${window.innerHeight}`;
+        const touchSupport =
+          "ontouchstart" in window ? "Поддерживается" : "Не поддерживается";
+        const orientation =
+          window.innerWidth > window.innerHeight ? "Landscape" : "Portrait";
+
+        document.getElementById("device-type").textContent = deviceType;
+        document.getElementById("screen-size").textContent = screenSize;
+        document.getElementById("touch-support").textContent = touchSupport;
+        document.getElementById("orientation").textContent = orientation;
+      }
+
+      /**
+       * Определение типа устройства
+       */
+      function detectDeviceType() {
+        const userAgent = navigator.userAgent;
+
+        if (/iPad/.test(userAgent)) return "iPad";
+        if (/iPhone/.test(userAgent)) return "iPhone";
+        if (/Android/.test(userAgent)) {
+          return /Mobile/.test(userAgent) ? "Android Phone" : "Android Tablet";
+        }
+        if (window.innerWidth <= 768) return "Mobile Device";
+
+        return "Desktop/Unknown";
+      }
+
+      /**
+       * Обновление информации о соединении
+       */
+      function updateConnectionInfo() {
+        if ("connection" in navigator) {
+          const connection = navigator.connection;
+          const type = connection.effectiveType || "unknown";
+          const speed = connection.downlink
+            ? `${connection.downlink} Mbps`
+            : "unknown";
+
+          document.getElementById("connection-type").textContent =
+            type.toUpperCase();
+          document.getElementById("connection-speed").textContent = speed;
+        } else {
+          document.getElementById("connection-type").textContent =
+            "Не поддерживается";
+          document.getElementById("connection-speed").textContent =
+            "Не поддерживается";
+        }
+      }
+
+      /**
+       * Настройка мокового API
+       */
+      function setupMockAPI() {
+        const originalFetch = window.fetch;
+
+        window.fetch = async function (url) {
+          const startTime = performance.now();
+
+          // Имитация сетевой задержки для мобильных
+          const delay = getNetworkDelay();
+          await new Promise((resolve) => setTimeout(resolve, delay));
+
+          const endTime = performance.now();
+          performanceMetrics.responseTime = Math.round(endTime - startTime);
+
+          if (url.includes("/api/countries.php")) {
+            return {
+              ok: true,
+              json: () =>
+                Promise.resolve({
+                  success: true,
+                  data: mockData.countries,
+                }),
+            };
+          }
+
+          if (url.includes("/api/countries-by-brand.php")) {
+            const brandId = new URL(
+              url,
+              window.location.origin
+            ).searchParams.get("brand_id");
+            return {
+              ok: true,
+              json: () =>
+                Promise.resolve({
+                  success: true,
+                  data: mockData.countries.filter((c) => c.id <= 2), // Имитация фильтрации
+                }),
+            };
+          }
+
+          return originalFetch.apply(this, arguments);
+        };
+      }
+
+      /**
+       * Получение задержки сети в зависимости от типа соединения
+       */
+      function getNetworkDelay() {
+        if ("connection" in navigator) {
+          const effectiveType = navigator.connection.effectiveType;
+          switch (effectiveType) {
+            case "slow-2g":
+              return 2000;
+            case "2g":
+              return 1000;
+            case "3g":
+              return 500;
+            case "4g":
+              return 200;
+            default:
+              return 300;
+          }
+        }
+        return 300;
+      }
+
+      /**
+       * Привязка мобильных событий
+       */
+      function bindMobileEvents() {
+        // Обработчики фильтров
+        document
+          .getElementById("mobile-brand")
+          .addEventListener("change", onMobileBrandChange);
+        document
+          .getElementById("mobile-model")
+          .addEventListener("change", onMobileModelChange);
+        document
+          .getElementById("mobile-year")
+          .addEventListener("change", onMobileYearChange);
+
+        // Кнопки действий
+        document
+          .getElementById("apply-mobile-filters")
+          .addEventListener("click", applyMobileFilters);
+        document
+          .getElementById("reset-mobile-filters")
+          .addEventListener("click", resetMobileFilters);
+
+        // Тесты производительности
+        document
+          .getElementById("run-performance-test")
+          .addEventListener("click", runPerformanceTest);
+        document
+          .getElementById("test-load-countries")
+          .addEventListener("click", testLoadCountries);
+        document
+          .getElementById("test-load-by-brand")
+          .addEventListener("click", testLoadByBrand);
+
+        // Touch тесты
+        document
+          .getElementById("test-touch-responsiveness")
+          .addEventListener("click", testTouchResponsiveness);
+        setupTouchTestArea();
+
+        // Обработчики изменения ориентации
+        window.addEventListener("orientationchange", () => {
+          setTimeout(updateDeviceInfo, 100);
+        });
+
+        window.addEventListener("resize", () => {
+          updateDeviceInfo();
+        });
+      }
+
+      /**
+       * Настройка области тестирования touch
+       */
+      function setupTouchTestArea() {
+        const touchArea = document.getElementById("touch-test-area");
+        let touchCount = 0;
+        let touchTimes = [];
+
+        touchArea.addEventListener(
+          "touchstart",
+          (e) => {
+            e.preventDefault();
+            const startTime = performance.now();
+            touchTimes.push(startTime);
+
+            touchArea.classList.add("active");
+            touchArea.textContent = `Touch ${++touchCount}`;
+          },
+          { passive: false }
+        );
+
+        touchArea.addEventListener(
+          "touchend",
+          (e) => {
+            e.preventDefault();
+            setTimeout(() => {
+              touchArea.classList.remove("active");
+            }, 150);
+          },
+          { passive: false }
+        );
+
+        // Fallback для мыши
+        touchArea.addEventListener("mousedown", (e) => {
+          touchArea.classList.add("active");
+          touchArea.textContent = `Click ${++touchCount}`;
+        });
+
+        touchArea.addEventListener("mouseup", (e) => {
+          setTimeout(() => {
+            touchArea.classList.remove("active");
+          }, 150);
+        });
+      }
+
+      /**
+       * Обработчики изменения фильтров
+       */
+      function onMobileBrandChange(event) {
+        const brandId = event.target.value;
+        updateMobileModels(brandId);
+
+        if (mobileCountryFilter && brandId) {
+          mobileCountryFilter.loadCountriesForBrand(brandId);
+        } else if (mobileCountryFilter) {
+          mobileCountryFilter.loadCountries();
+        }
+
+        updateMobileSelectionInfo();
+      }
+
+      function onMobileModelChange(event) {
+        const modelId = event.target.value;
+
+        if (mobileCountryFilter && modelId) {
+          mobileCountryFilter.loadCountriesForModel(modelId);
+        }
+
+        updateMobileSelectionInfo();
+      }
+
+      function onMobileYearChange(event) {
+        updateMobileSelectionInfo();
+      }
+
+      function onMobileCountryChange(countryId) {
+        updateMobileSelectionInfo();
+      }
+
+      /**
+       * Обновление моделей
+       */
+      function updateMobileModels(brandId) {
+        const modelSelect = document.getElementById("mobile-model");
+
+        modelSelect.innerHTML = '<option value="">Выберите модель</option>';
+
+        if (brandId && mockData.models[brandId]) {
+          mockData.models[brandId].forEach((model) => {
+            const option = document.createElement("option");
+            option.value = model.id;
+            option.textContent = model.name;
+            modelSelect.appendChild(option);
+          });
+          modelSelect.disabled = false;
+        } else {
+          modelSelect.innerHTML =
+            '<option value="">Сначала выберите марку</option>';
+          modelSelect.disabled = true;
+        }
+      }
+
+      /**
+       * Обновление информации о выборе
+       */
+      function updateMobileSelectionInfo() {
+        const brand = document.getElementById("mobile-brand");
+        const model = document.getElementById("mobile-model");
+        const year = document.getElementById("mobile-year");
+        const country = mobileCountryFilter
+          ? mobileCountryFilter.getSelectedCountryInfo()
+          : null;
+
+        const selection = [];
+
+        if (brand.value) {
+          selection.push(`Марка: ${brand.options[brand.selectedIndex].text}`);
+        }
+
+        if (model.value) {
+          selection.push(`Модель: ${model.options[model.selectedIndex].text}`);
+        }
+
+        if (country) {
+          selection.push(`Страна: ${country.name}`);
+        }
+
+        if (year.value) {
+          selection.push(`Год: ${year.value}`);
+        }
+
+        const infoElement = document.getElementById("mobile-selection-info");
+        if (selection.length > 0) {
+          infoElement.innerHTML = selection.join("<br>");
+        } else {
+          infoElement.innerHTML = "<em>Параметры не выбраны</em>";
+        }
+      }
+
+      /**
+       * Применение фильтров
+       */
+      function applyMobileFilters() {
+        const loadingTest = document.getElementById("loading-test");
+        loadingTest.innerHTML = `
+          <div class="loading-indicator"></div>
+          <p>Применение фильтров...</p>
+        `;
+
+        setTimeout(() => {
+          loadingTest.innerHTML = `
+            <div class="alert alert-success">
+              ✅ Фильтры применены успешно!<br>
+              <small>Найдено товаров: ${
+                Math.floor(Math.random() * 20) + 1
+              }</small>
+            </div>
+          `;
+        }, 1500);
+      }
+
+      /**
+       * Сброс фильтров
+       */
+      function resetMobileFilters() {
+        document.getElementById("mobile-brand").value = "";
+        document.getElementById("mobile-model").value = "";
+        document.getElementById("mobile-model").disabled = true;
+        document.getElementById("mobile-year").value = "";
+
+        if (mobileCountryFilter) {
+          mobileCountryFilter.reset();
+          mobileCountryFilter.loadCountries();
+        }
+
+        updateMobileSelectionInfo();
+      }
+
+      /**
+       * Тесты производительности
+       */
+      async function runPerformanceTest() {
+        const button = document.getElementById("run-performance-test");
+        button.disabled = true;
+        button.textContent = "Тестирование...";
+
+        try {
+          // Тест загрузки
+          const startTime = performance.now();
+          await mobileCountryFilter.loadCountries();
+          const loadTime = performance.now() - startTime;
+
+          // Тест кэша
+          const cacheStartTime = performance.now();
+          await mobileCountryFilter.loadCountries(); // Повторный запрос из кэша
+          const cacheTime = performance.now() - cacheStartTime;
+
+          // Обновление метрик
+          performanceMetrics.loadTime = Math.round(loadTime);
+          performanceMetrics.responseTime = Math.round(cacheTime);
+          performanceMetrics.cacheHits++;
+
+          if (performance.memory) {
+            performanceMetrics.memoryUsage = Math.round(
+              performance.memory.usedJSHeapSize / 1024 / 1024
+            );
+          }
+
+          updatePerformanceMetrics();
+        } catch (error) {
+          console.error("Performance test failed:", error);
+        } finally {
+          button.disabled = false;
+          button.textContent = "Запустить тест производительности";
+        }
+      }
+
+      async function testLoadCountries() {
+        const startTime = performance.now();
+        await mobileCountryFilter.loadCountries();
+        const endTime = performance.now();
+
+        showLoadingResult(
+          `Страны загружены за ${Math.round(endTime - startTime)}мс`
+        );
+      }
+
+      async function testLoadByBrand() {
+        const startTime = performance.now();
+        await mobileCountryFilter.loadCountriesForBrand(1);
+        const endTime = performance.now();
+
+        showLoadingResult(
+          `Страны для BMW загружены за ${Math.round(endTime - startTime)}мс`
+        );
+      }
+
+      function showLoadingResult(message) {
+        const loadingTest = document.getElementById("loading-test");
+        loadingTest.innerHTML = `
+          <div class="alert alert-info">
+            📊 ${message}
+          </div>
+        `;
+      }
+
+      /**
+       * Тест отзывчивости touch
+       */
+      function testTouchResponsiveness() {
+        const button = document.getElementById("test-touch-responsiveness");
+        const results = document.getElementById("touch-results");
+        const details = document.getElementById("touch-details");
+
+        button.disabled = true;
+        button.textContent = "Тестирование...";
+
+        let touchCount = 0;
+        let responseTimes = [];
+
+        const testTouch = () => {
+          const startTime = performance.now();
+
+          // Имитация touch события
+          setTimeout(() => {
+            const endTime = performance.now();
+            responseTimes.push(endTime - startTime);
+            touchCount++;
+
+            if (touchCount < 5) {
+              setTimeout(testTouch, 200);
+            } else {
+              // Показать результаты
+              const avgResponse =
+                responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+              details.textContent = `Среднее время отклика: ${Math.round(
+                avgResponse
+              )}мс (${touchCount} тестов)`;
+              results.style.display = "block";
+
+              button.disabled = false;
+              button.textContent = "Тест отзывчивости touch";
+            }
+          }, Math.random() * 50 + 10);
+        };
+
+        testTouch();
+      }
+
+      /**
+       * Обновление метрик производительности
+       */
+      function updatePerformanceMetrics() {
+        document.getElementById("load-time").textContent =
+          performanceMetrics.loadTime;
+        document.getElementById("response-time").textContent =
+          performanceMetrics.responseTime;
+        document.getElementById("cache-hits").textContent =
+          performanceMetrics.cacheHits;
+        document.getElementById("memory-usage").textContent =
+          performanceMetrics.memoryUsage + "MB";
+      }
+    </script>
+  </body>
+</html>

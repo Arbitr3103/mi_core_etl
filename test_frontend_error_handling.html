@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Тест обработки ошибок фронтенда - Фильтр по странам</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .test-section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+
+      .test-section h3 {
+        margin-top: 0;
+        color: #333;
+      }
+
+      button {
+        margin: 5px;
+        padding: 8px 15px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #0056b3;
+      }
+
+      .filter-group {
+        margin: 15px 0;
+      }
+
+      .filter-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+
+      .filter-input-wrapper {
+        position: relative;
+      }
+
+      .filter-select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      .filter-loading {
+        margin-top: 5px;
+        color: #007bff;
+      }
+
+      .filter-error {
+        margin-top: 5px;
+        padding: 8px;
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+      }
+
+      .loading-spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .log {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        margin-top: 10px;
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Тест обработки ошибок фронтенда - Фильтр по странам</h1>
+
+    <div class="test-section">
+      <h3>Фильтр по странам</h3>
+      <div id="country-filter-container"></div>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>Тесты обработки ошибок</h3>
+
+      <button onclick="testLoadAllCountries()">Загрузить все страны</button>
+      <button onclick="testLoadCountriesForValidBrand()">
+        Загрузить страны для валидной марки (ID: 1)
+      </button>
+      <button onclick="testLoadCountriesForInvalidBrand()">
+        Загрузить страны для невалидной марки (ID: abc)
+      </button>
+      <button onclick="testLoadCountriesForNonExistentBrand()">
+        Загрузить страны для несуществующей марки (ID: 99999)
+      </button>
+
+      <br /><br />
+
+      <button onclick="testLoadCountriesForValidModel()">
+        Загрузить страны для валидной модели (ID: 1)
+      </button>
+      <button onclick="testLoadCountriesForInvalidModel()">
+        Загрузить страны для невалидной модели (ID: -5)
+      </button>
+      <button onclick="testLoadCountriesForNonExistentModel()">
+        Загрузить страны для несуществующей модели (ID: 99999)
+      </button>
+
+      <br /><br />
+
+      <button onclick="testNetworkError()">
+        Тест сетевой ошибки (неверный URL)
+      </button>
+      <button onclick="testApiAvailability()">Проверить доступность API</button>
+      <button onclick="clearLog()">Очистить лог</button>
+    </div>
+
+    <script src="js/CountryFilter.js"></script>
+    <script>
+      let countryFilter;
+
+      // Инициализация фильтра
+      document.addEventListener("DOMContentLoaded", function () {
+        countryFilter = new CountryFilter("country-filter-container", function (
+          selectedCountry
+        ) {
+          log(`Выбрана страна: ${selectedCountry || "Все страны"}`);
+        });
+
+        log("Фильтр по странам инициализирован");
+      });
+
+      // Функция логирования
+      function log(message) {
+        const logElement = document.getElementById("log");
+        const timestamp = new Date().toLocaleTimeString();
+        logElement.innerHTML += `[${timestamp}] ${message}\n`;
+        logElement.scrollTop = logElement.scrollHeight;
+      }
+
+      // Тестовые функции
+      async function testLoadAllCountries() {
+        log("=== Тест: Загрузка всех стран ===");
+        try {
+          const result = await countryFilter.loadCountries();
+          log(`Результат: получено ${result.length} стран`);
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        }
+      }
+
+      async function testLoadCountriesForValidBrand() {
+        log("=== Тест: Загрузка стран для валидной марки (ID: 1) ===");
+        try {
+          const result = await countryFilter.loadCountriesForBrand(1);
+          log(`Результат: получено ${result.length} стран для марки ID: 1`);
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        }
+      }
+
+      async function testLoadCountriesForInvalidBrand() {
+        log("=== Тест: Загрузка стран для невалидной марки (ID: abc) ===");
+        try {
+          const result = await countryFilter.loadCountriesForBrand("abc");
+          log(`Результат: получено ${result.length} стран для марки ID: abc`);
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        }
+      }
+
+      async function testLoadCountriesForNonExistentBrand() {
+        log(
+          "=== Тест: Загрузка стран для несуществующей марки (ID: 99999) ==="
+        );
+        try {
+          const result = await countryFilter.loadCountriesForBrand(99999);
+          log(`Результат: получено ${result.length} стран для марки ID: 99999`);
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        }
+      }
+
+      async function testLoadCountriesForValidModel() {
+        log("=== Тест: Загрузка стран для валидной модели (ID: 1) ===");
+        try {
+          const result = await countryFilter.loadCountriesForModel(1);
+          log(`Результат: получено ${result.length} стран для модели ID: 1`);
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        }
+      }
+
+      async function testLoadCountriesForInvalidModel() {
+        log("=== Тест: Загрузка стран для невалидной модели (ID: -5) ===");
+        try {
+          const result = await countryFilter.loadCountriesForModel(-5);
+          log(`Результат: получено ${result.length} стран для модели ID: -5`);
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        }
+      }
+
+      async function testLoadCountriesForNonExistentModel() {
+        log(
+          "=== Тест: Загрузка стран для несуществующей модели (ID: 99999) ==="
+        );
+        try {
+          const result = await countryFilter.loadCountriesForModel(99999);
+          log(
+            `Результат: получено ${result.length} стран для модели ID: 99999`
+          );
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        }
+      }
+
+      async function testNetworkError() {
+        log("=== Тест: Сетевая ошибка (неверный URL) ===");
+
+        // Временно изменяем URL API для имитации сетевой ошибки
+        const originalUrl = countryFilter.apiBaseUrl;
+        countryFilter.apiBaseUrl = "/nonexistent-api";
+
+        try {
+          const result = await countryFilter.loadCountries();
+          log(`Результат: получено ${result.length} стран (неожиданно)`);
+        } catch (error) {
+          log(`Ошибка: ${error.message}`);
+        } finally {
+          // Восстанавливаем оригинальный URL
+          countryFilter.apiBaseUrl = originalUrl;
+          log("URL API восстановлен");
+        }
+      }
+
+      async function testApiAvailability() {
+        log("=== Тест: Проверка доступности API ===");
+        try {
+          const isAvailable = await countryFilter.checkApiAvailability();
+          log(`API доступно: ${isAvailable ? "Да" : "Нет"}`);
+        } catch (error) {
+          log(`Ошибка проверки API: ${error.message}`);
+        }
+      }
+
+      function clearLog() {
+        document.getElementById("log").innerHTML = "";
+      }
+    </script>
+  </body>
+</html>

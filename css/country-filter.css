@@ -1,0 +1,547 @@
+/**
+ * Стили для фильтра по стране изготовления
+ * 
+ * Обеспечивает единообразный дизайн с существующими фильтрами
+ * и адаптивность для мобильных устройств
+ * 
+ * @version 1.0
+ * @author ZUZ System
+ */
+
+/* Основной контейнер фильтра */
+.country-filter {
+  margin-bottom: 1rem;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+/* Стили для лейбла */
+.filter-label {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  display: block;
+}
+
+/* Контейнер для input элементов */
+.filter-input-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Стили для select элемента */
+.filter-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e1e5e9;
+  border-radius: 0.375rem;
+  background-color: #fff;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #495057;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+.filter-select:focus {
+  border-color: #007bff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.filter-select:disabled {
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Стили для состояния загрузки */
+.filter-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.loading-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Стили для ошибок */
+.filter-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.85rem;
+  color: #dc3545;
+}
+
+.error-icon {
+  font-size: 1rem;
+}
+
+.error-message {
+  flex: 1;
+}
+
+/* Стили для мобильных устройств */
+@media (max-width: 768px) {
+  .filter-group {
+    margin-bottom: 0.75rem;
+  }
+
+  .filter-label {
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .filter-select {
+    padding: 0.75rem 0.8rem; /* Увеличен padding для лучшего touch target */
+    font-size: 0.9rem; /* Увеличен размер шрифта для читаемости */
+    padding-right: 2.5rem;
+    min-height: 44px; /* Минимальная высота для touch accessibility */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  .filter-loading,
+  .filter-error {
+    font-size: 0.8rem;
+    padding: 0.4rem 0;
+  }
+
+  .loading-spinner {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  /* Улучшенные стили для touch взаимодействия */
+  .filter-select:focus {
+    border-width: 3px; /* Более заметная граница при фокусе */
+    box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.3);
+  }
+
+  /* Стили для retry кнопки на мобильных */
+  .retry-button {
+    padding: 0.5rem 1rem !important;
+    font-size: 0.8rem !important;
+    min-height: 36px;
+    border-radius: 6px !important;
+    touch-action: manipulation;
+  }
+
+  /* Оптимизация для производительности на мобильных */
+  .country-filter {
+    will-change: transform;
+    transform: translateZ(0); /* Включает аппаратное ускорение */
+  }
+
+  .filter-select {
+    will-change: border-color, box-shadow;
+  }
+}
+
+/* Стили для очень маленьких экранов (до 480px) */
+@media (max-width: 480px) {
+  .filter-group {
+    margin-bottom: 0.5rem;
+  }
+
+  .filter-label {
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
+    font-weight: 500;
+  }
+
+  .filter-select {
+    padding: 0.7rem 0.75rem;
+    font-size: 0.85rem;
+    padding-right: 2.3rem;
+    min-height: 42px;
+  }
+
+  .filter-loading,
+  .filter-error {
+    font-size: 0.75rem;
+    padding: 0.3rem 0;
+  }
+
+  .loading-spinner {
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+
+  .retry-button {
+    padding: 0.4rem 0.8rem !important;
+    font-size: 0.75rem !important;
+    min-height: 32px;
+  }
+
+  /* Компактный режим для маленьких экранов */
+  .country-filter--mobile-compact .filter-label {
+    font-size: 0.75rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .country-filter--mobile-compact .filter-select {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.8rem;
+    padding-right: 2rem;
+    min-height: 38px;
+  }
+}
+
+/* Стили для планшетов */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .filter-select {
+    padding: 0.7rem 0.9rem;
+    padding-right: 2.4rem;
+  }
+}
+
+/* Стили для больших экранов */
+@media (min-width: 1200px) {
+  .filter-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .filter-select {
+    padding: 0.8rem 1.1rem;
+    padding-right: 2.6rem;
+  }
+}
+
+/* Стили для темной темы (если используется) */
+@media (prefers-color-scheme: dark) {
+  .filter-label {
+    color: #f8f9fa;
+  }
+
+  .filter-select {
+    background-color: #343a40;
+    border-color: #495057;
+    color: #f8f9fa;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23f8f9fa' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  }
+
+  .filter-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  }
+
+  .filter-select:disabled {
+    background-color: #495057;
+    border-color: #6c757d;
+    color: #adb5bd;
+  }
+
+  .filter-loading {
+    color: #adb5bd;
+  }
+
+  .loading-spinner {
+    border-color: #495057;
+    border-top-color: #0d6efd;
+  }
+}
+
+/* Анимации для плавного появления */
+.country-filter {
+  opacity: 0;
+  animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Стили для состояний hover */
+.filter-select:hover:not(:disabled) {
+  border-color: #007bff;
+}
+
+/* Стили для валидации */
+.filter-select.is-valid {
+  border-color: #28a745;
+}
+
+.filter-select.is-valid:focus {
+  border-color: #28a745;
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.filter-select.is-invalid {
+  border-color: #dc3545;
+}
+
+.filter-select.is-invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+/* Стили для accessibility */
+.filter-select:focus-visible {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* Стили для печати */
+@media print {
+  .country-filter {
+    break-inside: avoid;
+  }
+
+  .filter-loading,
+  .filter-error {
+    display: none;
+  }
+}
+
+/* Утилитарные классы */
+.country-filter--compact {
+  margin-bottom: 0.5rem;
+}
+
+.country-filter--compact .filter-label {
+  margin-bottom: 0.3rem;
+  font-size: 0.8rem;
+}
+
+.country-filter--compact .filter-select {
+  padding: 0.5rem 0.75rem;
+  padding-right: 2rem;
+  font-size: 0.8rem;
+}
+
+/* Стили для интеграции с Bootstrap (если используется) */
+.form-control.filter-select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* Стили для интеграции с существующими фильтрами */
+.filters-container .country-filter {
+  order: 3; /* Размещаем после марки и модели */
+}
+
+.filters-row .country-filter {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Стили для горизонтального расположения фильтров */
+@media (min-width: 992px) {
+  .filters-horizontal .filter-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .filters-horizontal .filter-label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    min-width: 120px;
+  }
+
+  .filters-horizontal .filter-input-wrapper {
+    flex: 1;
+  }
+}
+
+/* Дополнительные мобильные оптимизации */
+
+/* Стили для мобильных классов */
+.country-filter--mobile .filter-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* Улучшенные стили для iOS */
+@supports (-webkit-touch-callout: none) {
+  .country-filter--mobile .filter-select {
+    font-size: 16px; /* Предотвращает зум на iOS */
+    border-radius: 0.5rem; /* Более округлые углы для iOS */
+  }
+
+  .country-filter--mobile .filter-select:focus {
+    outline: none;
+    border-color: #007aff; /* iOS blue */
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
+  }
+}
+
+/* Стили для Android */
+@media (max-width: 768px) {
+  .country-filter--mobile .filter-select {
+    background-color: #fafafa;
+    border: 2px solid #e0e0e0;
+    color: #212121;
+  }
+
+  .country-filter--mobile .filter-select:focus {
+    background-color: #fff;
+    border-color: #2196f3; /* Material Design blue */
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+  }
+}
+
+/* Стили для высокой плотности пикселей */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .country-filter--mobile .loading-spinner {
+    border-width: 1px; /* Тоньше на retina дисплеях */
+  }
+
+  .country-filter--mobile .filter-select {
+    background-size: 1.25em 1.25em; /* Меньше иконка на retina */
+  }
+}
+
+/* Стили для landscape ориентации на мобильных */
+@media (max-height: 500px) and (orientation: landscape) {
+  .country-filter--mobile {
+    margin-bottom: 0.5rem;
+  }
+
+  .country-filter--mobile .filter-label {
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .country-filter--mobile .filter-select {
+    padding: 0.5rem 0.75rem;
+    padding-right: 2.25rem;
+    font-size: 0.85rem;
+    min-height: 38px;
+  }
+}
+
+/* Стили для улучшения производительности на мобильных */
+.country-filter--mobile {
+  contain: layout style;
+  will-change: transform;
+}
+
+.country-filter--mobile .filter-select {
+  contain: layout;
+  will-change: border-color, box-shadow;
+}
+
+.country-filter--mobile .loading-spinner {
+  contain: layout;
+  will-change: transform;
+}
+
+/* Стили для уменьшения repaint на мобильных */
+.country-filter--mobile .filter-loading,
+.country-filter--mobile .filter-error {
+  contain: layout style;
+  transform: translateZ(0); /* Включает аппаратное ускорение */
+}
+
+/* Стили для улучшения scroll performance */
+.country-filter--mobile .filter-select {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Стили для предотвращения случайного зума */
+.country-filter--mobile .filter-select,
+.country-filter--mobile .retry-button {
+  touch-action: manipulation;
+}
+
+/* Стили для улучшения contrast на мобильных */
+@media (max-width: 768px) and (prefers-contrast: high) {
+  .country-filter--mobile .filter-select {
+    border-width: 3px;
+    border-color: #000;
+  }
+
+  .country-filter--mobile .filter-select:focus {
+    border-color: #0066cc;
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.5);
+  }
+}
+
+/* Стили для reduced motion на мобильных */
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+  .country-filter--mobile,
+  .country-filter--mobile * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .country-filter--mobile .loading-spinner {
+    animation: none;
+    border: 2px solid #007bff;
+    border-radius: 50%;
+  }
+}
+
+/* Стили для улучшения readability на маленьких экранах */
+@media (max-width: 360px) {
+  .country-filter--mobile-compact .filter-select {
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+
+  .country-filter--mobile-compact .filter-loading,
+  .country-filter--mobile-compact .filter-error {
+    font-size: 0.7rem;
+  }
+}
+
+/* Стили для улучшения battery life на мобильных */
+@media (max-width: 768px) {
+  .country-filter--mobile .filter-select:not(:focus):not(:hover) {
+    will-change: auto; /* Отключаем will-change когда не нужно */
+  }
+}

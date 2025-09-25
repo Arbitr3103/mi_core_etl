@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Фильтр по стране изготовления - ZUZ Проставки</title>
+
+    <!-- Подключение стилей -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link href="../css/country-filter.css" rel="stylesheet" />
+
+    <style>
+      /* Дополнительные стили для демонстрации */
+      .demo-container {
+        max-width: 1200px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+
+      .filters-section {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .filters-title {
+        margin-bottom: 1.5rem;
+        color: #333;
+        font-weight: 600;
+      }
+
+      .results-section {
+        background: #fff;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e1e5e9;
+      }
+
+      .product-item {
+        padding: 1rem;
+        border: 1px solid #e1e5e9;
+        border-radius: 0.375rem;
+        margin-bottom: 1rem;
+        background: #fff;
+      }
+
+      .product-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .product-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.5rem;
+      }
+
+      .product-details {
+        color: #6c757d;
+        font-size: 0.9rem;
+      }
+
+      .filter-actions {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .loading-results {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+      }
+
+      .no-results {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-container">
+      <h1 class="mb-4">Фильтр по стране изготовления автомобиля</h1>
+
+      <!-- Секция фильтров -->
+      <div class="filters-section">
+        <h2 class="filters-title">Фильтры для подбора ZUZ проставок</h2>
+
+        <div class="row">
+          <!-- Фильтр по марке -->
+          <div class="col-md-3 mb-3">
+            <div class="filter-group">
+              <label for="brand-select" class="filter-label"
+                >Марка автомобиля:</label
+              >
+              <div class="filter-input-wrapper">
+                <select id="brand-select" class="filter-select form-control">
+                  <option value="">Выберите марку</option>
+                  <option value="1">BMW</option>
+                  <option value="2">Mercedes-Benz</option>
+                  <option value="3">Audi</option>
+                  <option value="4">Toyota</option>
+                  <option value="5">Honda</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Фильтр по модели -->
+          <div class="col-md-3 mb-3">
+            <div class="filter-group">
+              <label for="model-select" class="filter-label"
+                >Модель автомобиля:</label
+              >
+              <div class="filter-input-wrapper">
+                <select
+                  id="model-select"
+                  class="filter-select form-control"
+                  disabled
+                >
+                  <option value="">Сначала выберите марку</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Фильтр по стране изготовления -->
+          <div class="col-md-3 mb-3">
+            <div id="country-filter-container"></div>
+          </div>
+
+          <!-- Фильтр по году -->
+          <div class="col-md-3 mb-3">
+            <div class="filter-group">
+              <label for="year-select" class="filter-label">Год выпуска:</label>
+              <div class="filter-input-wrapper">
+                <select id="year-select" class="filter-select form-control">
+                  <option value="">Любой год</option>
+                  <option value="2023">2023</option>
+                  <option value="2022">2022</option>
+                  <option value="2021">2021</option>
+                  <option value="2020">2020</option>
+                  <option value="2019">2019</option>
+                  <option value="2018">2018</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Действия с фильтрами -->
+        <div class="filter-actions">
+          <button id="apply-filters" class="btn btn-primary">
+            Применить фильтры
+          </button>
+          <button id="reset-filters" class="btn btn-outline-secondary">
+            Сбросить все
+          </button>
+          <button id="show-filters-info" class="btn btn-outline-info">
+            Показать активные фильтры
+          </button>
+        </div>
+      </div>
+
+      <!-- Секция результатов -->
+      <div class="results-section">
+        <h3 class="mb-3">Результаты поиска</h3>
+
+        <div id="results-container">
+          <div class="loading-results" style="display: none">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p class="mt-2">Поиск подходящих проставок...</p>
+          </div>
+
+          <div class="no-results">
+            <p>
+              Выберите параметры автомобиля для поиска подходящих ZUZ проставок
+            </p>
+          </div>
+        </div>
+
+        <!-- Информация о пагинации -->
+        <div id="pagination-info" class="mt-3" style="display: none">
+          <small class="text-muted">
+            Показано: <span id="results-count">0</span> из
+            <span id="total-count">0</span> результатов
+          </small>
+        </div>
+      </div>
+
+      <!-- Информационная панель -->
+      <div class="mt-4">
+        <div class="alert alert-info">
+          <h5 class="alert-heading">
+            Как работает фильтр по стране изготовления?
+          </h5>
+          <p class="mb-2">
+            Фильтр по стране изготовления помогает найти наиболее подходящие ZUZ
+            проставки для вашего автомобиля, учитывая региональные особенности
+            производства.
+          </p>
+          <ul class="mb-0">
+            <li>
+              Выберите марку автомобиля - список стран обновится автоматически
+            </li>
+            <li>Выберите модель - список стран станет еще более точным</li>
+            <li>Укажите страну изготовления для максимальной совместимости</li>
+            <li>Добавьте год выпуска для финальной фильтрации</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Подключение скриптов -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/CountryFilter.js"></script>
+
+    <script>
+      /**
+       * Демонстрационный скрипт для интеграции фильтра по стране
+       */
+
+      // Инициализация компонентов
+      let countryFilter;
+      let currentFilters = {
+        brand_id: null,
+        model_id: null,
+        year: null,
+        country_id: null,
+      };
+
+      // Моковые данные для демонстрации
+      const mockModels = {
+        1: [
+          { id: 1, name: "X1" },
+          { id: 2, name: "X3" },
+          { id: 3, name: "X5" },
+          { id: 4, name: "3 Series" },
+          { id: 5, name: "5 Series" },
+        ],
+        2: [
+          { id: 6, name: "C-Class" },
+          { id: 7, name: "E-Class" },
+          { id: 8, name: "S-Class" },
+          { id: 9, name: "GLC" },
+          { id: 10, name: "GLE" },
+        ],
+        3: [
+          { id: 11, name: "A4" },
+          { id: 12, name: "A6" },
+          { id: 13, name: "Q5" },
+          { id: 14, name: "Q7" },
+        ],
+      };
+
+      const mockProducts = [
+        {
+          id: 1,
+          name: "ZUZ Проставка 20мм для BMW X5",
+          brand: "BMW",
+          model: "X5",
+          country: "Германия",
+          year: "2018-2023",
+          price: "1500 руб.",
+        },
+        {
+          id: 2,
+          name: "ZUZ Проставка 25мм для Mercedes GLE",
+          brand: "Mercedes-Benz",
+          model: "GLE",
+          country: "Германия",
+          year: "2019-2023",
+          price: "1650 руб.",
+        },
+      ];
+
+      // Инициализация при загрузке страницы
+      document.addEventListener("DOMContentLoaded", function () {
+        initializeFilters();
+        bindEvents();
+      });
+
+      /**
+       * Инициализация фильтров
+       */
+      function initializeFilters() {
+        // Инициализация фильтра по стране
+        countryFilter = new CountryFilter(
+          "country-filter-container",
+          onCountryChange
+        );
+
+        console.log("Фильтры инициализированы");
+      }
+
+      /**
+       * Привязка обработчиков событий
+       */
+      function bindEvents() {
+        // Обработчик изменения марки
+        document
+          .getElementById("brand-select")
+          .addEventListener("change", onBrandChange);
+
+        // Обработчик изменения модели
+        document
+          .getElementById("model-select")
+          .addEventListener("change", onModelChange);
+
+        // Обработчик изменения года
+        document
+          .getElementById("year-select")
+          .addEventListener("change", onYearChange);
+
+        // Кнопки действий
+        document
+          .getElementById("apply-filters")
+          .addEventListener("click", applyFilters);
+        document
+          .getElementById("reset-filters")
+          .addEventListener("click", resetAllFilters);
+        document
+          .getElementById("show-filters-info")
+          .addEventListener("click", showFiltersInfo);
+      }
+
+      /**
+       * Обработчик изменения марки
+       */
+      function onBrandChange(event) {
+        const brandId = event.target.value;
+        currentFilters.brand_id = brandId || null;
+        currentFilters.model_id = null; // Сбрасываем модель
+
+        // Обновляем модели
+        updateModels(brandId);
+
+        // Обновляем страны для выбранной марки
+        if (countryFilter && brandId) {
+          countryFilter.loadCountriesForBrand(brandId);
+        } else if (countryFilter) {
+          countryFilter.loadCountries();
+        }
+
+        console.log("Марка изменена:", brandId);
+      }
+
+      /**
+       * Обработчик изменения модели
+       */
+      function onModelChange(event) {
+        const modelId = event.target.value;
+        currentFilters.model_id = modelId || null;
+
+        // Обновляем страны для выбранной модели
+        if (countryFilter && modelId) {
+          countryFilter.loadCountriesForModel(modelId);
+        } else if (countryFilter && currentFilters.brand_id) {
+          countryFilter.loadCountriesForBrand(currentFilters.brand_id);
+        } else if (countryFilter) {
+          countryFilter.loadCountries();
+        }
+
+        console.log("Модель изменена:", modelId);
+      }
+
+      /**
+       * Обработчик изменения года
+       */
+      function onYearChange(event) {
+        const year = event.target.value;
+        currentFilters.year = year || null;
+
+        console.log("Год изменен:", year);
+      }
+
+      /**
+       * Обработчик изменения страны
+       */
+      function onCountryChange(countryId) {
+        currentFilters.country_id = countryId;
+
+        console.log("Страна изменена:", countryId);
+
+        // Автоматически применяем фильтры при изменении страны
+        applyFilters();
+      }
+
+      /**
+       * Обновление списка моделей
+       */
+      function updateModels(brandId) {
+        const modelSelect = document.getElementById("model-select");
+
+        // Очищаем список моделей
+        modelSelect.innerHTML = '<option value="">Выберите модель</option>';
+
+        if (brandId && mockModels[brandId]) {
+          // Добавляем модели для выбранной марки
+          mockModels[brandId].forEach((model) => {
+            const option = document.createElement("option");
+            option.value = model.id;
+            option.textContent = model.name;
+            modelSelect.appendChild(option);
+          });
+
+          modelSelect.disabled = false;
+        } else {
+          modelSelect.innerHTML =
+            '<option value="">Сначала выберите марку</option>';
+          modelSelect.disabled = true;
+        }
+      }
+
+      /**
+       * Применение фильтров
+       */
+      async function applyFilters() {
+        console.log("Применение фильтров:", currentFilters);
+
+        showLoading();
+
+        // Имитация запроса к API
+        setTimeout(() => {
+          const filteredProducts = filterProducts(currentFilters);
+          displayResults(filteredProducts);
+          hideLoading();
+        }, 1000);
+      }
+
+      /**
+       * Фильтрация продуктов (мок)
+       */
+      function filterProducts(filters) {
+        let results = [...mockProducts];
+
+        // Простая фильтрация для демонстрации
+        if (filters.brand_id) {
+          const brandName = document.querySelector(
+            `#brand-select option[value="${filters.brand_id}"]`
+          ).textContent;
+          results = results.filter((product) => product.brand === brandName);
+        }
+
+        if (filters.country_id && countryFilter) {
+          const countryInfo = countryFilter.getSelectedCountryInfo();
+          if (countryInfo) {
+            results = results.filter(
+              (product) => product.country === countryInfo.name
+            );
+          }
+        }
+
+        return results;
+      }
+
+      /**
+       * Отображение результатов
+       */
+      function displayResults(products) {
+        const container = document.getElementById("results-container");
+        const paginationInfo = document.getElementById("pagination-info");
+
+        if (products.length === 0) {
+          container.innerHTML = `
+                    <div class="no-results">
+                        <p>По выбранным критериям товары не найдены</p>
+                        <small class="text-muted">Попробуйте изменить параметры поиска</small>
+                    </div>
+                `;
+          paginationInfo.style.display = "none";
+          return;
+        }
+
+        const html = products
+          .map(
+            (product) => `
+                <div class="product-item">
+                    <div class="product-title">${product.name}</div>
+                    <div class="product-details">
+                        <strong>Марка:</strong> ${product.brand} | 
+                        <strong>Модель:</strong> ${product.model} | 
+                        <strong>Страна:</strong> ${product.country} | 
+                        <strong>Годы:</strong> ${product.year} | 
+                        <strong>Цена:</strong> ${product.price}
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+
+        container.innerHTML = html;
+
+        // Обновляем информацию о пагинации
+        document.getElementById("results-count").textContent = products.length;
+        document.getElementById("total-count").textContent = products.length;
+        paginationInfo.style.display = "block";
+      }
+
+      /**
+       * Сброс всех фильтров
+       */
+      function resetAllFilters() {
+        // Сбрасываем значения фильтров
+        currentFilters = {
+          brand_id: null,
+          model_id: null,
+          year: null,
+          country_id: null,
+        };
+
+        // Сбрасываем UI элементы
+        document.getElementById("brand-select").value = "";
+        document.getElementById("model-select").value = "";
+        document.getElementById("model-select").disabled = true;
+        document.getElementById("model-select").innerHTML =
+          '<option value="">Сначала выберите марку</option>';
+        document.getElementById("year-select").value = "";
+
+        // Сбрасываем фильтр по стране
+        if (countryFilter) {
+          countryFilter.reset();
+          countryFilter.loadCountries();
+        }
+
+        // Очищаем результаты
+        document.getElementById("results-container").innerHTML = `
+                <div class="no-results">
+                    <p>Выберите параметры автомобиля для поиска подходящих ZUZ проставок</p>
+                </div>
+            `;
+        document.getElementById("pagination-info").style.display = "none";
+
+        console.log("Все фильтры сброшены");
+      }
+
+      /**
+       * Показать информацию об активных фильтрах
+       */
+      function showFiltersInfo() {
+        const activeFilters = [];
+
+        if (currentFilters.brand_id) {
+          const brandName = document.querySelector(
+            `#brand-select option[value="${currentFilters.brand_id}"]`
+          ).textContent;
+          activeFilters.push(`Марка: ${brandName}`);
+        }
+
+        if (currentFilters.model_id) {
+          const modelName = document.querySelector(
+            `#model-select option[value="${currentFilters.model_id}"]`
+          ).textContent;
+          activeFilters.push(`Модель: ${modelName}`);
+        }
+
+        if (currentFilters.country_id && countryFilter) {
+          const countryInfo = countryFilter.getSelectedCountryInfo();
+          if (countryInfo) {
+            activeFilters.push(`Страна: ${countryInfo.name}`);
+          }
+        }
+
+        if (currentFilters.year) {
+          activeFilters.push(`Год: ${currentFilters.year}`);
+        }
+
+        const message =
+          activeFilters.length > 0
+            ? `Активные фильтры:\n${activeFilters.join("\n")}`
+            : "Фильтры не выбраны";
+
+        alert(message);
+      }
+
+      /**
+       * Показать индикатор загрузки
+       */
+      function showLoading() {
+        document.querySelector(".loading-results").style.display = "block";
+        document.querySelector(".no-results").style.display = "none";
+
+        // Скрываем существующие результаты
+        const productItems = document.querySelectorAll(".product-item");
+        productItems.forEach((item) => (item.style.display = "none"));
+      }
+
+      /**
+       * Скрыть индикатор загрузки
+       */
+      function hideLoading() {
+        document.querySelector(".loading-results").style.display = "none";
+      }
+    </script>
+  </body>
+</html>

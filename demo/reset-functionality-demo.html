@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Демо: Функция сброса фильтров</title>
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Стили фильтра -->
+    <link href="../css/country-filter.css" rel="stylesheet" />
+
+    <style>
+      body {
+        background-color: #f8f9fa;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+      }
+
+      .demo-header {
+        background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+      }
+
+      .demo-section {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .scenario-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: #f8f9fa;
+      }
+
+      .scenario-card.active {
+        border-color: #0d6efd;
+        background: #e7f3ff;
+      }
+
+      .filter-state {
+        background: #e9ecef;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        margin: 0.5rem 0;
+        font-family: "Courier New", monospace;
+        font-size: 0.9rem;
+      }
+
+      .filter-state.before {
+        border-left: 4px solid #ffc107;
+      }
+
+      .filter-state.after {
+        border-left: 4px solid #28a745;
+      }
+
+      .reset-button {
+        margin: 0.25rem;
+      }
+
+      .test-log {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: "Courier New", monospace;
+        font-size: 0.85rem;
+      }
+
+      .log-entry {
+        margin-bottom: 0.25rem;
+        padding: 0.25rem;
+        border-radius: 0.25rem;
+      }
+
+      .log-entry.success {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .log-entry.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .log-entry.info {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+      }
+
+      .status-success {
+        background-color: #28a745;
+      }
+      .status-warning {
+        background-color: #ffc107;
+      }
+      .status-error {
+        background-color: #dc3545;
+      }
+
+      .performance-meter {
+        background: #e9ecef;
+        height: 20px;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 0.5rem 0;
+      }
+
+      .performance-bar {
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          #28a745 0%,
+          #ffc107 70%,
+          #dc3545 100%
+        );
+        transition: width 0.3s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Заголовок -->
+    <div class="demo-header">
+      <div class="container">
+        <h1 class="mb-0">🔄 Демо: Функция сброса фильтров</h1>
+        <p class="mb-0 mt-2">
+          Тестирование различных сценариев сброса фильтров по стране
+          изготовления
+        </p>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Текущее состояние фильтров -->
+      <div class="demo-section">
+        <h2>📊 Текущее состояние фильтров</h2>
+
+        <div class="row">
+          <!-- Фильтры -->
+          <div class="col-md-8">
+            <div class="row">
+              <div class="col-md-3 mb-3">
+                <label for="demo-brand" class="form-label">Марка:</label>
+                <select id="demo-brand" class="form-select">
+                  <option value="">Выберите марку</option>
+                  <option value="1">BMW</option>
+                  <option value="2">Mercedes-Benz</option>
+                  <option value="3">Audi</option>
+                  <option value="4">Toyota</option>
+                </select>
+              </div>
+
+              <div class="col-md-3 mb-3">
+                <label for="demo-model" class="form-label">Модель:</label>
+                <select id="demo-model" class="form-select">
+                  <option value="">Выберите модель</option>
+                  <option value="1">X5</option>
+                  <option value="2">3 Series</option>
+                  <option value="3">E-Class</option>
+                </select>
+              </div>
+
+              <div class="col-md-3 mb-3">
+                <div id="country-filter-demo"></div>
+              </div>
+
+              <div class="col-md-3 mb-3">
+                <label for="demo-year" class="form-label">Год:</label>
+                <select id="demo-year" class="form-select">
+                  <option value="">Любой год</option>
+                  <option value="2023">2023</option>
+                  <option value="2022">2022</option>
+                  <option value="2021">2021</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Кнопки сброса -->
+          <div class="col-md-4">
+            <label class="form-label">Действия сброса:</label>
+            <div class="d-grid gap-2">
+              <button
+                id="reset-country-only"
+                class="btn btn-warning reset-button"
+                onclick="resetCountryOnly()"
+              >
+                🌍 Сбросить только страну
+              </button>
+              <button
+                id="reset-all-filters"
+                class="btn btn-danger reset-button"
+                onclick="resetAllFilters()"
+              >
+                🔄 Сбросить все фильтры
+              </button>
+              <button
+                id="reset-with-reload"
+                class="btn btn-info reset-button"
+                onclick="resetWithReload()"
+              >
+                ↻ Сбросить с перезагрузкой
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Отображение состояния -->
+        <div class="filter-state" id="current-state">
+          Состояние фильтров будет отображаться здесь...
+        </div>
+      </div>
+
+      <!-- Тестовые сценарии -->
+      <div class="demo-section">
+        <h2>🧪 Тестовые сценарии</h2>
+        <p>Выберите сценарий для автоматического тестирования:</p>
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="scenario-card" onclick="runScenario('basic-reset')">
+              <h5>1. Базовый сброс</h5>
+              <p>Установка фильтров и полный сброс</p>
+              <small class="text-muted"
+                >Тестирует основную функциональность</small
+              >
+            </div>
+
+            <div class="scenario-card" onclick="runScenario('partial-reset')">
+              <h5>2. Частичный сброс</h5>
+              <p>Сброс только фильтра по стране</p>
+              <small class="text-muted">Проверяет изолированный сброс</small>
+            </div>
+
+            <div class="scenario-card" onclick="runScenario('multiple-resets')">
+              <h5>3. Множественные сбросы</h5>
+              <p>Быстрые повторные сбросы</p>
+              <small class="text-muted">Тестирует стабильность</small>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div
+              class="scenario-card"
+              onclick="runScenario('reset-with-errors')"
+            >
+              <h5>4. Сброс с ошибками</h5>
+              <p>Сброс при наличии ошибок API</p>
+              <small class="text-muted">Проверяет обработку ошибок</small>
+            </div>
+
+            <div
+              class="scenario-card"
+              onclick="runScenario('performance-test')"
+            >
+              <h5>5. Тест производительности</h5>
+              <p>Измерение времени сброса</p>
+              <small class="text-muted">Проверяет скорость выполнения</small>
+            </div>
+
+            <div
+              class="scenario-card"
+              onclick="runScenario('integration-test')"
+            >
+              <h5>6. Интеграционный тест</h5>
+              <p>Полный цикл с восстановлением</p>
+              <small class="text-muted">Комплексная проверка</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <button class="btn btn-success" onclick="runAllScenarios()">
+            ▶️ Запустить все сценарии
+          </button>
+          <button class="btn btn-secondary" onclick="clearTestLog()">
+            🗑️ Очистить лог
+          </button>
+        </div>
+      </div>
+
+      <!-- Лог тестирования -->
+      <div class="demo-section">
+        <h2>📋 Лог тестирования</h2>
+        <div id="test-log" class="test-log">
+          <div class="text-muted">
+            Лог тестирования будет отображаться здесь...
+          </div>
+        </div>
+      </div>
+
+      <!-- Статистика производительности -->
+      <div class="demo-section">
+        <h2>⚡ Статистика производительности</h2>
+        <div class="row">
+          <div class="col-md-4">
+            <h6>Время сброса страны:</h6>
+            <div class="performance-meter">
+              <div
+                id="country-reset-bar"
+                class="performance-bar"
+                style="width: 0%"
+              ></div>
+            </div>
+            <small id="country-reset-time">0 мс</small>
+          </div>
+          <div class="col-md-4">
+            <h6>Время полного сброса:</h6>
+            <div class="performance-meter">
+              <div
+                id="full-reset-bar"
+                class="performance-bar"
+                style="width: 0%"
+              ></div>
+            </div>
+            <small id="full-reset-time">0 мс</small>
+          </div>
+          <div class="col-md-4">
+            <h6>Общие тесты:</h6>
+            <div>
+              <span class="status-indicator status-success"></span>
+              <span id="tests-passed">0</span> пройдено
+            </div>
+            <div>
+              <span class="status-indicator status-error"></span>
+              <span id="tests-failed">0</span> провалено
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Подключение скриптов -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/CountryFilter.js"></script>
+    <script src="../js/FilterManager.js"></script>
+
+    <script>
+      // Глобальные переменные
+      let filterManager;
+      let testLog;
+      let testStats = {
+        passed: 0,
+        failed: 0,
+        countryResetTime: 0,
+        fullResetTime: 0,
+      };
+
+      // Моковые данные
+      const mockData = {
+        countries: [
+          { id: 1, name: "Германия" },
+          { id: 2, name: "Япония" },
+          { id: 3, name: "США" },
+        ],
+        countriesByBrand: {
+          1: [{ id: 1, name: "Германия" }], // BMW
+          2: [{ id: 1, name: "Германия" }], // Mercedes
+          3: [{ id: 1, name: "Германия" }], // Audi
+          4: [{ id: 2, name: "Япония" }], // Toyota
+        },
+      };
+
+      // Инициализация
+      document.addEventListener("DOMContentLoaded", function () {
+        testLog = document.getElementById("test-log");
+        initializeDemo();
+        setupMockAPI();
+      });
+
+      /**
+       * Инициализация демо
+       */
+      function initializeDemo() {
+        logTest("🚀 Инициализация демо сброса фильтров", "info");
+
+        // Создание FilterManager
+        filterManager = new FilterManager({
+          apiBaseUrl: "/api",
+          onFiltersChange: onFiltersChange,
+        });
+
+        // Инициализация фильтра по стране
+        filterManager.initCountryFilter("country-filter-demo");
+
+        // Привязка обработчиков
+        document
+          .getElementById("demo-brand")
+          .addEventListener("change", onBrandChange);
+        document
+          .getElementById("demo-model")
+          .addEventListener("change", onModelChange);
+        document
+          .getElementById("demo-year")
+          .addEventListener("change", onYearChange);
+
+        logTest("✅ Демо инициализировано успешно", "success");
+        updateStateDisplay();
+      }
+
+      /**
+       * Настройка мокового API
+       */
+      function setupMockAPI() {
+        const originalFetch = window.fetch;
+
+        window.fetch = async function (url) {
+          // Имитируем задержку сети
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          if (url.includes("/api/countries.php")) {
+            return {
+              ok: true,
+              json: () =>
+                Promise.resolve({
+                  success: true,
+                  data: mockData.countries,
+                }),
+            };
+          }
+
+          if (url.includes("/api/countries-by-brand.php")) {
+            const brandId = new URL(
+              url,
+              window.location.origin
+            ).searchParams.get("brand_id");
+            return {
+              ok: true,
+              json: () =>
+                Promise.resolve({
+                  success: true,
+                  data: mockData.countriesByBrand[brandId] || [],
+                }),
+            };
+          }
+
+          if (url.includes("/api/products-filter.php")) {
+            return {
+              ok: true,
+              json: () =>
+                Promise.resolve({
+                  success: true,
+                  data: [],
+                  pagination: { total: 0 },
+                }),
+            };
+          }
+
+          return originalFetch.apply(this, arguments);
+        };
+      }
+
+      /**
+       * Обработчики событий
+       */
+      function onBrandChange(event) {
+        filterManager.onBrandChange(event.target.value);
+      }
+
+      function onModelChange(event) {
+        filterManager.onModelChange(event.target.value);
+      }
+
+      function onYearChange(event) {
+        filterManager.onYearChange(event.target.value);
+      }
+
+      function onFiltersChange(result, filters) {
+        updateStateDisplay();
+      }
+
+      /**
+       * Функции сброса
+       */
+      async function resetCountryOnly() {
+        logTest("🌍 Сброс только фильтра по стране", "info");
+
+        const startTime = performance.now();
+        await filterManager.resetCountryFilter();
+        const endTime = performance.now();
+
+        testStats.countryResetTime = endTime - startTime;
+        updatePerformanceDisplay();
+
+        logTest(
+          `✅ Фильтр по стране сброшен за ${testStats.countryResetTime.toFixed(
+            2
+          )} мс`,
+          "success"
+        );
+        updateStateDisplay();
+      }
+
+      async function resetAllFilters() {
+        logTest("🔄 Полный сброс всех фильтров", "info");
+
+        const startTime = performance.now();
+        await filterManager.resetAllFilters();
+        const endTime = performance.now();
+
+        testStats.fullResetTime = endTime - startTime;
+        updatePerformanceDisplay();
+
+        logTest(
+          `✅ Все фильтры сброшены за ${testStats.fullResetTime.toFixed(2)} мс`,
+          "success"
+        );
+        updateStateDisplay();
+      }
+
+      async function resetWithReload() {
+        logTest("↻ Сброс с перезагрузкой стран", "info");
+
+        await filterManager.resetCountryFilter(true);
+
+        logTest("✅ Сброс с перезагрузкой выполнен", "success");
+        updateStateDisplay();
+      }
+
+      /**
+       * Обновление отображения состояния
+       */
+      function updateStateDisplay() {
+        const currentFilters = filterManager.getCurrentFilters();
+        const activeFilters = filterManager.getActiveFilters();
+
+        const stateElement = document.getElementById("current-state");
+
+        const stateInfo = {
+          "Все фильтры": currentFilters,
+          "Активные фильтры": activeFilters,
+          "Есть активные": filterManager.hasActiveFilters(),
+          "Выбранная страна":
+            filterManager.countryFilter?.getSelectedCountry() || null,
+        };
+
+        stateElement.innerHTML = Object.entries(stateInfo)
+          .map(
+            ([key, value]) =>
+              `<strong>${key}:</strong> ${JSON.stringify(value)}`
+          )
+          .join("<br>");
+      }
+
+      /**
+       * Обновление отображения производительности
+       */
+      function updatePerformanceDisplay() {
+        // Обновляем время сброса страны
+        const countryBar = document.getElementById("country-reset-bar");
+        const countryTime = document.getElementById("country-reset-time");
+        const countryPercent = Math.min(
+          (testStats.countryResetTime / 50) * 100,
+          100
+        );
+        countryBar.style.width = `${countryPercent}%`;
+        countryTime.textContent = `${testStats.countryResetTime.toFixed(2)} мс`;
+
+        // Обновляем время полного сброса
+        const fullBar = document.getElementById("full-reset-bar");
+        const fullTime = document.getElementById("full-reset-time");
+        const fullPercent = Math.min(
+          (testStats.fullResetTime / 100) * 100,
+          100
+        );
+        fullBar.style.width = `${fullPercent}%`;
+        fullTime.textContent = `${testStats.fullResetTime.toFixed(2)} мс`;
+
+        // Обновляем статистику тестов
+        document.getElementById("tests-passed").textContent = testStats.passed;
+        document.getElementById("tests-failed").textContent = testStats.failed;
+      }
+
+      /**
+       * Тестовые сценарии
+       */
+      async function runScenario(scenarioName) {
+        // Подсвечиваем активный сценарий
+        document.querySelectorAll(".scenario-card").forEach((card) => {
+          card.classList.remove("active");
+        });
+        event.currentTarget.classList.add("active");
+
+        logTest(`🧪 Запуск сценария: ${scenarioName}`, "info");
+
+        try {
+          switch (scenarioName) {
+            case "basic-reset":
+              await testBasicReset();
+              break;
+            case "partial-reset":
+              await testPartialReset();
+              break;
+            case "multiple-resets":
+              await testMultipleResets();
+              break;
+            case "reset-with-errors":
+              await testResetWithErrors();
+              break;
+            case "performance-test":
+              await testPerformance();
+              break;
+            case "integration-test":
+              await testIntegration();
+              break;
+          }
+          testStats.passed++;
+          logTest(`✅ Сценарий ${scenarioName} пройден`, "success");
+        } catch (error) {
+          testStats.failed++;
+          logTest(
+            `❌ Сценарий ${scenarioName} провален: ${error.message}`,
+            "error"
+          );
+        }
+
+        updatePerformanceDisplay();
+      }
+
+      async function testBasicReset() {
+        // Устанавливаем фильтры
+        filterManager.setFilter("brand_id", "1");
+        filterManager.setFilter("model_id", "1");
+        filterManager.setFilter("country_id", "1");
+
+        if (!filterManager.hasActiveFilters()) {
+          throw new Error("Фильтры не установились");
+        }
+
+        // Сбрасываем все
+        await filterManager.resetAllFilters();
+
+        if (filterManager.hasActiveFilters()) {
+          throw new Error("Фильтры не сбросились");
+        }
+
+        logTest("  ✓ Базовый сброс работает корректно", "success");
+      }
+
+      async function testPartialReset() {
+        // Устанавливаем фильтры
+        filterManager.setFilter("brand_id", "1");
+        filterManager.setFilter("country_id", "1");
+
+        // Сбрасываем только страну
+        await filterManager.resetCountryFilter();
+
+        if (filterManager.getFilter("brand_id") !== "1") {
+          throw new Error("Марка сбросилась при частичном сбросе");
+        }
+
+        if (filterManager.getFilter("country_id") !== null) {
+          throw new Error("Страна не сбросилась");
+        }
+
+        logTest("  ✓ Частичный сброс работает корректно", "success");
+      }
+
+      async function testMultipleResets() {
+        // Быстрые множественные сбросы
+        const promises = [
+          filterManager.resetAllFilters(),
+          filterManager.resetCountryFilter(),
+          filterManager.resetAllFilters(),
+        ];
+
+        await Promise.all(promises);
+
+        if (filterManager.hasActiveFilters()) {
+          throw new Error("Множественные сбросы работают некорректно");
+        }
+
+        logTest("  ✓ Множественные сбросы работают корректно", "success");
+      }
+
+      async function testResetWithErrors() {
+        // Имитируем ошибку API
+        const originalFetch = window.fetch;
+        window.fetch = () => Promise.reject(new Error("Network error"));
+
+        try {
+          await filterManager.resetAllFilters();
+          // Сброс должен работать даже при ошибках API
+          logTest("  ✓ Сброс работает при ошибках API", "success");
+        } finally {
+          // Восстанавливаем fetch
+          window.fetch = originalFetch;
+        }
+      }
+
+      async function testPerformance() {
+        const iterations = 10;
+        let totalTime = 0;
+
+        for (let i = 0; i < iterations; i++) {
+          filterManager.setFilter("country_id", "1");
+
+          const startTime = performance.now();
+          await filterManager.resetCountryFilter();
+          const endTime = performance.now();
+
+          totalTime += endTime - startTime;
+        }
+
+        const averageTime = totalTime / iterations;
+
+        if (averageTime > 50) {
+          throw new Error(
+            `Сброс слишком медленный: ${averageTime.toFixed(2)} мс`
+          );
+        }
+
+        logTest(
+          `  ✓ Среднее время сброса: ${averageTime.toFixed(2)} мс`,
+          "success"
+        );
+      }
+
+      async function testIntegration() {
+        // Полный цикл: установка -> сброс -> восстановление
+
+        // 1. Устанавливаем фильтры
+        await filterManager.onBrandChange("1");
+        filterManager.onCountryChange("1");
+
+        // 2. Сбрасываем все
+        await filterManager.resetAllFilters();
+
+        // 3. Устанавливаем новые фильтры
+        await filterManager.onBrandChange("2");
+        filterManager.onCountryChange("2");
+
+        const activeFilters = filterManager.getActiveFilters();
+
+        if (
+          activeFilters.brand_id !== "2" ||
+          activeFilters.country_id !== "2"
+        ) {
+          throw new Error("Интеграционный тест провален");
+        }
+
+        logTest("  ✓ Интеграционный тест пройден", "success");
+      }
+
+      async function runAllScenarios() {
+        logTest("🚀 Запуск всех тестовых сценариев", "info");
+
+        const scenarios = [
+          "basic-reset",
+          "partial-reset",
+          "multiple-resets",
+          "reset-with-errors",
+          "performance-test",
+          "integration-test",
+        ];
+
+        for (const scenario of scenarios) {
+          try {
+            await runScenario(scenario);
+            await new Promise((resolve) => setTimeout(resolve, 500)); // Пауза между тестами
+          } catch (error) {
+            logTest(
+              `❌ Ошибка в сценарии ${scenario}: ${error.message}`,
+              "error"
+            );
+          }
+        }
+
+        logTest("🏁 Все сценарии завершены", "info");
+      }
+
+      /**
+       * Логирование
+       */
+      function logTest(message, type = "info") {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = document.createElement("div");
+        logEntry.className = `log-entry ${type}`;
+        logEntry.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${message}`;
+
+        if (
+          testLog.querySelector(".text-muted") &&
+          testLog.children.length === 1
+        ) {
+          testLog.innerHTML = "";
+        }
+
+        testLog.appendChild(logEntry);
+        testLog.scrollTop = testLog.scrollHeight;
+      }
+
+      function clearTestLog() {
+        testLog.innerHTML = '<div class="text-muted">Лог очищен...</div>';
+
+        // Сбрасываем статистику
+        testStats = {
+          passed: 0,
+          failed: 0,
+          countryResetTime: 0,
+          fullResetTime: 0,
+        };
+
+        updatePerformanceDisplay();
+      }
+    </script>
+  </body>
+</html>

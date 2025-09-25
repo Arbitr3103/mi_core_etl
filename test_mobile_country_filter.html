@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>Тестирование мобильной адаптации фильтра по стране</title>
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Стили фильтра -->
+    <link href="css/country-filter.css" rel="stylesheet" />
+
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background-color: #f8f9fa;
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .test-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+      }
+
+      .test-section {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .test-results {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-family: "Courier New", monospace;
+        font-size: 0.85rem;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .status-passed {
+        background-color: #d4edda;
+        color: #155724;
+      }
+
+      .status-failed {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+
+      .status-warning {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+
+      .test-controls {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .test-controls .btn {
+        flex: 1;
+        min-width: 150px;
+      }
+
+      .device-simulator {
+        border: 2px solid #6c757d;
+        border-radius: 1rem;
+        padding: 1rem;
+        background: #fff;
+        margin: 1rem 0;
+        position: relative;
+      }
+
+      .device-simulator::before {
+        content: attr(data-device);
+        position: absolute;
+        top: -0.75rem;
+        left: 1rem;
+        background: #6c757d;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .performance-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      .performance-card {
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        text-align: center;
+      }
+
+      .performance-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1976d2;
+        margin-bottom: 0.5rem;
+      }
+
+      .performance-label {
+        font-size: 0.85rem;
+        color: #666;
+      }
+
+      .touch-test-area {
+        background: linear-gradient(45deg, #fff3cd, #ffeaa7);
+        border: 2px dashed #ffc107;
+        border-radius: 0.5rem;
+        padding: 2rem;
+        text-align: center;
+        margin: 1rem 0;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        touch-action: manipulation;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .touch-test-area:active {
+        transform: scale(0.98);
+        background: linear-gradient(45deg, #d4edda, #a8e6cf);
+        border-color: #28a745;
+      }
+
+      .console-output {
+        background: #1e1e1e;
+        color: #f8f8f2;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        font-family: "Courier New", monospace;
+        font-size: 0.8rem;
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 1rem;
+      }
+
+      .console-output .log-entry {
+        margin-bottom: 0.25rem;
+        padding: 0.25rem 0;
+        border-bottom: 1px solid #333;
+      }
+
+      .console-output .log-entry:last-child {
+        border-bottom: none;
+      }
+
+      .console-output .log-success {
+        color: #a6e22e;
+      }
+
+      .console-output .log-error {
+        color: #f92672;
+      }
+
+      .console-output .log-warning {
+        color: #fd971f;
+      }
+
+      .console-output .log-info {
+        color: #66d9ef;
+      }
+
+      @media (max-width: 768px) {
+        .test-controls {
+          flex-direction: column;
+        }
+
+        .test-controls .btn {
+          min-width: auto;
+        }
+
+        .performance-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Заголовок -->
+    <div class="test-header">
+      <div class="container">
+        <h1 class="mb-0">🧪 Тестирование мобильной адаптации</h1>
+        <p class="mb-0 mt-2">
+          Комплексное тестирование фильтра по стране изготовления для мобильных
+          устройств
+        </p>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Управление тестами -->
+      <div class="test-section">
+        <h2>🎮 Управление тестами</h2>
+        <div class="test-controls">
+          <button id="run-all-tests" class="btn btn-primary">
+            Запустить все тесты
+          </button>
+          <button id="run-mobile-adaptation" class="btn btn-secondary">
+            Тест адаптации
+          </button>
+          <button id="run-touch-usability" class="btn btn-secondary">
+            Тест touch UX
+          </button>
+          <button id="run-loading-optimization" class="btn btn-secondary">
+            Тест производительности
+          </button>
+          <button id="clear-results" class="btn btn-outline-danger">
+            Очистить результаты
+          </button>
+        </div>
+
+        <div class="alert alert-info">
+          <strong>Инструкции:</strong>
+          <ul class="mb-0 mt-2">
+            <li>Откройте консоль браузера для детального вывода</li>
+            <li>Тестируйте на различных устройствах и размерах экрана</li>
+            <li>Проверьте работу в portrait и landscape ориентациях</li>
+            <li>Обратите внимание на время отклика и плавность анимаций</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Симуляторы устройств -->
+      <div class="test-section">
+        <h2>📱 Симуляторы устройств</h2>
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="device-simulator" data-device="iPhone SE (375x667)">
+              <div id="iphone-se-test"></div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="device-simulator" data-device="iPad (768x1024)">
+              <div id="ipad-test"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="device-simulator" data-device="Android Phone (414x896)">
+              <div id="android-phone-test"></div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="device-simulator" data-device="Small Screen (320x568)">
+              <div id="small-screen-test"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Тест touch взаимодействия -->
+      <div class="test-section">
+        <h2>👆 Интерактивный тест touch</h2>
+
+        <div class="touch-test-area" id="interactive-touch-test">
+          Коснитесь или кликните здесь для тестирования отзывчивости
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <h5>Статистика touch:</h5>
+            <ul id="touch-stats">
+              <li>Количество касаний: <span id="touch-count">0</span></li>
+              <li>
+                Среднее время отклика: <span id="avg-response-time">-</span>мс
+              </li>
+              <li>Последнее касание: <span id="last-touch-time">-</span></li>
+            </ul>
+          </div>
+
+          <div class="col-md-6">
+            <h5>Информация об устройстве:</h5>
+            <ul id="device-info">
+              <li>User Agent: <span id="user-agent">-</span></li>
+              <li>Touch поддержка: <span id="touch-support">-</span></li>
+              <li>Размер экрана: <span id="screen-dimensions">-</span></li>
+              <li>Pixel Ratio: <span id="pixel-ratio">-</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Метрики производительности -->
+      <div class="test-section">
+        <h2>📊 Метрики производительности</h2>
+
+        <div class="performance-grid">
+          <div class="performance-card">
+            <div class="performance-value" id="init-time">-</div>
+            <div class="performance-label">Время инициализации (мс)</div>
+          </div>
+
+          <div class="performance-card">
+            <div class="performance-value" id="first-load-time">-</div>
+            <div class="performance-label">Первая загрузка (мс)</div>
+          </div>
+
+          <div class="performance-card">
+            <div class="performance-value" id="cache-load-time">-</div>
+            <div class="performance-label">Загрузка из кэша (мс)</div>
+          </div>
+
+          <div class="performance-card">
+            <div class="performance-value" id="memory-usage">-</div>
+            <div class="performance-label">Использование памяти (KB)</div>
+          </div>
+        </div>
+
+        <button id="measure-performance" class="btn btn-info w-100 mt-3">
+          Измерить производительность
+        </button>
+      </div>
+
+      <!-- Результаты тестов -->
+      <div class="test-section">
+        <h2>📋 Результаты тестов</h2>
+
+        <div id="test-summary" class="alert alert-secondary">
+          Тесты не запущены. Нажмите "Запустить все тесты" для начала.
+        </div>
+
+        <div class="console-output" id="console-output">
+          <div class="log-entry log-info">
+            Консоль готова к выводу результатов тестирования...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Подключение скриптов -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/CountryFilter.js"></script>
+    <script src="test_mobile_country_filter.js"></script>
+
+    <script>
+      // Глобальные переменные для тестирования
+      let testInstances = {};
+      let touchStats = {
+        count: 0,
+        responseTimes: [],
+        lastTouchTime: null,
+      };
+
+      // Инициализация при загрузке страницы
+      document.addEventListener("DOMContentLoaded", function () {
+        initializeTestEnvironment();
+        setupEventHandlers();
+        updateDeviceInfo();
+        setupInteractiveTouchTest();
+      });
+
+      /**
+       * Инициализация тестовой среды
+       */
+      function initializeTestEnvironment() {
+        logToConsole("Инициализация тестовой среды...", "info");
+
+        // Создаем экземпляры фильтров для разных устройств
+        const devices = [
+          { id: "iphone-se-test", name: "iPhone SE" },
+          { id: "ipad-test", name: "iPad" },
+          { id: "android-phone-test", name: "Android Phone" },
+          { id: "small-screen-test", name: "Small Screen" },
+        ];
+
+        devices.forEach((device) => {
+          try {
+            testInstances[device.id] = new CountryFilter(
+              device.id,
+              (countryId) => {
+                logToConsole(
+                  `${device.name}: Выбрана страна ${countryId}`,
+                  "success"
+                );
+              }
+            );
+            logToConsole(`${device.name}: Инициализирован успешно`, "success");
+          } catch (error) {
+            logToConsole(
+              `${device.name}: Ошибка инициализации - ${error.message}`,
+              "error"
+            );
+          }
+        });
+      }
+
+      /**
+       * Настройка обработчиков событий
+       */
+      function setupEventHandlers() {
+        document
+          .getElementById("run-all-tests")
+          .addEventListener("click", runAllTests);
+        document
+          .getElementById("run-mobile-adaptation")
+          .addEventListener("click", () => runSpecificTest("mobile"));
+        document
+          .getElementById("run-touch-usability")
+          .addEventListener("click", () => runSpecificTest("touch"));
+        document
+          .getElementById("run-loading-optimization")
+          .addEventListener("click", () => runSpecificTest("loading"));
+        document
+          .getElementById("clear-results")
+          .addEventListener("click", clearResults);
+        document
+          .getElementById("measure-performance")
+          .addEventListener("click", measurePerformance);
+      }
+
+      /**
+       * Обновление информации об устройстве
+       */
+      function updateDeviceInfo() {
+        document.getElementById("user-agent").textContent =
+          navigator.userAgent.substring(0, 50) + "...";
+        document.getElementById("touch-support").textContent =
+          "ontouchstart" in window ? "Да" : "Нет";
+        document.getElementById(
+          "screen-dimensions"
+        ).textContent = `${window.innerWidth}x${window.innerHeight}`;
+        document.getElementById("pixel-ratio").textContent =
+          window.devicePixelRatio || 1;
+      }
+
+      /**
+       * Настройка интерактивного теста touch
+       */
+      function setupInteractiveTouchTest() {
+        const touchArea = document.getElementById("interactive-touch-test");
+
+        const handleTouch = (event) => {
+          const startTime = performance.now();
+
+          touchStats.count++;
+          touchStats.lastTouchTime = new Date().toLocaleTimeString();
+
+          // Имитация обработки
+          setTimeout(() => {
+            const endTime = performance.now();
+            const responseTime = endTime - startTime;
+            touchStats.responseTimes.push(responseTime);
+
+            // Ограничиваем массив последними 10 измерениями
+            if (touchStats.responseTimes.length > 10) {
+              touchStats.responseTimes.shift();
+            }
+
+            updateTouchStats();
+          }, Math.random() * 20 + 5); // Случайная задержка 5-25мс
+        };
+
+        // Touch события
+        touchArea.addEventListener("touchstart", handleTouch, {
+          passive: true,
+        });
+        touchArea.addEventListener(
+          "touchend",
+          (e) => {
+            e.preventDefault();
+          },
+          { passive: false }
+        );
+
+        // Mouse события как fallback
+        touchArea.addEventListener("mousedown", handleTouch);
+        touchArea.addEventListener("mouseup", (e) => {
+          e.preventDefault();
+        });
+      }
+
+      /**
+       * Обновление статистики touch
+       */
+      function updateTouchStats() {
+        document.getElementById("touch-count").textContent = touchStats.count;
+        document.getElementById("last-touch-time").textContent =
+          touchStats.lastTouchTime || "-";
+
+        if (touchStats.responseTimes.length > 0) {
+          const avgTime =
+            touchStats.responseTimes.reduce((a, b) => a + b, 0) /
+            touchStats.responseTimes.length;
+          document.getElementById("avg-response-time").textContent =
+            Math.round(avgTime);
+        }
+      }
+
+      /**
+       * Запуск всех тестов
+       */
+      async function runAllTests() {
+        const button = document.getElementById("run-all-tests");
+        button.disabled = true;
+        button.textContent = "Выполнение тестов...";
+
+        logToConsole("Запуск полного набора тестов...", "info");
+
+        try {
+          const tester = new MobileCountryFilterTester();
+          await tester.runAllTests();
+
+          updateTestSummary("success", "Все тесты выполнены успешно!");
+        } catch (error) {
+          logToConsole(`Ошибка выполнения тестов: ${error.message}`, "error");
+          updateTestSummary(
+            "error",
+            `Ошибка выполнения тестов: ${error.message}`
+          );
+        } finally {
+          button.disabled = false;
+          button.textContent = "Запустить все тесты";
+        }
+      }
+
+      /**
+       * Запуск конкретного теста
+       */
+      async function runSpecificTest(testType) {
+        logToConsole(`Запуск теста: ${testType}`, "info");
+
+        try {
+          const tester = new MobileCountryFilterTester();
+
+          switch (testType) {
+            case "mobile":
+              await tester.testMobileAdaptation();
+              break;
+            case "touch":
+              await tester.testTouchUsability();
+              break;
+            case "loading":
+              await tester.testLoadingOptimization();
+              break;
+          }
+
+          logToConsole(`Тест ${testType} завершен`, "success");
+        } catch (error) {
+          logToConsole(`Ошибка теста ${testType}: ${error.message}`, "error");
+        }
+      }
+
+      /**
+       * Измерение производительности
+       */
+      async function measurePerformance() {
+        const button = document.getElementById("measure-performance");
+        button.disabled = true;
+        button.textContent = "Измерение...";
+
+        try {
+          // Измерение времени инициализации
+          const initStart = performance.now();
+          const testFilter = new CountryFilter(
+            "performance-test-container",
+            () => {}
+          );
+          const initEnd = performance.now();
+
+          document.getElementById("init-time").textContent = Math.round(
+            initEnd - initStart
+          );
+
+          // Измерение первой загрузки
+          const firstLoadStart = performance.now();
+          await testFilter.loadCountries();
+          const firstLoadEnd = performance.now();
+
+          document.getElementById("first-load-time").textContent = Math.round(
+            firstLoadEnd - firstLoadStart
+          );
+
+          // Измерение загрузки из кэша
+          const cacheLoadStart = performance.now();
+          await testFilter.loadCountries();
+          const cacheLoadEnd = performance.now();
+
+          document.getElementById("cache-load-time").textContent = Math.round(
+            cacheLoadEnd - cacheLoadStart
+          );
+
+          // Измерение использования памяти
+          if (performance.memory) {
+            const memoryUsage = Math.round(
+              performance.memory.usedJSHeapSize / 1024
+            );
+            document.getElementById("memory-usage").textContent = memoryUsage;
+          }
+
+          logToConsole("Измерение производительности завершено", "success");
+        } catch (error) {
+          logToConsole(
+            `Ошибка измерения производительности: ${error.message}`,
+            "error"
+          );
+        } finally {
+          button.disabled = false;
+          button.textContent = "Измерить производительность";
+        }
+      }
+
+      /**
+       * Очистка результатов
+       */
+      function clearResults() {
+        document.getElementById("console-output").innerHTML =
+          '<div class="log-entry log-info">Консоль очищена...</div>';
+
+        document.getElementById("test-summary").className =
+          "alert alert-secondary";
+        document.getElementById("test-summary").textContent =
+          "Результаты очищены. Запустите тесты заново.";
+
+        // Сброс статистики touch
+        touchStats = {
+          count: 0,
+          responseTimes: [],
+          lastTouchTime: null,
+        };
+        updateTouchStats();
+
+        // Сброс метрик производительности
+        [
+          "init-time",
+          "first-load-time",
+          "cache-load-time",
+          "memory-usage",
+        ].forEach((id) => {
+          document.getElementById(id).textContent = "-";
+        });
+      }
+
+      /**
+       * Обновление сводки тестов
+       */
+      function updateTestSummary(type, message) {
+        const summary = document.getElementById("test-summary");
+
+        switch (type) {
+          case "success":
+            summary.className = "alert alert-success";
+            break;
+          case "error":
+            summary.className = "alert alert-danger";
+            break;
+          case "warning":
+            summary.className = "alert alert-warning";
+            break;
+          default:
+            summary.className = "alert alert-info";
+        }
+
+        summary.textContent = message;
+      }
+
+      /**
+       * Логирование в консоль
+       */
+      function logToConsole(message, type = "info") {
+        const console = document.getElementById("console-output");
+        const timestamp = new Date().toLocaleTimeString();
+
+        const logEntry = document.createElement("div");
+        logEntry.className = `log-entry log-${type}`;
+        logEntry.textContent = `[${timestamp}] ${message}`;
+
+        console.appendChild(logEntry);
+        console.scrollTop = console.scrollHeight;
+
+        // Также выводим в браузерную консоль
+        switch (type) {
+          case "error":
+            console.error(message);
+            break;
+          case "warning":
+            console.warn(message);
+            break;
+          case "success":
+            console.log(`✅ ${message}`);
+            break;
+          default:
+            console.log(message);
+        }
+      }
+
+      // Обработчики изменения размера окна и ориентации
+      window.addEventListener("resize", () => {
+        updateDeviceInfo();
+        logToConsole(
+          `Размер окна изменен: ${window.innerWidth}x${window.innerHeight}`,
+          "info"
+        );
+      });
+
+      window.addEventListener("orientationchange", () => {
+        setTimeout(() => {
+          updateDeviceInfo();
+          logToConsole("Ориентация изменена", "info");
+        }, 100);
+      });
+
+      // Создаем скрытый контейнер для тестов производительности
+      const performanceContainer = document.createElement("div");
+      performanceContainer.id = "performance-test-container";
+      performanceContainer.style.display = "none";
+      document.body.appendChild(performanceContainer);
+    </script>
+  </body>
+</html>
