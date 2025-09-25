@@ -36,6 +36,11 @@ class InventoryItem:
     available_stock: int
     last_updated: datetime
     cost_price: Optional[float] = None
+    min_stock_level: int = 0
+    max_stock_level: int = 0
+    reorder_point: int = 0
+    lead_time_days: int = 14
+    safety_stock_days: int = 7
 
 
 @dataclass
@@ -200,9 +205,9 @@ class InventoryAnalyzer:
                     COALESCE(reorder_point, 0) as reorder_point,
                     COALESCE(lead_time_days, %s) as lead_time_days,
                     COALESCE(safety_stock_days, %s) as safety_stock_days,
-                    COALESCE(is_active_for_replenishment, TRUE) as is_active
+                    COALESCE(is_active, TRUE) as is_active
                 FROM dim_products 
-                WHERE id = %s
+                WHERE product_id = %s
             """, (
                 self.settings.get('default_lead_time_days', 14),
                 self.settings.get('default_safety_stock_days', 7),

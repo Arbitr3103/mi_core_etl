@@ -146,9 +146,9 @@ class SalesVelocityCalculator:
             
             # Получаем SKU товара
             cursor.execute("""
-                SELECT COALESCE(sku_ozon, 'UNKNOWN') as sku 
+                SELECT COALESCE(sku, 'UNKNOWN') as sku 
                 FROM dim_products 
-                WHERE id = %s
+                WHERE product_id = %s
             """, (product_id,))
             
             sku_result = cursor.fetchone()
