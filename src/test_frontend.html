@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Тест фильтра стран</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .filter-group {
+        margin-bottom: 20px;
+      }
+      .filter-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      .filter-select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .filter-loading {
+        color: #007bff;
+        font-style: italic;
+      }
+      .filter-error {
+        color: #dc3545;
+        font-weight: bold;
+      }
+      .retry-button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .debug-info {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 15px;
+        margin-top: 20px;
+        border-radius: 4px;
+      }
+      .debug-info h3 {
+        margin-top: 0;
+      }
+      .debug-info pre {
+        background: white;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Тест фильтра стран</h1>
+
+    <div id="country-filter-container"></div>
+
+    <div class="debug-info">
+      <h3>Отладочная информация</h3>
+      <div>
+        <strong>Выбранная страна:</strong>
+        <span id="selected-country">Не выбрана</span>
+      </div>
+      <div>
+        <strong>Статус API:</strong> <span id="api-status">Проверяется...</span>
+      </div>
+      <div>
+        <strong>Последний ответ API:</strong>
+        <pre id="api-response">Ожидание...</pre>
+      </div>
+    </div>
+
+    <script src="js/CountryFilter.js"></script>
+    <script>
+      // Инициализация фильтра стран
+      const countryFilter = new CountryFilter(
+        "country-filter-container",
+        function (selectedCountry) {
+          console.log("Выбрана страна:", selectedCountry);
+          document.getElementById("selected-country").textContent =
+            selectedCountry || "Не выбрана";
+        }
+      );
+
+      // Проверка доступности API
+      async function checkAPI() {
+        const statusElement = document.getElementById("api-status");
+        const responseElement = document.getElementById("api-response");
+
+        try {
+          statusElement.textContent = "Проверяется...";
+
+          // Проверяем основной endpoint
+          const response = await fetch("/api/countries.php");
+          const result = await response.json();
+
+          if (result.success) {
+            statusElement.textContent = "✅ API работает";
+            statusElement.style.color = "green";
+          } else {
+            statusElement.textContent = "❌ API вернул ошибку";
+            statusElement.style.color = "red";
+          }
+
+          responseElement.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          statusElement.textContent = "❌ Ошибка подключения к API";
+          statusElement.style.color = "red";
+          responseElement.textContent = "Ошибка: " + error.message;
+        }
+      }
+
+      // Запускаем проверку API при загрузке страницы
+      checkAPI();
+
+      // Обновляем проверку каждые 30 секунд
+      setInterval(checkAPI, 30000);
+    </script>
+  </body>
+</html>
