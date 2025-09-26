@@ -101,7 +101,9 @@
           statusElement.textContent = "Проверяется...";
 
           // Проверяем основной endpoint
-          const response = await fetch("/api/countries.php");
+          const response = await fetch(
+            "http://178.72.129.61/api/countries.php"
+          );
           const result = await response.json();
 
           if (result.success) {
