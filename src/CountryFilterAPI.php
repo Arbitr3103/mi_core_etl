@@ -133,56 +133,17 @@ class CountryFilterAPI {
     public function getAllCountries() {
         return $this->getCachedOrExecute('all_countries', function() {
             try {
-                // Пробуем разные источники данных для стран
-                $queries = [
-                    // Вариант 1: Используем v_car_applicability
-                    "SELECT DISTINCT 
-                        ROW_NUMBER() OVER (ORDER BY country) as id,
-                        country as name
-                     FROM v_car_applicability
-                     WHERE country IS NOT NULL AND country != '' AND country != 'NULL'
-                     ORDER BY country ASC
-                     LIMIT 1000",
-                    
-                    // Вариант 2: Используем dim_products напрямую
-                    "SELECT DISTINCT 
-                        ROW_NUMBER() OVER (ORDER BY country) as id,
-                        country as name
-                     FROM dim_products
-                     WHERE country IS NOT NULL AND country != '' AND country != 'NULL'
-                     ORDER BY country ASC
-                     LIMIT 1000",
-                     
-                    // Вариант 3: Используем regions таблицу
-                    "SELECT DISTINCT 
-                        r.id, r.name
-                     FROM regions r
-                     WHERE r.name IS NOT NULL AND r.name != ''
-                     ORDER BY r.name ASC
-                     LIMIT 1000"
-                ];
+                // Правильный запрос для получения стран из v_car_applicability
+                $sql = "SELECT DISTINCT 
+                            ROW_NUMBER() OVER (ORDER BY country) as id,
+                            country as name
+                        FROM v_car_applicability 
+                        WHERE country IS NOT NULL AND country != '' AND country != 'NULL'
+                        ORDER BY country ASC";
                 
-                $results = [];
-                $sql = null;
-                
-                // Пробуем каждый запрос пока не найдем рабочий
-                foreach ($queries as $query) {
-                    try {
-                        $stmt = $this->db->getCoreConnection()->prepare($query);
-                        $stmt->execute();
-                        $testResults = $stmt->fetchAll();
-                        
-                        if (!empty($testResults)) {
-                            $results = $testResults;
-                            $sql = $query;
-                            break;
-                        }
-                    } catch (Exception $e) {
-                        // Пробуем следующий запрос
-                        continue;
-                    }
-                }
-
+                $stmt = $this->db->getCoreConnection()->prepare($sql);
+                $stmt->execute();
+                $results = $stmt->fetchAll();
                 
                 // Если нет результатов, возвращаем пустой массив с сообщением
                 if (empty($results)) {
@@ -247,17 +208,14 @@ class CountryFilterAPI {
                     ];
                 }
                 
-                // Используем представление v_car_applicability из mi_core_db
-                $sql = "
-                    SELECT DISTINCT 
-                        ROW_NUMBER() OVER (ORDER BY country) as id,
-                        country as name
-                    FROM v_car_applicability
-                    WHERE brand_id = :brand_id
-                      AND country IS NOT NULL AND country != '' AND country != 'NULL'
-                    ORDER BY country ASC
-                    LIMIT 100
-                ";
+                // Правильный запрос для получения стран по марке
+                $sql = "SELECT DISTINCT 
+                            ROW_NUMBER() OVER (ORDER BY country) as id,
+                            country as name
+                        FROM v_car_applicability 
+                        WHERE brand_id = :brand_id 
+                          AND country IS NOT NULL AND country != '' AND country != 'NULL'
+                        ORDER BY country ASC";
                 
                 $stmt = $this->db->getCoreConnection()->prepare($sql);
                 $stmt->execute(['brand_id' => $brandId]);
