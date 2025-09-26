@@ -96,13 +96,14 @@ class CountryFilterAPI {
     public function getAllCountries() {
         return $this->getCachedOrExecute('all_countries', function() {
             try {
-                // Оптимизированный запрос с использованием индексов
+                // Используем представление v_car_applicability или dim_products
                 $sql = "
-                    SELECT DISTINCT r.id, r.name
-                    FROM regions r
-                    INNER JOIN brands b ON r.id = b.region_id
-                    WHERE r.name IS NOT NULL AND r.name != ''
-                    ORDER BY r.name ASC
+                    SELECT DISTINCT 
+                        ROW_NUMBER() OVER (ORDER BY country) as id,
+                        country as name
+                    FROM v_car_applicability
+                    WHERE country IS NOT NULL AND country != '' AND country != 'NULL'
+                    ORDER BY country ASC
                     LIMIT 1000
                 ";
                 
@@ -174,14 +175,15 @@ class CountryFilterAPI {
                     ];
                 }
                 
-                // Оптимизированный запрос с использованием индексов
+                // Используем представление v_car_applicability
                 $sql = "
-                    SELECT r.id, r.name
-                    FROM regions r
-                    INNER JOIN brands b ON r.id = b.region_id
-                    WHERE b.id = :brand_id
-                      AND r.name IS NOT NULL AND r.name != ''
-                    ORDER BY r.name ASC
+                    SELECT DISTINCT 
+                        ROW_NUMBER() OVER (ORDER BY country) as id,
+                        country as name
+                    FROM v_car_applicability
+                    WHERE brand_id = :brand_id
+                      AND country IS NOT NULL AND country != '' AND country != 'NULL'
+                    ORDER BY country ASC
                     LIMIT 100
                 ";
                 
@@ -253,15 +255,15 @@ class CountryFilterAPI {
                     ];
                 }
                 
-                // Оптимизированный запрос с использованием индексов
+                // Используем представление v_car_applicability
                 $sql = "
-                    SELECT r.id, r.name
-                    FROM regions r
-                    INNER JOIN brands b ON r.id = b.region_id
-                    INNER JOIN car_models cm ON b.id = cm.brand_id
-                    WHERE cm.id = :model_id
-                      AND r.name IS NOT NULL AND r.name != ''
-                    ORDER BY r.name ASC
+                    SELECT DISTINCT 
+                        ROW_NUMBER() OVER (ORDER BY country) as id,
+                        country as name
+                    FROM v_car_applicability
+                    WHERE model_id = :model_id
+                      AND country IS NOT NULL AND country != '' AND country != 'NULL'
+                    ORDER BY country ASC
                     LIMIT 100
                 ";
                 
