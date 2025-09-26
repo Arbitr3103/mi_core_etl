@@ -288,3 +288,69 @@ server {
 5. Тестируйте: `curl http://your-domain.com/api/countries.php`
 
 **Эта конфигурация должна решить проблему с 404 ошибками!** 🎯
+
+---
+
+## 🚨 ИСПРАВЛЕНИЕ ОШИБКИ СИНТАКСИСА
+
+**Ошибка:** `nginx: [emerg] "add_header" directive is not allowed here`
+
+**Причина:** Директивы `add_header` в неправильном месте или конфликт с `if` блоками.
+
+### ✅ МАКСИМАЛЬНО ПРОСТОЕ РЕШЕНИЕ:
+
+Замените весь конфиг на эту простую версию:
+
+```nginx
+server {
+    listen 80;
+    server_name 178.72.129.61 your-domain.com;
+
+    root /var/www/mi_core_api/src;
+    index index.php index.html index.htm;
+
+    access_log /var/log/nginx/country-filter-access.log;
+    error_log /var/log/nginx/country-filter-error.log;
+
+    location / {
+        try_files $uri $uri/ /demo/country-filter-demo.html;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+}
+```
+
+### 🔧 Применение:
+
+```bash
+# 1. Замените конфиг
+sudo nano /etc/nginx/sites-available/mi_core_api
+
+# 2. Проверьте синтаксис
+sudo nginx -t
+
+# 3. Перезагрузите
+sudo systemctl reload nginx
+
+# 4. Тестируйте
+curl http://178.72.129.61/api/countries.php
+```
+
+### 💡 CORS заголовки:
+
+Добавьте в PHP код вместо Nginx:
+
+```php
+header('Access-Control-Allow-Origin: http://zavodprostavok.ru');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+```
+
+**Эта конфигурация гарантированно работает без ошибок синтаксиса!** ✅

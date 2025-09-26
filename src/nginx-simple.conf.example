@@ -1,0 +1,50 @@
+# Nginx configuration for Country Filter System
+# МАКСИМАЛЬНО ПРОСТАЯ конфигурация без CORS сложностей
+# 
+# Структура файлов:
+# /var/www/mi_core_api/src/api/countries.php
+# /var/www/mi_core_api/src/api/countries-by-brand.php
+# /var/www/mi_core_api/src/api/countries-by-model.php
+# /var/www/mi_core_api/src/api/products-filter.php
+
+server {
+    listen 80;
+    server_name 178.72.129.61 your-domain.com;
+    
+    # Указываем корень, где лежит папка api
+    root /var/www/mi_core_api/src;
+    
+    # Индексные файлы
+    index index.php index.html index.htm;
+
+    # Логи
+    access_log /var/log/nginx/country-filter-access.log;
+    error_log /var/log/nginx/country-filter-error.log;
+
+    # Основная обработка запросов
+    location / {
+        try_files $uri $uri/ /demo/country-filter-demo.html;
+    }
+
+    # ПРОСТОЙ обработчик для всех PHP файлов
+    location ~ \.php$ {
+        try_files $uri =404;
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+    }
+
+    # Кэширование статических файлов
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1M;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Безопасность - запрет доступа к служебным файлам
+    location ~ /\. {
+        deny all;
+    }
+
+    location ~* \.(log|sql|bak)$ {
+        deny all;
+    }
+}

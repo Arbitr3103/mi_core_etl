@@ -21,31 +21,39 @@ server {
     access_log /var/log/nginx/country-filter-access.log;
     error_log /var/log/nginx/country-filter-error.log;
 
-    # Общие настройки CORS для всего сайта
-    add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
-    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+    # Основная обработка запросов
+    location / {
+        try_files $uri $uri/ /demo/country-filter-demo.html;
+        
+        # CORS headers для всех запросов
+        add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+    }
 
     # Обработка preflight OPTIONS запросов
-    if ($request_method = 'OPTIONS') {
+    location = /api/options {
+        add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
         add_header 'Access-Control-Max-Age' 1728000;
         add_header 'Content-Type' 'text/plain; charset=utf-8';
         add_header 'Content-Length' 0;
         return 204;
     }
 
-    # Основная обработка запросов
-    location / {
-        try_files $uri $uri/ /demo/country-filter-demo.html;
-    }
-
     # Главный обработчик для всех PHP файлов (включая API)
     location ~ \.php$ {
         try_files $uri =404;
         include snippets/fastcgi-php.conf;
-        # Убедитесь, что эта версия PHP правильная!
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+        
+        # CORS headers для PHP ответов
+        add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
     }
 
     # Кэширование статических файлов
