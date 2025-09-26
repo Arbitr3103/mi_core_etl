@@ -78,7 +78,7 @@ class CountryFilterDatabase {
 }
 
 class CountryFilterAPI {
-    private $db;
+    public $db;
     private $cache;
     private $cacheTimeout;
     
