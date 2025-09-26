@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Тест фильтра стран на zavodprostavok.ru</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .country-filter {
+        margin-bottom: 20px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #f9f9f9;
+      }
+      .filter-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      .filter-select {
+        width: 100%;
+        max-width: 300px;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+        font-size: 14px;
+      }
+      .filter-loading {
+        color: #007bff;
+        font-style: italic;
+        font-size: 12px;
+      }
+      .filter-error {
+        color: #dc3545;
+        font-size: 12px;
+      }
+      .retry-button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 11px;
+      }
+      .debug-info {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin-top: 20px;
+        border-radius: 4px;
+      }
+      .debug-info pre {
+        background: #f4f4f4;
+        padding: 10px;
+        border-radius: 3px;
+        overflow-x: auto;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+      }
+      .status.success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .status.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .status.info {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 Тест фильтра стран на zavodprostavok.ru</h1>
+
+    <div class="status info">
+      <strong>Информация:</strong> Этот файл должен быть размещен на сайте
+      zavodprostavok.ru для тестирования CORS запросов к API на 178.72.129.61
+    </div>
+
+    <!-- Контейнер для фильтра стран -->
+    <div id="country-filter-container"></div>
+
+    <div class="debug-info">
+      <h3>Отладочная информация</h3>
+      <div>
+        <strong>Текущий домен:</strong> <span id="current-domain"></span>
+      </div>
+      <div><strong>API URL:</strong> <span id="api-url"></span></div>
+      <div>
+        <strong>Выбранная страна:</strong>
+        <span id="selected-country">Не выбрана</span>
+      </div>
+      <div>
+        <strong>Статус API:</strong> <span id="api-status">Проверяется...</span>
+      </div>
+      <div>
+        <strong>Последний ответ:</strong>
+        <pre id="api-response">Ожидание...</pre>
+      </div>
+    </div>
+
+    <script>
+      // Конфигурация
+      const API_BASE_URL = "http://178.72.129.61/api";
+
+      // Обновляем отладочную информацию
+      document.getElementById("current-domain").textContent =
+        window.location.hostname;
+      document.getElementById("api-url").textContent = API_BASE_URL;
+
+      // Простая реализация CountryFilter для тестирования
+      class SimpleCountryFilter {
+        constructor(containerId, onChangeCallback) {
+          this.container = document.getElementById(containerId);
+          this.onChange = onChangeCallback;
+          this.countries = [];
+          this.selectedCountry = null;
+          this.apiBaseUrl = API_BASE_URL;
+
+          this.init();
+        }
+
+        init() {
+          this.render();
+          this.loadCountries();
+        }
+
+        render() {
+          this.container.innerHTML = `
+                    <div class="country-filter">
+                        <label for="country-select" class="filter-label">
+                            Страна изготовления:
+                        </label>
+                        <div class="filter-input-wrapper">
+                            <select id="country-select" class="filter-select">
+                                <option value="">Все страны</option>
+                            </select>
+                            <div class="filter-loading" style="display: none;">
+                                Загрузка стран...
+                            </div>
+                            <div class="filter-error" style="display: none;">
+                                <span class="error-message"></span>
+                                <button type="button" class="retry-button">Повторить</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+          this.selectElement = this.container.querySelector("#country-select");
+          this.loadingElement = this.container.querySelector(".filter-loading");
+          this.errorElement = this.container.querySelector(".filter-error");
+          this.retryButton = this.container.querySelector(".retry-button");
+
+          // Обработчики событий
+          this.selectElement.addEventListener("change", (e) => {
+            this.selectedCountry = e.target.value || null;
+            this.triggerChange();
+          });
+
+          this.retryButton.addEventListener("click", () => {
+            this.loadCountries();
+          });
+        }
+
+        async loadCountries() {
+          this.showLoading();
+
+          try {
+            const response = await fetch(`${this.apiBaseUrl}/countries.php`, {
+              method: "GET",
+              headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+              },
+            });
+
+            const result = await response.json();
+
+            // Обновляем отладочную информацию
+            document.getElementById("api-status").textContent = response.ok
+              ? "✅ Успешно"
+              : "❌ Ошибка";
+            document.getElementById("api-response").textContent =
+              JSON.stringify(result, null, 2);
+
+            if (result.success && result.data) {
+              this.countries = result.data;
+              this.populateSelect(result.data);
+              this.hideLoading();
+
+              // Показываем успешный статус
+              this.showStatus(
+                "success",
+                `Загружено ${result.data.length} стран`
+              );
+            } else {
+              this.showError(result.error || "Неизвестная ошибка API");
+            }
+          } catch (error) {
+            console.error("Ошибка загрузки стран:", error);
+            this.showError(`Сетевая ошибка: ${error.message}`);
+
+            // Обновляем отладочную информацию
+            document.getElementById("api-status").textContent =
+              "❌ Сетевая ошибка";
+            document.getElementById(
+              "api-response"
+            ).textContent = `Ошибка: ${error.message}`;
+          }
+        }
+
+        populateSelect(countries) {
+          // Очищаем select
+          this.selectElement.innerHTML = '<option value="">Все страны</option>';
+
+          // Добавляем страны
+          countries.forEach((country) => {
+            const option = document.createElement("option");
+            option.value = country.id;
+            option.textContent = country.name;
+            this.selectElement.appendChild(option);
+          });
+        }
+
+        showLoading() {
+          this.loadingElement.style.display = "block";
+          this.errorElement.style.display = "none";
+          this.selectElement.disabled = true;
+        }
+
+        hideLoading() {
+          this.loadingElement.style.display = "none";
+          this.selectElement.disabled = false;
+        }
+
+        showError(message) {
+          this.hideLoading();
+          this.errorElement.style.display = "block";
+          this.errorElement.querySelector(".error-message").textContent =
+            message;
+
+          this.showStatus("error", message);
+        }
+
+        showStatus(type, message) {
+          // Удаляем предыдущие статусы
+          const existingStatus = document.querySelector(".status.dynamic");
+          if (existingStatus) {
+            existingStatus.remove();
+          }
+
+          // Создаем новый статус
+          const statusDiv = document.createElement("div");
+          statusDiv.className = `status ${type} dynamic`;
+          statusDiv.innerHTML = `<strong>${
+            type === "success" ? "Успех" : "Ошибка"
+          }:</strong> ${message}`;
+
+          // Вставляем после заголовка
+          const h1 = document.querySelector("h1");
+          h1.insertAdjacentElement("afterend", statusDiv);
+        }
+
+        triggerChange() {
+          document.getElementById("selected-country").textContent =
+            this.selectedCountry || "Не выбрана";
+
+          if (typeof this.onChange === "function") {
+            this.onChange(this.selectedCountry);
+          }
+        }
+      }
+
+      // Инициализация при загрузке страницы
+      document.addEventListener("DOMContentLoaded", function () {
+        const countryFilter = new SimpleCountryFilter(
+          "country-filter-container",
+          function (selectedCountryId) {
+            console.log("Выбрана страна с ID:", selectedCountryId);
+
+            // Здесь должна быть ваша логика обработки выбора страны
+            if (selectedCountryId) {
+              alert(`Выбрана страна с ID: ${selectedCountryId}`);
+            } else {
+              alert("Сброшен фильтр по стране");
+            }
+          }
+        );
+      });
+    </script>
+  </body>
+</html>
