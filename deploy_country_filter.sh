@@ -83,14 +83,11 @@ echo ""
 # Создание бэкапа (если есть существующие файлы)
 print_info "Создание бэкапа существующих файлов..."
 
-if [ -d "api" ] || [ -f "CountryFilterAPI.php" ]; then
+if [ -d "src" ] || [ -f "src/CountryFilterAPI.php" ]; then
     mkdir -p "$BACKUP_DIR"
     
     # Бэкап основных файлов
-    [ -f "CountryFilterAPI.php" ] && cp "CountryFilterAPI.php" "$BACKUP_DIR/"
-    [ -d "api" ] && cp -r "api" "$BACKUP_DIR/"
-    [ -d "js" ] && cp -r "js" "$BACKUP_DIR/"
-    [ -d "css" ] && cp -r "css" "$BACKUP_DIR/"
+    [ -d "src" ] && cp -r "src" "$BACKUP_DIR/"
     
     print_success "Бэкап создан в директории: $BACKUP_DIR"
 else
@@ -103,13 +100,13 @@ echo ""
 print_info "Проверка файлов системы фильтрации..."
 
 REQUIRED_FILES=(
-    "CountryFilterAPI.php"
-    "api/countries.php"
-    "api/countries-by-brand.php"
-    "api/countries-by-model.php"
-    "api/products-filter.php"
-    "js/CountryFilter.js"
-    "css/country-filter.css"
+    "src/CountryFilterAPI.php"
+    "src/api/countries.php"
+    "src/api/countries-by-brand.php"
+    "src/api/countries-by-model.php"
+    "src/api/products-filter.php"
+    "src/js/CountryFilter.js"
+    "src/css/country-filter.css"
 )
 
 MISSING_FILES=()
@@ -134,17 +131,17 @@ echo ""
 # Настройка прав доступа
 print_info "Настройка прав доступа к файлам..."
 
-# Права на PHP файлы
-find . -name "*.php" -exec chmod 644 {} \;
+# Права на PHP файлы в src/
+find src/ -name "*.php" -exec chmod 644 {} \; 2>/dev/null || true
 print_success "Права на PHP файлы установлены (644)"
 
-# Права на JavaScript и CSS
-find . -name "*.js" -exec chmod 644 {} \;
-find . -name "*.css" -exec chmod 644 {} \;
+# Права на JavaScript и CSS в src/
+find src/ -name "*.js" -exec chmod 644 {} \; 2>/dev/null || true
+find src/ -name "*.css" -exec chmod 644 {} \; 2>/dev/null || true
 print_success "Права на статические файлы установлены (644)"
 
-# Права на директории
-find . -type d -exec chmod 755 {} \;
+# Права на директории в src/
+find src/ -type d -exec chmod 755 {} \; 2>/dev/null || true
 print_success "Права на директории установлены (755)"
 
 # Права на исполняемые скрипты
@@ -158,10 +155,10 @@ echo ""
 # Проверка конфигурации базы данных
 print_info "Проверка конфигурации базы данных..."
 
-if [ -f "config/database.php" ]; then
+if [ -f "src/config/database.php" ]; then
     print_success "Найден файл конфигурации БД"
-elif [ -f "CountryFilterAPI.php" ]; then
-    print_warning "Проверьте настройки БД в CountryFilterAPI.php"
+elif [ -f "src/CountryFilterAPI.php" ]; then
+    print_warning "Проверьте настройки БД в src/CountryFilterAPI.php"
     echo "Убедитесь что указаны правильные параметры подключения:"
     echo "- host, database, username, password"
 else
@@ -182,10 +179,10 @@ echo ""
 # Тестирование API endpoints
 print_info "Тестирование API endpoints..."
 
-if [ -f "test_country_filter_api.php" ]; then
+if [ -f "src/test_country_filter_api.php" ]; then
     print_info "Запуск базовых тестов API..."
     
-    if php test_country_filter_api.php > /tmp/api_test.log 2>&1; then
+    if cd src && php test_country_filter_api.php > /tmp/api_test.log 2>&1; then
         if grep -q "SUCCESS\|✅" /tmp/api_test.log; then
             print_success "API тесты пройдены успешно"
         else
@@ -236,15 +233,46 @@ fi
 echo ""
 
 # Проверка производительности
-if [ -f "test_country_filter_performance.php" ]; then
+if [ -f "src/test_country_filter_performance.php" ]; then
     print_info "Запуск тестов производительности..."
     
-    if php test_country_filter_performance.php > /tmp/performance_test.log 2>&1; then
+    if cd src && php test_country_filter_performance.php > /tmp/performance_test.log 2>&1; then
         print_success "Тесты производительности завершены"
         echo "Результаты в: /tmp/performance_test.log"
     else
         print_warning "Проблемы с тестами производительности"
     fi
+fi
+
+echo ""
+
+# Копирование в веб-директорию (если запущено с правами root)
+if [ "$EUID" -eq 0 ] || [ "$(whoami)" = "root" ]; then
+    print_info "Копирование файлов в веб-директорию..."
+    
+    if [ -d "src" ]; then
+        # Создаем бэкап существующих файлов в /var/www/html
+        if [ -d "/var/www/html/src" ]; then
+            mv /var/www/html/src /var/www/html/src_backup_$(date +%Y%m%d_%H%M%S)
+            print_info "Создан бэкап существующих файлов в /var/www/html"
+        fi
+        
+        # Копируем новые файлы
+        cp -r src/ /var/www/html/
+        chown -R www-data:www-data /var/www/html/src/
+        chmod -R 755 /var/www/html/src/
+        
+        print_success "Файлы скопированы в /var/www/html/src/"
+        print_success "Права доступа настроены для www-data"
+    else
+        print_error "Директория src/ не найдена!"
+    fi
+else
+    print_warning "Для копирования в /var/www/html требуются права root"
+    print_info "Выполните вручную:"
+    echo "  sudo cp -r src/ /var/www/html/"
+    echo "  sudo chown -R www-data:www-data /var/www/html/src/"
+    echo "  sudo chmod -R 755 /var/www/html/src/"
 fi
 
 echo ""
@@ -256,8 +284,8 @@ print_info "Проверка готовности к работе..."
 
 # Проверка доступности демо страниц
 DEMO_PAGES=(
-    "demo/country-filter-demo.html"
-    "demo/mobile-country-filter-demo.html"
+    "src/demo/country-filter-demo.html"
+    "src/demo/mobile-country-filter-demo.html"
 )
 
 for page in "${DEMO_PAGES[@]}"; do

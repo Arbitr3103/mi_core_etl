@@ -76,22 +76,25 @@ php test_country_filter_performance.php
 ## Структура файлов на сервере
 
 ```
-/
-├── CountryFilterAPI.php          # Основной API класс
-├── api/                          # API endpoints
-│   ├── countries.php
-│   ├── countries-by-brand.php
-│   ├── countries-by-model.php
-│   └── products-filter.php
-├── js/                           # Frontend компоненты
-│   ├── CountryFilter.js
-│   └── FilterManager.js
-├── css/                          # Стили
-│   └── country-filter.css
-├── demo/                         # Демо страницы
-│   ├── country-filter-demo.html
-│   └── mobile-country-filter-demo.html
-└── tests/                        # Тесты (опционально)
+/var/www/html/
+└── src/                          # Веб-приложение
+    ├── CountryFilterAPI.php      # Основной API класс
+    ├── api/                      # API endpoints
+    │   ├── countries.php
+    │   ├── countries-by-brand.php
+    │   ├── countries-by-model.php
+    │   └── products-filter.php
+    ├── js/                       # Frontend компоненты
+    │   ├── CountryFilter.js
+    │   └── FilterManager.js
+    ├── css/                      # Стили
+    │   └── country-filter.css
+    ├── demo/                     # Демо страницы
+    │   ├── country-filter-demo.html
+    │   └── mobile-country-filter-demo.html
+    └── classes/                  # PHP классы
+        ├── Region.php
+        └── CarFilter.php
 ```
 
 ---
@@ -148,7 +151,7 @@ private $maxLimit = 1000;
 
 ```html
 <!-- Подключение стилей -->
-<link rel="stylesheet" href="css/country-filter.css" />
+<link rel="stylesheet" href="src/css/country-filter.css" />
 
 <!-- HTML разметка -->
 <div id="country-filter-container">
@@ -159,8 +162,8 @@ private $maxLimit = 1000;
 </div>
 
 <!-- Подключение скриптов -->
-<script src="js/CountryFilter.js"></script>
-<script src="js/FilterManager.js"></script>
+<script src="src/js/CountryFilter.js"></script>
+<script src="src/js/FilterManager.js"></script>
 ```
 
 ### JavaScript инициализация

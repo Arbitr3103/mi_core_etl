@@ -17,14 +17,19 @@
 git clone https://github.com/Arbitr3103/mi_core_etl.git
 cd mi_core_etl
 
-# 2. Автоматическое развертывание
+# 2. Автоматическое развертывание (рекомендуется)
 ./deploy_country_filter.sh production
+
+# ИЛИ ручное развертывание:
+# sudo cp -r src/ /var/www/html/
+# sudo chown -R www-data:www-data /var/www/html/src/
+# sudo chmod -R 755 /var/www/html/src/
 
 # 3. Создание индексов БД (для оптимизации)
 mysql -u username -p database < create_country_filter_indexes.sql
 
 # 4. Тестирование
-php test_country_filter_api.php
+cd /var/www/html/src && php test_country_filter_api.php
 ```
 
 **Готово! Система работает.**
@@ -35,22 +40,22 @@ php test_country_filter_api.php
 
 ### Backend (PHP)
 
-- ✅ `CountryFilterAPI.php` - Основной API класс
-- ✅ `api/countries.php` - Получение всех стран
-- ✅ `api/countries-by-brand.php` - Страны по марке
-- ✅ `api/countries-by-model.php` - Страны по модели
-- ✅ `api/products-filter.php` - Фильтрация товаров
+- ✅ `src/CountryFilterAPI.php` - Основной API класс
+- ✅ `src/api/countries.php` - Получение всех стран
+- ✅ `src/api/countries-by-brand.php` - Страны по марке
+- ✅ `src/api/countries-by-model.php` - Страны по модели
+- ✅ `src/api/products-filter.php` - Фильтрация товаров
 
 ### Frontend (JavaScript)
 
-- ✅ `js/CountryFilter.js` - Компонент фильтра
-- ✅ `js/FilterManager.js` - Интеграция с системой
-- ✅ `css/country-filter.css` - Стили интерфейса
+- ✅ `src/js/CountryFilter.js` - Компонент фильтра
+- ✅ `src/js/FilterManager.js` - Интеграция с системой
+- ✅ `src/css/country-filter.css` - Стили интерфейса
 
 ### Демо и документация
 
-- ✅ `demo/country-filter-demo.html` - Рабочее демо
-- ✅ `demo/mobile-country-filter-demo.html` - Мобильная версия
+- ✅ `src/demo/country-filter-demo.html` - Рабочее демо
+- ✅ `src/demo/mobile-country-filter-demo.html` - Мобильная версия
 - ✅ `DEPLOYMENT_GUIDE.md` - Полное руководство
 - ✅ `COUNTRY_FILTER_API_GUIDE.md` - API документация
 
@@ -119,9 +124,9 @@ php test_country_filter_api.php
 **1. Подключите файлы:**
 
 ```html
-<link rel="stylesheet" href="css/country-filter.css" />
-<script src="js/CountryFilter.js"></script>
-<script src="js/FilterManager.js"></script>
+<link rel="stylesheet" href="src/css/country-filter.css" />
+<script src="src/js/CountryFilter.js"></script>
+<script src="src/js/FilterManager.js"></script>
 ```
 
 **2. Добавьте HTML:**
