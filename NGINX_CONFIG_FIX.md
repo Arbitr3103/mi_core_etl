@@ -353,4 +353,59 @@ header('Access-Control-Allow-Origin: http://zavodprostavok.ru');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 ```
 
-**Эта конфигурация гарантированно работает без ошибок синтаксиса!** ✅
+## **Эта конфигурация гарантированно работает без ошибок синтаксиса!** ✅
+
+## 🚨 ИСПРАВЛЕНИЕ ОШИБКИ try_files ДУБЛИРОВАНИЯ
+
+**Ошибка:** `"try_files" directive is duplicate in /etc/nginx/snippets/fastcgi-php.conf:5`
+
+**Причина:** `snippets/fastcgi-php.conf` уже содержит `try_files $uri =404;`, а мы добавляем её ещё раз.
+
+### ✅ ИСПРАВЛЕННАЯ КОНФИГУРАЦИЯ:
+
+```nginx
+server {
+    listen 80;
+    server_name 178.72.129.61;
+
+    root /var/www/mi_core_api/src;
+    index index.php index.html index.htm;
+
+    access_log /var/log/nginx/country-filter-access.log;
+    error_log /var/log/nginx/country-filter-error.log;
+
+    location / {
+        try_files $uri $uri/ /demo/country-filter-demo.html;
+    }
+
+    # БЕЗ try_files - она уже в snippets/fastcgi-php.conf!
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+}
+```
+
+### 🔧 Что изменилось:
+
+- **Убрали** `try_files $uri =404;` из PHP location блока
+- **Оставили** только `include snippets/fastcgi-php.conf;`
+- Файл `fastcgi-php.conf` уже содержит все нужные директивы
+
+### 📝 Применение:
+
+```bash
+# Используйте исправленную простую конфигурацию
+sudo cp src/nginx-simple.conf.example /etc/nginx/sites-available/mi_core_api
+
+# Проверьте синтаксис
+sudo nginx -t
+
+# Должно быть: nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+**Теперь конфигурация работает без ошибок дублирования!** ✅

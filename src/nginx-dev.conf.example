@@ -39,8 +39,8 @@ server {
     }
 
     # Главный обработчик для всех PHP файлов (включая API)
+    # try_files уже включена в snippets/fastcgi-php.conf
     location ~ \.php$ {
-        try_files $uri =404;
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
     }
