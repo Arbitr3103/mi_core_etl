@@ -63,7 +63,7 @@
       <p>
         Этот фильтр должен быть интегрирован на сайт
         <strong>zavodprostavok.ru</strong> и будет обращаться к API на сервере
-        <strong>178.72.129.61</strong>
+        <strong>api.zavodprostavok.ru</strong> (HTTPS)
       </p>
     </div>
 
@@ -75,12 +75,12 @@
       </p>
       <div class="code-block">
         <pre><code>&lt;!-- Подключение Country Filter --&gt;
-&lt;script src="http://178.72.129.61/api/js/config.js"&gt;&lt;/script&gt;
-&lt;script src="http://178.72.129.61/api/js/CountryFilter.js"&gt;&lt;/script&gt;
+&lt;script src="https://api.zavodprostavok.ru/api/js/config.js"&gt;&lt;/script&gt;
+&lt;script src="https://api.zavodprostavok.ru/api/js/CountryFilter.js"&gt;&lt;/script&gt;
 
 &lt;!-- Опционально: полная интеграция с FilterManager --&gt;
-&lt;script src="http://178.72.129.61/api/js/FilterManager.js"&gt;&lt;/script&gt;
-&lt;script src="http://178.72.129.61/api/js/FilterManagerIntegration.js"&gt;&lt;/script&gt;</code></pre>
+&lt;script src="https://api.zavodprostavok.ru/api/js/FilterManager.js"&gt;&lt;/script&gt;
+&lt;script src="https://api.zavodprostavok.ru/api/js/FilterManagerIntegration.js"&gt;&lt;/script&gt;</code></pre>
       </div>
     </div>
 
@@ -246,7 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
     &lt;!-- Ваш существующий контент каталога --&gt;
     
     &lt;!-- JavaScript для фильтра стран --&gt;
-    &lt;script src="http://178.72.129.61/api/js/CountryFilter.js"&gt;&lt;/script&gt;
+    &lt;script src="https://api.zavodprostavok.ru/api/js/CountryFilter.js"&gt;&lt;/script&gt;
     &lt;script&gt;
     document.addEventListener('DOMContentLoaded', function() {
         const countryFilter = new CountryFilter('country-filter-container', function(selectedCountryId) {
@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </li>
         <li>
           <strong>Сетевые запросы</strong> (F12 → Network) - должны идти запросы
-          к 178.72.129.61
+          к api.zavodprostavok.ru
         </li>
         <li>
           <strong>CORS ошибки</strong> - должны быть разрешены запросы с
@@ -312,21 +312,23 @@ document.addEventListener('DOMContentLoaded', function() {
         <li>
           Проверьте тестовую страницу:
           <a
-            href="http://178.72.129.61/api/test_api_endpoints.html"
+            href="https://api.zavodprostavok.ru/api/test_api_endpoints.html"
             target="_blank"
-            >http://178.72.129.61/api/test_api_endpoints.html</a
+            >https://api.zavodprostavok.ru/api/test_api_endpoints.html</a
           >
         </li>
         <li>
           Убедитесь, что API работает:
-          <a href="http://178.72.129.61/api/countries.php" target="_blank"
-            >http://178.72.129.61/api/countries.php</a
+          <a
+            href="https://api.zavodprostavok.ru/api/countries.php"
+            target="_blank"
+            >https://api.zavodprostavok.ru/api/countries.php</a
           >
         </li>
         <li>
           Проверьте документацию API:
-          <a href="http://178.72.129.61/api/" target="_blank"
-            >http://178.72.129.61/api/</a
+          <a href="https://api.zavodprostavok.ru/api/" target="_blank"
+            >https://api.zavodprostavok.ru/api/</a
           >
         </li>
       </ul>

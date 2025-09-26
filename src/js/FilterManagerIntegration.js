@@ -29,7 +29,7 @@ class FilterManagerIntegration {
       countryContainerId: "country-filter-container",
       resetButtonId: "reset-filters",
       resultsContainerId: "products-list",
-      apiBaseUrl: "http://178.72.129.61/api",
+      apiBaseUrl: "https://api.zavodprostavok.ru/api",
       ...options,
     };
 

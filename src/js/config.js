@@ -7,11 +7,11 @@
 // Основная конфигурация API
 const CountryFilterConfig = {
   // Базовый URL API сервера
-  API_BASE_URL: "http://178.72.129.61/api",
+  API_BASE_URL: "https://api.zavodprostavok.ru/api",
 
   // Альтернативные URL для разных окружений
   ENVIRONMENTS: {
-    production: "http://178.72.129.61/api",
+    production: "https://api.zavodprostavok.ru/api",
     development: "http://localhost/api",
     local: "/api",
   },

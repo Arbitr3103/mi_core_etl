@@ -18,7 +18,7 @@ class FilterManager {
    * @param {function} options.onFiltersChange - Callback для изменения фильтров
    */
   constructor(options = {}) {
-    this.apiBaseUrl = options.apiBaseUrl || "http://178.72.129.61/api";
+    this.apiBaseUrl = options.apiBaseUrl || "https://api.zavodprostavok.ru/api";
     this.onFiltersChangeCallback = options.onFiltersChange || null;
 
     // Текущие значения фильтров

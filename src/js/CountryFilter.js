@@ -22,7 +22,7 @@ class CountryFilter {
     this.onChange = onChangeCallback;
     this.countries = [];
     this.selectedCountry = null;
-    this.apiBaseUrl = "http://178.72.129.61/api";
+    this.apiBaseUrl = "https://api.zavodprostavok.ru/api";
 
     // Определение мобильного устройства
     this.isMobile = this.detectMobileDevice();
