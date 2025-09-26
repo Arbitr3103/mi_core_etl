@@ -5,38 +5,75 @@
  * Предоставляет API endpoints для получения стран изготовления автомобилей
  * и фильтрации товаров по странам
  * 
- * @version 1.0
+ * МОДИФИКАЦИЯ: Поддержка двух баз данных
+ * - replenishment_db: аналитические данные (DB_* переменные)
+ * - mi_core_db: каталог товаров (CORE_DB_* переменные)
+ * 
+ * @version 1.1
  * @author ZUZ System
  */
 
 class CountryFilterDatabase {
-    private $host;
-    private $dbname;
-    private $username;
-    private $password;
-    private $pdo;
+    /**
+     * @var PDO|null Подключение к аналитической базе 'replenishment_db'
+     */
+    private $replenishment_db_conn;
+    
+    /**
+     * @var PDO|null Подключение к основной базе 'mi_core_db' с каталогом товаров
+     */
+    private $mi_core_db_conn;
     
     public function __construct() {
-        // Загружаем настройки из переменных окружения или используем значения по умолчанию
-        $this->host = $_ENV['DB_HOST'] ?? 'localhost';
-        $this->dbname = $_ENV['DB_NAME'] ?? 'mi_core_db';
-        $this->username = $_ENV['DB_USER'] ?? 'your_username';
-        $this->password = $_ENV['DB_PASSWORD'] ?? 'your_password';
-        
+        // Подключение №1: к replenishment_db (аналитическая база)
         try {
-            $dsn = "mysql:host={$this->host};dbname={$this->dbname};charset=utf8mb4";
-            $this->pdo = new PDO($dsn, $this->username, $this->password, [
+            $dsn = "mysql:host={$_ENV['DB_HOST']};dbname={$_ENV['DB_NAME']};charset=utf8mb4";
+            $this->replenishment_db_conn = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASSWORD'], [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
             ]);
         } catch (PDOException $e) {
-            throw new Exception("Ошибка подключения к БД: " . $e->getMessage());
+            throw new Exception("Ошибка подключения к replenishment_db: " . $e->getMessage());
+        }
+        
+        // Подключение №2: к mi_core_db (основная база с каталогом товаров)
+        try {
+            $core_host = $_ENV['CORE_DB_HOST'] ?? 'localhost';
+            $core_dbname = $_ENV['CORE_DB_NAME'] ?? 'mi_core_db';
+            $core_username = $_ENV['CORE_DB_USER'] ?? 'app_user';
+            $core_password = $_ENV['CORE_DB_PASSWORD'] ?? '';
+            
+            $dsn_core = "mysql:host={$core_host};dbname={$core_dbname};charset=utf8mb4";
+            $this->mi_core_db_conn = new PDO($dsn_core, $core_username, $core_password, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+            ]);
+        } catch (PDOException $e) {
+            throw new Exception("Ошибка подключения к mi_core_db: " . $e->getMessage());
         }
     }
     
+    /**
+     * Получить подключение к аналитической базе replenishment_db
+     */
+    public function getReplenishmentConnection() {
+        return $this->replenishment_db_conn;
+    }
+    
+    /**
+     * Получить подключение к основной базе mi_core_db
+     */
+    public function getCoreConnection() {
+        return $this->mi_core_db_conn;
+    }
+    
+    /**
+     * @deprecated Используйте getCoreConnection() или getReplenishmentConnection()
+     */
     public function getConnection() {
-        return $this->pdo;
+        return $this->mi_core_db_conn; // По умолчанию возвращаем основную базу
     }
 }
 
@@ -96,21 +133,56 @@ class CountryFilterAPI {
     public function getAllCountries() {
         return $this->getCachedOrExecute('all_countries', function() {
             try {
-                // Используем представление v_car_applicability или dim_products
-                $sql = "
-                    SELECT DISTINCT 
+                // Пробуем разные источники данных для стран
+                $queries = [
+                    // Вариант 1: Используем v_car_applicability
+                    "SELECT DISTINCT 
                         ROW_NUMBER() OVER (ORDER BY country) as id,
                         country as name
-                    FROM v_car_applicability
-                    WHERE country IS NOT NULL AND country != '' AND country != 'NULL'
-                    ORDER BY country ASC
-                    LIMIT 1000
-                ";
+                     FROM v_car_applicability
+                     WHERE country IS NOT NULL AND country != '' AND country != 'NULL'
+                     ORDER BY country ASC
+                     LIMIT 1000",
+                    
+                    // Вариант 2: Используем dim_products напрямую
+                    "SELECT DISTINCT 
+                        ROW_NUMBER() OVER (ORDER BY country) as id,
+                        country as name
+                     FROM dim_products
+                     WHERE country IS NOT NULL AND country != '' AND country != 'NULL'
+                     ORDER BY country ASC
+                     LIMIT 1000",
+                     
+                    // Вариант 3: Используем regions таблицу
+                    "SELECT DISTINCT 
+                        r.id, r.name
+                     FROM regions r
+                     WHERE r.name IS NOT NULL AND r.name != ''
+                     ORDER BY r.name ASC
+                     LIMIT 1000"
+                ];
                 
-                $stmt = $this->db->getConnection()->prepare($sql);
-                $stmt->execute();
+                $results = [];
+                $sql = null;
                 
-                $results = $stmt->fetchAll();
+                // Пробуем каждый запрос пока не найдем рабочий
+                foreach ($queries as $query) {
+                    try {
+                        $stmt = $this->db->getCoreConnection()->prepare($query);
+                        $stmt->execute();
+                        $testResults = $stmt->fetchAll();
+                        
+                        if (!empty($testResults)) {
+                            $results = $testResults;
+                            $sql = $query;
+                            break;
+                        }
+                    } catch (Exception $e) {
+                        // Пробуем следующий запрос
+                        continue;
+                    }
+                }
+
                 
                 // Если нет результатов, возвращаем пустой массив с сообщением
                 if (empty($results)) {
@@ -164,8 +236,8 @@ class CountryFilterAPI {
         
         return $this->getCachedOrExecute("countries_brand_{$brandId}", function() use ($brandId) {
             try {
-                // Проверяем существование марки
-                $checkStmt = $this->db->getConnection()->prepare("SELECT COUNT(*) as count FROM brands WHERE id = ?");
+                // Проверяем существование марки в mi_core_db
+                $checkStmt = $this->db->getCoreConnection()->prepare("SELECT COUNT(*) as count FROM brands WHERE id = ?");
                 $checkStmt->execute([(int)$brandId]);
                 if ($checkStmt->fetch()['count'] == 0) {
                     return [
@@ -175,7 +247,7 @@ class CountryFilterAPI {
                     ];
                 }
                 
-                // Используем представление v_car_applicability
+                // Используем представление v_car_applicability из mi_core_db
                 $sql = "
                     SELECT DISTINCT 
                         ROW_NUMBER() OVER (ORDER BY country) as id,
@@ -187,7 +259,7 @@ class CountryFilterAPI {
                     LIMIT 100
                 ";
                 
-                $stmt = $this->db->getConnection()->prepare($sql);
+                $stmt = $this->db->getCoreConnection()->prepare($sql);
                 $stmt->execute(['brand_id' => $brandId]);
                 
                 $results = $stmt->fetchAll();
@@ -244,8 +316,8 @@ class CountryFilterAPI {
         
         return $this->getCachedOrExecute("countries_model_{$modelId}", function() use ($modelId) {
             try {
-                // Проверяем существование модели
-                $checkStmt = $this->db->getConnection()->prepare("SELECT COUNT(*) as count FROM car_models WHERE id = ?");
+                // Проверяем существование модели в mi_core_db
+                $checkStmt = $this->db->getCoreConnection()->prepare("SELECT COUNT(*) as count FROM car_models WHERE id = ?");
                 $checkStmt->execute([(int)$modelId]);
                 if ($checkStmt->fetch()['count'] == 0) {
                     return [
@@ -255,7 +327,7 @@ class CountryFilterAPI {
                     ];
                 }
                 
-                // Используем представление v_car_applicability
+                // Используем представление v_car_applicability из mi_core_db
                 $sql = "
                     SELECT DISTINCT 
                         ROW_NUMBER() OVER (ORDER BY country) as id,
@@ -267,7 +339,7 @@ class CountryFilterAPI {
                     LIMIT 100
                 ";
                 
-                $stmt = $this->db->getConnection()->prepare($sql);
+                $stmt = $this->db->getCoreConnection()->prepare($sql);
                 $stmt->execute(['model_id' => $modelId]);
                 
                 $results = $stmt->fetchAll();
@@ -389,7 +461,8 @@ class CountryFilterAPI {
             $sql .= " ORDER BY p.product_name ASC";
             $sql .= " LIMIT :limit OFFSET :offset";
             
-            $stmt = $this->db->getConnection()->prepare($sql);
+            // ИСПОЛЬЗУЕМ подключение к mi_core_db для данных каталога товаров
+            $stmt = $this->db->getCoreConnection()->prepare($sql);
             
             // Привязываем параметры
             foreach ($params as $key => $value) {
@@ -427,7 +500,8 @@ class CountryFilterAPI {
                 $countSql .= " AND r.id = :country_id";
             }
             
-            $countStmt = $this->db->getConnection()->prepare($countSql);
+            // ИСПОЛЬЗУЕМ подключение к mi_core_db для подсчета
+            $countStmt = $this->db->getCoreConnection()->prepare($countSql);
             foreach ($params as $key => $value) {
                 $countStmt->bindValue($key, $value);
             }
@@ -570,39 +644,39 @@ class CountryFilterAPI {
         $errors = [];
         
         try {
-            // Проверяем существование марки
+            // Проверяем существование марки в mi_core_db
             if (isset($filters['brand_id']) && $filters['brand_id'] !== null && $filters['brand_id'] !== '') {
-                $stmt = $this->db->getConnection()->prepare("SELECT COUNT(*) as count FROM brands WHERE id = ?");
+                $stmt = $this->db->getCoreConnection()->prepare("SELECT COUNT(*) as count FROM brands WHERE id = ?");
                 $stmt->execute([(int)$filters['brand_id']]);
                 if ($stmt->fetch()['count'] == 0) {
                     $errors[] = 'Марка с указанным ID не найдена';
                 }
             }
             
-            // Проверяем существование модели
+            // Проверяем существование модели в mi_core_db
             if (isset($filters['model_id']) && $filters['model_id'] !== null && $filters['model_id'] !== '') {
-                $stmt = $this->db->getConnection()->prepare("SELECT COUNT(*) as count FROM car_models WHERE id = ?");
+                $stmt = $this->db->getCoreConnection()->prepare("SELECT COUNT(*) as count FROM car_models WHERE id = ?");
                 $stmt->execute([(int)$filters['model_id']]);
                 if ($stmt->fetch()['count'] == 0) {
                     $errors[] = 'Модель с указанным ID не найдена';
                 }
             }
             
-            // Проверяем существование страны
+            // Проверяем существование страны в mi_core_db
             if (isset($filters['country_id']) && $filters['country_id'] !== null && $filters['country_id'] !== '') {
-                $stmt = $this->db->getConnection()->prepare("SELECT COUNT(*) as count FROM regions WHERE id = ?");
+                $stmt = $this->db->getCoreConnection()->prepare("SELECT COUNT(*) as count FROM regions WHERE id = ?");
                 $stmt->execute([(int)$filters['country_id']]);
                 if ($stmt->fetch()['count'] == 0) {
                     $errors[] = 'Страна с указанным ID не найдена';
                 }
             }
             
-            // Проверяем соответствие модели и марки
+            // Проверяем соответствие модели и марки в mi_core_db
             if (isset($filters['brand_id']) && isset($filters['model_id']) && 
                 $filters['brand_id'] !== null && $filters['model_id'] !== null &&
                 $filters['brand_id'] !== '' && $filters['model_id'] !== '') {
                 
-                $stmt = $this->db->getConnection()->prepare(
+                $stmt = $this->db->getCoreConnection()->prepare(
                     "SELECT COUNT(*) as count FROM car_models WHERE id = ? AND brand_id = ?"
                 );
                 $stmt->execute([(int)$filters['model_id'], (int)$filters['brand_id']]);
