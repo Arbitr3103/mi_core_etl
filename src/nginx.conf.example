@@ -1,53 +1,51 @@
 # Nginx configuration for Country Filter System
-# Пример конфигурации для Nginx
+# Упрощённая и надёжная конфигурация
 # 
 # Структура файлов:
-# /var/www/html/src/api/countries.php
-# /var/www/html/src/api/countries-by-brand.php
-# /var/www/html/src/api/countries-by-model.php
-# /var/www/html/src/api/products-filter.php
+# /var/www/mi_core_api/src/api/countries.php
+# /var/www/mi_core_api/src/api/countries-by-brand.php
+# /var/www/mi_core_api/src/api/countries-by-model.php
+# /var/www/mi_core_api/src/api/products-filter.php
 
 server {
     listen 80;
-    server_name your-domain.com;
-    root /var/www/html/src;
-    index index.php index.html demo/country-filter-demo.html;
+    server_name 178.72.129.61 your-domain.com;
+    
+    # Указываем корень, где лежит папка api
+    root /var/www/mi_core_api/src;
+    
+    # Сначала ищем точное совпадение файла, потом папки, потом отдаем 404
+    index index.php index.html index.htm;
 
     # Логи
     access_log /var/log/nginx/country-filter-access.log;
     error_log /var/log/nginx/country-filter-error.log;
+
+    # Общие настройки CORS для всего сайта
+    add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+
+    # Обработка preflight OPTIONS запросов
+    if ($request_method = 'OPTIONS') {
+        add_header 'Access-Control-Max-Age' 1728000;
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
 
     # Основная обработка запросов
     location / {
         try_files $uri $uri/ /demo/country-filter-demo.html;
     }
 
-    # ВАЖНО: Обработка API PHP файлов - БЕЗ country_filter_module в пути!
-    # Соответствует реальной структуре: /api/countries.php
-    location ~ ^/api/.*\.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-        
-        # CORS headers
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
-        
-        if ($request_method = 'OPTIONS') {
-            return 200;
-        }
-    }
-
-    # Обработка остальных PHP файлов
+    # Главный обработчик для всех PHP файлов (включая API)
     location ~ \.php$ {
         try_files $uri =404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include snippets/fastcgi-php.conf;
+        # Убедитесь, что эта версия PHP правильная!
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
     }
 
     # Кэширование статических файлов

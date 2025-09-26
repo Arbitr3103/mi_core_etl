@@ -1,5 +1,5 @@
 # Nginx configuration for Country Filter System - Development Version
-# Конфигурация для разработки в домашней директории
+# Упрощённая конфигурация для разработки в домашней директории
 # 
 # Структура файлов для разработки:
 # /home/vladimir/mi_core_etl/src/api/countries.php
@@ -10,6 +10,8 @@
 server {
     listen 80;
     server_name dev.your-domain.com localhost;
+    
+    # Указываем корень для разработки
     root /home/vladimir/mi_core_etl/src;
     index index.php index.html demo/country-filter-demo.html;
 
@@ -17,36 +19,30 @@ server {
     access_log /var/log/nginx/country-filter-dev-access.log;
     error_log /var/log/nginx/country-filter-dev-error.log;
 
+    # Общие настройки CORS для всего сайта
+    add_header 'Access-Control-Allow-Origin' '*' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+
+    # Обработка preflight OPTIONS запросов
+    if ($request_method = 'OPTIONS') {
+        add_header 'Access-Control-Max-Age' 1728000;
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
+
     # Основная обработка запросов
     location / {
         try_files $uri $uri/ /demo/country-filter-demo.html;
     }
 
-    # ВАЖНО: Обработка API PHP файлов - соответствует структуре src/api/
-    location ~ ^/api/.*\.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-        
-        # CORS headers
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
-        
-        if ($request_method = 'OPTIONS') {
-            return 200;
-        }
-    }
-
-    # Обработка остальных PHP файлов
+    # Главный обработчик для всех PHP файлов (включая API)
     location ~ \.php$ {
         try_files $uri =404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
     }
 
     # Кэширование статических файлов

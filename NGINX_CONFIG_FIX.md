@@ -216,3 +216,75 @@ server {
 - ✅ Демо страницы загружаются
 
 **Проблема решена!** 🎉
+
+---
+
+## 🚀 УПРОЩЁННАЯ КОНФИГУРАЦИЯ (РЕКОМЕНДУЕТСЯ)
+
+Эта конфигурация решает большинство проблем с location блоками:
+
+```nginx
+server {
+    listen 80;
+    server_name 178.72.129.61 your-domain.com;
+
+    # Указываем корень, где лежит папка api
+    root /var/www/mi_core_api/src;
+
+    # Сначала ищем точное совпадение файла, потом папки, потом отдаем 404
+    index index.php index.html index.htm;
+
+    # Логи
+    access_log /var/log/nginx/country-filter-access.log;
+    error_log /var/log/nginx/country-filter-error.log;
+
+    # Общие настройки CORS для всего сайта
+    add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+
+    # Обработка preflight OPTIONS запросов
+    if ($request_method = 'OPTIONS') {
+        add_header 'Access-Control-Max-Age' 1728000;
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
+
+    # Основная обработка запросов
+    location / {
+        try_files $uri $uri/ /demo/country-filter-demo.html;
+    }
+
+    # УПРОЩЁННЫЙ ПОДХОД: один блок для всех PHP файлов
+    location ~ \.php$ {
+        try_files $uri =404;
+        include snippets/fastcgi-php.conf;
+        # Убедитесь, что эта версия PHP правильная!
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+    }
+
+    # Запрещаем доступ к скрытым файлам
+    location ~ /\.ht {
+        deny all;
+    }
+}
+```
+
+### 🔑 Преимущества упрощённой конфигурации:
+
+1. **Один PHP обработчик** - нет конфликтов между location блоками
+2. **CORS на уровне сервера** - применяется ко всем запросам автоматически
+3. **Меньше сложности** - проще отлаживать проблемы
+4. **Стандартный подход** - работает в большинстве случаев
+
+### 📝 Инструкция по применению:
+
+1. Скопируйте эту конфигурацию в `/etc/nginx/sites-available/mi_core_api`
+2. Замените `your-domain.com` на ваш домен
+3. Проверьте: `sudo nginx -t`
+4. Перезагрузите: `sudo systemctl reload nginx`
+5. Тестируйте: `curl http://your-domain.com/api/countries.php`
+
+**Эта конфигурация должна решить проблему с 404 ошибками!** 🎯
