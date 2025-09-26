@@ -25,10 +25,14 @@ cd mi_core_etl
 # sudo chown -R www-data:www-data /var/www/html/src/
 # sudo chmod -R 755 /var/www/html/src/
 
-# 3. Создание индексов БД (для оптимизации)
+# 3. ВАЖНО: Проверьте конфигурацию Nginx
+# Убедитесь что пути соответствуют: /api/*.php (БЕЗ country_filter_module!)
+# См. NGINX_CONFIG_FIX.md для деталей
+
+# 4. Создание индексов БД (для оптимизации)
 mysql -u username -p database < create_country_filter_indexes.sql
 
-# 4. Тестирование
+# 5. Тестирование
 cd /var/www/html/src && php test_country_filter_api.php
 ```
 

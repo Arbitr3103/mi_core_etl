@@ -48,6 +48,10 @@ sudo cp /var/www/html/src/nginx.conf.example /etc/nginx/sites-available/country-
 # Редактирование конфигурации (замените your-domain.com на ваш домен)
 sudo nano /etc/nginx/sites-available/country-filter
 
+# ВАЖНО: Убедитесь что в конфигурации правильные пути:
+# location ~ ^/api/.*\.php$ (БЕЗ country_filter_module!)
+# root /var/www/html/src;
+
 # Активация сайта
 sudo ln -s /etc/nginx/sites-available/country-filter /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
@@ -96,6 +100,50 @@ php test_country_filter_performance.php
 # Проверка через браузер
 curl http://your-domain.com/src/api/countries.php
 ```
+
+---
+
+## ⚠️ Важно: Соответствие путей в конфигурации
+
+### Проблема с путями в Nginx
+
+Убедитесь, что конфигурация Nginx соответствует реальной структуре файлов:
+
+**❌ НЕПРАВИЛЬНО (старая версия):**
+
+```nginx
+location ~ ^/country_filter_module/api/.*\.php$ {
+    # Этот путь НЕ соответствует реальной структуре!
+}
+```
+
+**✅ ПРАВИЛЬНО (текущая версия):**
+
+```nginx
+location ~ ^/api/.*\.php$ {
+    include snippets/fastcgi-php.conf;
+    fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    include fastcgi_params;
+}
+```
+
+### Реальная структура файлов:
+
+```
+/var/www/html/src/
+├── api/
+│   ├── countries.php
+│   ├── countries-by-brand.php
+│   ├── countries-by-model.php
+│   └── products-filter.php
+└── ...
+```
+
+### URL endpoints:
+
+- `http://your-domain.com/api/countries.php` ✅
+- `http://your-domain.com/country_filter_module/api/countries.php` ❌
 
 ---
 

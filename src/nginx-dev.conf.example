@@ -1,29 +1,28 @@
-# Nginx configuration for Country Filter System
-# Пример конфигурации для Nginx
+# Nginx configuration for Country Filter System - Development Version
+# Конфигурация для разработки в домашней директории
 # 
-# Структура файлов:
-# /var/www/html/src/api/countries.php
-# /var/www/html/src/api/countries-by-brand.php
-# /var/www/html/src/api/countries-by-model.php
-# /var/www/html/src/api/products-filter.php
+# Структура файлов для разработки:
+# /home/vladimir/mi_core_etl/src/api/countries.php
+# /home/vladimir/mi_core_etl/src/api/countries-by-brand.php
+# /home/vladimir/mi_core_etl/src/api/countries-by-model.php
+# /home/vladimir/mi_core_etl/src/api/products-filter.php
 
 server {
     listen 80;
-    server_name your-domain.com;
-    root /var/www/html/src;
+    server_name dev.your-domain.com localhost;
+    root /home/vladimir/mi_core_etl/src;
     index index.php index.html demo/country-filter-demo.html;
 
     # Логи
-    access_log /var/log/nginx/country-filter-access.log;
-    error_log /var/log/nginx/country-filter-error.log;
+    access_log /var/log/nginx/country-filter-dev-access.log;
+    error_log /var/log/nginx/country-filter-dev-error.log;
 
     # Основная обработка запросов
     location / {
         try_files $uri $uri/ /demo/country-filter-demo.html;
     }
 
-    # ВАЖНО: Обработка API PHP файлов - БЕЗ country_filter_module в пути!
-    # Соответствует реальной структуре: /api/countries.php
+    # ВАЖНО: Обработка API PHP файлов - соответствует структуре src/api/
     location ~ ^/api/.*\.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
