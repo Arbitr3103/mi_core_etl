@@ -162,6 +162,49 @@ if (isset($_GET['api'])) {
                 echo json_encode(['success' => true, 'data' => $rows]);
                 break;
 
+            case 'abc_analysis':
+                $sql = "
+                    SELECT 
+                        fo.sku,
+                        dp.product_name,
+                        SUM(fo.price * fo.qty) as total_revenue,
+                        SUM(fo.qty) as total_qty,
+                        COUNT(DISTINCT fo.order_date) as sales_days
+                    FROM fact_orders fo
+                    JOIN dim_products dp ON fo.product_id = dp.id
+                    WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    GROUP BY fo.sku, dp.product_name
+                    ORDER BY total_revenue DESC
+                ";
+                $stmt = $pdo->query($sql);
+                $products = $stmt->fetchAll();
+                
+                // Рассчитываем ABC-классификацию
+                $totalRevenue = array_sum(array_column($products, 'total_revenue'));
+                $cumulativeRevenue = 0;
+                
+                foreach ($products as &$product) {
+                    $cumulativeRevenue += $product['total_revenue'];
+                    $cumulativePercent = ($cumulativeRevenue / $totalRevenue) * 100;
+                    
+                    if ($cumulativePercent <= 80) {
+                        $product['abc_category'] = 'A';
+                        $product['category_label'] = 'A-товары (80% выручки)';
+                    } elseif ($cumulativePercent <= 95) {
+                        $product['abc_category'] = 'B';
+                        $product['category_label'] = 'B-товары (15% выручки)';
+                    } else {
+                        $product['abc_category'] = 'C';
+                        $product['category_label'] = 'C-товары (5% выручки)';
+                    }
+                    
+                    $product['revenue_percent'] = round(($product['total_revenue'] / $totalRevenue) * 100, 2);
+                    $product['cumulative_percent'] = round($cumulativePercent, 2);
+                }
+                
+                echo json_encode(['success' => true, 'data' => $products, 'total_revenue' => $totalRevenue]);
+                break;
+
             case 'export':
                 $status = $_GET['status'] ?? null;
                 $sql = "
@@ -443,6 +486,43 @@ if (isset($_GET['api'])) {
             </div>
         </div>
 
+        <!-- ABC-анализ товаров -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center bg-info text-white">
+                <h5 class="mb-0">📊 ABC-анализ товаров (30 дней)</h5>
+                <div class="d-flex align-items-center gap-2">
+                    <small class="text-white">A: 80% выручки | B: 15% | C: 5%</small>
+                    <select id="abc-limit" class="form-select form-select-sm text-dark" style="width:auto;">
+                        <option>10</option>
+                        <option>20</option>
+                        <option selected>30</option>
+                        <option>50</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0" id="abc-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>№</th>
+                                <th>SKU</th>
+                                <th>Товар</th>
+                                <th class="text-end">Выручка</th>
+                                <th class="text-end">% от общей</th>
+                                <th class="text-end">Накопительно %</th>
+                                <th class="text-center">Категория</th>
+                                <th class="text-end">Продано шт</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="8" class="text-center py-4 text-muted">⏳ Загрузка ABC-анализа...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- Виджет оборачиваемости -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
@@ -502,6 +582,7 @@ if (isset($_GET['api'])) {
                 this.loadList();
                 this.loadTurnover();
                 this.loadMarkupAnalysis();
+                this.loadABCAnalysis();
             }
 
             bind() {
@@ -533,6 +614,12 @@ if (isset($_GET['api'])) {
                 }
                 if (markupBottomLimit) {
                     markupBottomLimit.addEventListener('change', () => this.loadMarkupAnalysis());
+                }
+
+                // Обработчик для ABC-анализа
+                const abcLimit = document.getElementById('abc-limit');
+                if (abcLimit) {
+                    abcLimit.addEventListener('change', () => this.loadABCAnalysis());
                 }
             }
 
@@ -716,6 +803,60 @@ if (isset($_GET['api'])) {
                         <td class="text-end">${this.formatMoney(r.sale_price || 0)}</td>
                         <td class="text-end">${this.formatMoney(r.cost_price || 0)}</td>
                         <td class="text-end ${markupClass}">${r.markup_percent || 0}%</td>
+                    </tr>`;
+            }
+
+            async loadABCAnalysis() {
+                try {
+                    const limit = document.getElementById('abc-limit')?.value || '30';
+                    const res = await fetch(`${this.apiBase}?api=abc_analysis`);
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        const abcBody = document.querySelector('#abc-table tbody');
+                        if (abcBody) {
+                            const limitedData = data.data.slice(0, parseInt(limit));
+                            abcBody.innerHTML = limitedData.map((r, index) => this.renderABCRow(r, index + 1)).join('');
+                        }
+                    }
+                } catch (e) {
+                    console.error('ABC analysis load error', e);
+                    const abcBody = document.querySelector('#abc-table tbody');
+                    if (abcBody) {
+                        abcBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">❌ Ошибка загрузки ABC-анализа</td></tr>';
+                    }
+                }
+            }
+
+            renderABCRow(r, index) {
+                let categoryBadge = '';
+                let categoryClass = '';
+                
+                switch (r.abc_category) {
+                    case 'A':
+                        categoryBadge = '<span class="badge bg-success">A</span>';
+                        categoryClass = 'table-success';
+                        break;
+                    case 'B':
+                        categoryBadge = '<span class="badge bg-warning text-dark">B</span>';
+                        categoryClass = 'table-warning';
+                        break;
+                    case 'C':
+                        categoryBadge = '<span class="badge bg-secondary">C</span>';
+                        categoryClass = 'table-light';
+                        break;
+                }
+                
+                return `
+                    <tr class="${categoryClass}">
+                        <td><strong>${index}</strong></td>
+                        <td><code class="text-primary">${this.escape(r.sku || '')}</code></td>
+                        <td><small>${this.escape(r.product_name || '').substring(0, 50)}...</small></td>
+                        <td class="text-end fw-bold">${this.formatMoney(r.total_revenue || 0)}</td>
+                        <td class="text-end">${r.revenue_percent || 0}%</td>
+                        <td class="text-end">${r.cumulative_percent || 0}%</td>
+                        <td class="text-center">${categoryBadge}</td>
+                        <td class="text-end">${Number(r.total_qty || 0).toLocaleString('ru-RU')}</td>
                     </tr>`;
             }
 
