@@ -247,6 +247,75 @@ if (isset($_GET['api'])) {
                 echo json_encode(['success' => true, 'data' => $data]);
                 break;
 
+            case 'operational_kpi':
+                $days = isset($_GET['days']) ? max(7, min(90, (int)$_GET['days'])) : 30;
+                
+                // Основные KPI
+                $sql = "
+                    SELECT 
+                        COUNT(DISTINCT fo.order_id) as total_orders,
+                        SUM(fo.price * fo.qty) as total_revenue,
+                        SUM(fo.qty) as total_items,
+                        COUNT(DISTINCT fo.product_id) as unique_products,
+                        ROUND(SUM(fo.price * fo.qty) / COUNT(DISTINCT fo.order_id), 2) as avg_order_value,
+                        ROUND(SUM(fo.qty) / COUNT(DISTINCT fo.order_id), 2) as avg_items_per_order,
+                        COUNT(DISTINCT fo.order_date) as active_days
+                    FROM fact_orders fo
+                    WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+                ";
+                $stmt = $pdo->prepare($sql);
+                $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+                $stmt->execute();
+                $kpi = $stmt->fetch();
+                
+                // Критические остатки
+                $criticalSql = "
+                    SELECT COUNT(*) as critical_stock_count
+                    FROM v_product_turnover_30d
+                    WHERE days_of_stock IS NOT NULL AND days_of_stock < 7
+                ";
+                $criticalStmt = $pdo->query($criticalSql);
+                $critical = $criticalStmt->fetch();
+                
+                // Товары-лидеры роста (сравнение с предыдущим периодом)
+                $growthSql = "
+                    SELECT 
+                        fo.sku,
+                        dp.product_name,
+                        SUM(CASE WHEN fo.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY) 
+                            THEN fo.price * fo.qty ELSE 0 END) as current_revenue,
+                        SUM(CASE WHEN fo.order_date >= DATE_SUB(CURDATE(), INTERVAL :days2 DAY) 
+                            AND fo.order_date < DATE_SUB(CURDATE(), INTERVAL :days DAY)
+                            THEN fo.price * fo.qty ELSE 0 END) as previous_revenue
+                    FROM fact_orders fo
+                    JOIN dim_products dp ON fo.product_id = dp.id
+                    WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL :days3 DAY)
+                    GROUP BY fo.sku, dp.product_name
+                    HAVING current_revenue > 0 AND previous_revenue > 0
+                    ORDER BY (current_revenue - previous_revenue) / previous_revenue DESC
+                    LIMIT 5
+                ";
+                $growthStmt = $pdo->prepare($growthSql);
+                $growthStmt->bindValue(':days', $days, PDO::PARAM_INT);
+                $growthStmt->bindValue(':days2', $days * 2, PDO::PARAM_INT);
+                $growthStmt->bindValue(':days3', $days * 2, PDO::PARAM_INT);
+                $growthStmt->execute();
+                $growth = $growthStmt->fetchAll();
+                
+                // Добавляем процент роста
+                foreach ($growth as &$item) {
+                    $item['growth_percent'] = round((($item['current_revenue'] - $item['previous_revenue']) / $item['previous_revenue']) * 100, 2);
+                }
+                
+                $result = [
+                    'kpi' => $kpi,
+                    'critical_stock' => $critical,
+                    'growth_leaders' => $growth
+                ];
+                
+                echo json_encode(['success' => true, 'data' => $result]);
+                break;
+
             case 'export':
                 $status = $_GET['status'] ?? null;
                 $sql = "
@@ -359,6 +428,90 @@ if (isset($_GET['api'])) {
                     <div class="card-body">
                         <div class="text-muted small">Дней в анализе</div>
                         <div class="h3 text-secondary" id="margin-days">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Операционные KPI -->
+        <div class="row mb-4" id="operational-kpi">
+            <div class="col-12">
+                <h4 class="mb-3">🎯 Операционные KPI (30 дней)</h4>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-info">
+                    <div class="card-body">
+                        <div class="text-muted small">Заказов</div>
+                        <div class="h4 text-info" id="kpi-orders">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-success">
+                    <div class="card-body">
+                        <div class="text-muted small">Средний чек</div>
+                        <div class="h4 text-success" id="kpi-avg-order">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-primary">
+                    <div class="card-body">
+                        <div class="text-muted small">Товаров/заказ</div>
+                        <div class="h4 text-primary" id="kpi-items-order">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-warning">
+                    <div class="card-body">
+                        <div class="text-muted small">Уник. товаров</div>
+                        <div class="h4 text-warning" id="kpi-unique-products">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-danger">
+                    <div class="card-body">
+                        <div class="text-muted small">Критич. остатки</div>
+                        <div class="h4 text-danger" id="kpi-critical-stock">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-secondary">
+                    <div class="card-body">
+                        <div class="text-muted small">Активных дней</div>
+                        <div class="h4 text-secondary" id="kpi-active-days">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Лидеры роста -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">🚀 Лидеры роста (сравнение с предыдущим периодом)</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0" id="growth-leaders-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Товар</th>
+                                        <th class="text-end">Текущий период</th>
+                                        <th class="text-end">Предыдущий период</th>
+                                        <th class="text-end">Рост %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="text-center py-3 text-muted">⏳ Загрузка лидеров роста...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -656,6 +809,7 @@ if (isset($_GET['api'])) {
                 this.loadTurnover();
                 this.loadMarkupAnalysis();
                 this.loadABCAnalysis();
+                this.loadOperationalKPI();
                 this.initCharts();
             }
 
@@ -937,6 +1091,54 @@ if (isset($_GET['api'])) {
                         <td class="text-end">${r.cumulative_percent || 0}%</td>
                         <td class="text-center">${categoryBadge}</td>
                         <td class="text-end">${Number(r.total_qty || 0).toLocaleString('ru-RU')}</td>
+                    </tr>`;
+            }
+
+            async loadOperationalKPI() {
+                try {
+                    const res = await fetch(`${this.apiBase}?api=operational_kpi&days=30`);
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'API error');
+
+                    const kpi = data.data.kpi || {};
+                    const critical = data.data.critical_stock || {};
+                    const growth = data.data.growth_leaders || [];
+
+                    // Обновляем KPI карточки
+                    document.getElementById('kpi-orders').textContent = Number(kpi.total_orders || 0).toLocaleString('ru-RU');
+                    document.getElementById('kpi-avg-order').textContent = this.formatMoney(kpi.avg_order_value || 0);
+                    document.getElementById('kpi-items-order').textContent = (kpi.avg_items_per_order || 0);
+                    document.getElementById('kpi-unique-products').textContent = Number(kpi.unique_products || 0).toLocaleString('ru-RU');
+                    document.getElementById('kpi-critical-stock').textContent = Number(critical.critical_stock_count || 0).toLocaleString('ru-RU');
+                    document.getElementById('kpi-active-days').textContent = Number(kpi.active_days || 0).toLocaleString('ru-RU');
+
+                    // Обновляем таблицу лидеров роста
+                    const growthBody = document.querySelector('#growth-leaders-table tbody');
+                    if (growthBody) {
+                        if (growth.length === 0) {
+                            growthBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">📭 Нет данных по росту</td></tr>';
+                        } else {
+                            growthBody.innerHTML = growth.map(r => this.renderGrowthRow(r)).join('');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Operational KPI load error', e);
+                }
+            }
+
+            renderGrowthRow(r) {
+                const growthClass = r.growth_percent > 0 ? 'text-success fw-bold' : 
+                                  r.growth_percent < 0 ? 'text-danger fw-bold' : '';
+                const growthIcon = r.growth_percent > 0 ? '📈' : 
+                                  r.growth_percent < 0 ? '📉' : '➡️';
+                
+                return `
+                    <tr>
+                        <td><code class="text-primary">${this.escape(r.sku || '')}</code></td>
+                        <td><small>${this.escape(r.product_name || '').substring(0, 40)}...</small></td>
+                        <td class="text-end">${this.formatMoney(r.current_revenue || 0)}</td>
+                        <td class="text-end">${this.formatMoney(r.previous_revenue || 0)}</td>
+                        <td class="text-end ${growthClass}">${growthIcon} ${r.growth_percent || 0}%</td>
                     </tr>`;
             }
 
