@@ -1,15 +1,12 @@
 <?php
 /**
- * Временная демо-страница дашборда рекомендаций для клиента
- * Содержит встроенный API и полный UI в одном файле
- * 
- * Настройка: поменяйте DB_* константы ниже на боевые
+ * Manhattan Dashboard с маржинальностью и рекомендациями
  */
 
 // === КОНФИГУРАЦИЯ БД ===
-define('DB_HOST', '178.72.129.61');
+define('DB_HOST', 'localhost');
 define('DB_NAME', 'mi_core_db');
-define('DB_USER', 'app_user');
+define('DB_USER', 'mi_core_user');
 define('DB_PASS', 'secure_password_123');
 
 // === ВСТРОЕННЫЙ API ===
@@ -40,6 +37,27 @@ if (isset($_GET['api'])) {
                         SUM(CASE WHEN status = 'low_priority' THEN 1 ELSE 0 END) as low_priority_count,
                         SUM(recommended_order_qty) as total_recommended_qty
                     FROM stock_recommendations
+                ";
+                $stmt = $pdo->query($sql);
+                $data = $stmt->fetch() ?: [];
+                echo json_encode(['success' => true, 'data' => $data]);
+                break;
+
+            case 'margin_summary':
+                $sql = "
+                    SELECT 
+                        SUM(revenue_sum) as total_revenue,
+                        SUM(cogs_sum) as total_cogs,
+                        SUM(commission_sum + shipping_sum + other_expenses_sum) as total_expenses,
+                        SUM(revenue_sum - COALESCE(cogs_sum,0) - commission_sum - shipping_sum - other_expenses_sum) as total_profit,
+                        ROUND(
+                            (SUM(revenue_sum - COALESCE(cogs_sum,0) - commission_sum - shipping_sum - other_expenses_sum) / SUM(revenue_sum)) * 100, 2
+                        ) as margin_percent,
+                        COUNT(DISTINCT metric_date) as days_count,
+                        MIN(metric_date) as date_from,
+                        MAX(metric_date) as date_to
+                    FROM metrics_daily 
+                    WHERE metric_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                 ";
                 $stmt = $pdo->query($sql);
                 $data = $stmt->fetch() ?: [];
@@ -169,7 +187,7 @@ if (isset($_GET['api'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manhattan Dashboard - Рекомендации по пополнению</title>
+    <title>Manhattan Dashboard - Рекомендации и маржинальность</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .badge-status { font-size: 0.85rem; }
@@ -178,6 +196,8 @@ if (isset($_GET['api'])) {
         .demo-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem 0; margin-bottom: 2rem; }
         .demo-header h1 { margin: 0; font-weight: 300; }
         .demo-header p { margin: 0.5rem 0 0 0; opacity: 0.9; }
+        .margin-positive { color: #28a745; }
+        .margin-negative { color: #dc3545; }
     </style>
 </head>
 <body>
@@ -185,11 +205,51 @@ if (isset($_GET['api'])) {
     <div class="demo-header">
         <div class="container">
             <h1>📊 Manhattan Dashboard</h1>
-            <p>Система рекомендаций по пополнению запасов и анализ оборачиваемости</p>
+            <p>Система рекомендаций по пополнению запасов, анализ оборачиваемости и маржинальности</p>
         </div>
     </div>
 
     <div class="container-fluid" id="demo-app">
+        
+        <!-- KPI Маржинальности -->
+        <div class="row mb-4" id="margin-kpi">
+            <div class="col-12">
+                <h4 class="mb-3">💰 Маржинальность (30 дней)</h4>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-success">
+                    <div class="card-body">
+                        <div class="text-muted small">Выручка</div>
+                        <div class="h3 text-success" id="margin-revenue">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-primary">
+                    <div class="card-body">
+                        <div class="text-muted small">Прибыль</div>
+                        <div class="h3 text-primary" id="margin-profit">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-info">
+                    <div class="card-body">
+                        <div class="text-muted small">Маржа %</div>
+                        <div class="h3 text-info" id="margin-percent">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-secondary">
+                    <div class="card-body">
+                        <div class="text-muted small">Дней в анализе</div>
+                        <div class="h3 text-secondary" id="margin-days">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Фильтры -->
         <div class="card mb-3 sticky-toolbar">
             <div class="card-body">
@@ -223,13 +283,16 @@ if (isset($_GET['api'])) {
             </div>
         </div>
 
-        <!-- KPI Карточки -->
+        <!-- KPI Рекомендаций -->
         <div class="row mb-4" id="kpi">
+            <div class="col-12">
+                <h4 class="mb-3">📦 Рекомендации по пополнению</h4>
+            </div>
             <div class="col-md-3">
                 <div class="card text-center border-primary">
                     <div class="card-body">
                         <div class="text-muted small">Всего рекомендаций</div>
-                        <div class="h2 text-primary" id="kpi-total">—</div>
+                        <div class="h3 text-primary" id="kpi-total">—</div>
                     </div>
                 </div>
             </div>
@@ -237,7 +300,7 @@ if (isset($_GET['api'])) {
                 <div class="card text-center border-danger">
                     <div class="card-body">
                         <div class="text-muted small">🔴 Критично</div>
-                        <div class="h2 text-danger" id="kpi-urgent">—</div>
+                        <div class="h3 text-danger" id="kpi-urgent">—</div>
                     </div>
                 </div>
             </div>
@@ -245,7 +308,7 @@ if (isset($_GET['api'])) {
                 <div class="card text-center border-info">
                     <div class="card-body">
                         <div class="text-muted small">🔵 Обычный</div>
-                        <div class="h2 text-info" id="kpi-normal">—</div>
+                        <div class="h3 text-info" id="kpi-normal">—</div>
                     </div>
                 </div>
             </div>
@@ -253,7 +316,7 @@ if (isset($_GET['api'])) {
                 <div class="card text-center border-secondary">
                     <div class="card-body">
                         <div class="text-muted small">⚪ Низкий приоритет</div>
-                        <div class="h2 text-secondary" id="kpi-low">—</div>
+                        <div class="h3 text-secondary" id="kpi-low">—</div>
                     </div>
                 </div>
             </div>
@@ -335,13 +398,14 @@ if (isset($_GET['api'])) {
     <script>
         class DemoDashboard {
             constructor() {
-                this.apiBase = window.location.href.split('?')[0]; // Текущая страница
+                this.apiBase = window.location.href.split('?')[0];
                 this.filtersForm = document.getElementById('filters');
                 this.tbody = document.querySelector('#reco-table tbody');
                 this.turnoverBody = document.querySelector('#turnover-table tbody');
                 this.turnoverLimit = document.getElementById('turnover-limit');
                 this.turnoverOrder = document.getElementById('turnover-order');
                 this.bind();
+                this.loadMarginSummary();
                 this.loadSummary();
                 this.loadList();
                 this.loadTurnover();
@@ -381,6 +445,22 @@ if (isset($_GET['api'])) {
                 params.append('limit', limit);
 
                 return params;
+            }
+
+            async loadMarginSummary() {
+                try {
+                    const res = await fetch(`${this.apiBase}?api=margin_summary`);
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'API error');
+
+                    const s = data.data || {};
+                    document.getElementById('margin-revenue').textContent = this.formatMoney(s.total_revenue || 0);
+                    document.getElementById('margin-profit').textContent = this.formatMoney(s.total_profit || 0);
+                    document.getElementById('margin-percent').textContent = (s.margin_percent || 0) + '%';
+                    document.getElementById('margin-days').textContent = (s.days_count || 0);
+                } catch (e) {
+                    console.error('Margin summary load error', e);
+                }
             }
 
             async loadSummary() {
@@ -490,6 +570,15 @@ if (isset($_GET['api'])) {
                 const params = this.getParams();
                 const url = `${this.apiBase}?api=export&${params.toString()}`;
                 window.open(url, '_blank');
+            }
+
+            formatMoney(amount) {
+                return new Intl.NumberFormat('ru-RU', {
+                    style: 'currency',
+                    currency: 'RUB',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(amount || 0);
             }
 
             escape(s) {
