@@ -328,11 +328,10 @@ if (isset($_GET['api'])) {
                     WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                     GROUP BY fo.sku, dp.product_name
                     ORDER BY revenue DESC
-                    LIMIT :limit
+                    LIMIT ?
                 ";
                 $stmt = $pdo->prepare($sql);
-                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-                $stmt->execute();
+                $stmt->execute([$limit]);
                 $products = $stmt->fetchAll();
                 
                 // Добавляем расчетные данные для пузырьков
