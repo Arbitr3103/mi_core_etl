@@ -1,6 +1,6 @@
 <?php
 /**
- * Manhattan Dashboard с маржинальностью и рекомендациями
+ * ZUZ Dashboard с маржинальностью и рекомендациями
  */
 
 // === КОНФИГУРАЦИЯ БД ===
@@ -419,7 +419,7 @@ if (isset($_GET['api'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manhattan Dashboard - Рекомендации и маржинальность</title>
+    <title>ZUZ Dashboard - Рекомендации и маржинальность</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -437,7 +437,7 @@ if (isset($_GET['api'])) {
     <!-- Демо-хедер -->
     <div class="demo-header">
         <div class="container">
-            <h1>📊 Manhattan Dashboard</h1>
+            <h1>📊 ZUZ Dashboard</h1>
             <p>Система рекомендаций по пополнению запасов, анализ оборачиваемости и маржинальности</p>
         </div>
     </div>
@@ -863,7 +863,10 @@ if (isset($_GET['api'])) {
 
         <!-- Футер -->
         <div class="text-center mt-4 mb-3">
-            <small class="text-muted">Manhattan Dashboard © 2024 | Демо-версия для презентации</small>
+            <small class="text-muted">
+                ZUZ Dashboard © 2024 | Система аналитики и рекомендаций | 
+                <a href="https://zuz.ru" target="_blank" class="text-decoration-none">🔗 ZUZ.ru</a>
+            </small>
         </div>
     </div>
 
