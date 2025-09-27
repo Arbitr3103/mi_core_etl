@@ -205,6 +205,48 @@ if (isset($_GET['api'])) {
                 echo json_encode(['success' => true, 'data' => $products, 'total_revenue' => $totalRevenue]);
                 break;
 
+            case 'revenue_dynamics':
+                $days = isset($_GET['days']) ? max(7, min(90, (int)$_GET['days'])) : 30;
+                $sql = "
+                    SELECT 
+                        fo.order_date,
+                        SUM(fo.price * fo.qty) as daily_revenue,
+                        COUNT(DISTINCT fo.order_id) as orders_count,
+                        SUM(fo.qty) as items_sold
+                    FROM fact_orders fo
+                    WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+                    GROUP BY fo.order_date
+                    ORDER BY fo.order_date ASC
+                ";
+                $stmt = $pdo->prepare($sql);
+                $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+                $stmt->execute();
+                $data = $stmt->fetchAll();
+                echo json_encode(['success' => true, 'data' => $data]);
+                break;
+
+            case 'top_products_chart':
+                $limit = isset($_GET['limit']) ? max(5, min(20, (int)$_GET['limit'])) : 10;
+                $sql = "
+                    SELECT 
+                        fo.sku,
+                        dp.product_name,
+                        SUM(fo.price * fo.qty) as total_revenue,
+                        SUM(fo.qty) as total_qty
+                    FROM fact_orders fo
+                    JOIN dim_products dp ON fo.product_id = dp.id
+                    WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    GROUP BY fo.sku, dp.product_name
+                    ORDER BY total_revenue DESC
+                    LIMIT :limit
+                ";
+                $stmt = $pdo->prepare($sql);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->execute();
+                $data = $stmt->fetchAll();
+                echo json_encode(['success' => true, 'data' => $data]);
+                break;
+
             case 'export':
                 $status = $_GET['status'] ?? null;
                 $sql = "
@@ -260,6 +302,7 @@ if (isset($_GET['api'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manhattan Dashboard - Рекомендации и маржинальность</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .badge-status { font-size: 0.85rem; }
         .table thead th { white-space: nowrap; }
@@ -523,6 +566,36 @@ if (isset($_GET['api'])) {
             </div>
         </div>
 
+        <!-- Графики динамики продаж -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+                        <h5 class="mb-0">📈 Динамика выручки</h5>
+                        <select id="revenue-days" class="form-select form-select-sm text-dark" style="width:auto;">
+                            <option value="7">7 дней</option>
+                            <option value="14">14 дней</option>
+                            <option value="30" selected>30 дней</option>
+                            <option value="60">60 дней</option>
+                        </select>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="revenueChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">🏆 Топ товары</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="topProductsChart" width="300" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Виджет оборачиваемости -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
@@ -583,6 +656,7 @@ if (isset($_GET['api'])) {
                 this.loadTurnover();
                 this.loadMarkupAnalysis();
                 this.loadABCAnalysis();
+                this.initCharts();
             }
 
             bind() {
@@ -620,6 +694,12 @@ if (isset($_GET['api'])) {
                 const abcLimit = document.getElementById('abc-limit');
                 if (abcLimit) {
                     abcLimit.addEventListener('change', () => this.loadABCAnalysis());
+                }
+
+                // Обработчик для графиков
+                const revenueDays = document.getElementById('revenue-days');
+                if (revenueDays) {
+                    revenueDays.addEventListener('change', () => this.updateRevenueChart());
                 }
             }
 
@@ -858,6 +938,120 @@ if (isset($_GET['api'])) {
                         <td class="text-center">${categoryBadge}</td>
                         <td class="text-end">${Number(r.total_qty || 0).toLocaleString('ru-RU')}</td>
                     </tr>`;
+            }
+
+            initCharts() {
+                this.initRevenueChart();
+                this.initTopProductsChart();
+                this.updateRevenueChart();
+                this.updateTopProductsChart();
+            }
+
+            initRevenueChart() {
+                const ctx = document.getElementById('revenueChart');
+                if (!ctx) return;
+                
+                this.revenueChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Выручка, ₽',
+                            data: [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('ru-RU').format(value) + '₽';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            initTopProductsChart() {
+                const ctx = document.getElementById('topProductsChart');
+                if (!ctx) return;
+                
+                this.topProductsChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            data: [],
+                            backgroundColor: [
+                                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                                '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 12,
+                                    font: {
+                                        size: 10
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            async updateRevenueChart() {
+                try {
+                    const days = document.getElementById('revenue-days')?.value || '30';
+                    const res = await fetch(`${this.apiBase}?api=revenue_dynamics&days=${days}`);
+                    const data = await res.json();
+                    
+                    if (data.success && this.revenueChart) {
+                        const labels = data.data.map(d => new Date(d.order_date).toLocaleDateString('ru-RU'));
+                        const revenues = data.data.map(d => parseFloat(d.daily_revenue || 0));
+                        
+                        this.revenueChart.data.labels = labels;
+                        this.revenueChart.data.datasets[0].data = revenues;
+                        this.revenueChart.update();
+                    }
+                } catch (e) {
+                    console.error('Revenue chart update error', e);
+                }
+            }
+
+            async updateTopProductsChart() {
+                try {
+                    const res = await fetch(`${this.apiBase}?api=top_products_chart&limit=5`);
+                    const data = await res.json();
+                    
+                    if (data.success && this.topProductsChart) {
+                        const labels = data.data.map(d => d.sku.substring(0, 15) + '...');
+                        const revenues = data.data.map(d => parseFloat(d.total_revenue || 0));
+                        
+                        this.topProductsChart.data.labels = labels;
+                        this.topProductsChart.data.datasets[0].data = revenues;
+                        this.topProductsChart.update();
+                    }
+                } catch (e) {
+                    console.error('Top products chart update error', e);
+                }
             }
 
             formatMoney(amount) {
