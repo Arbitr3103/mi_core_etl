@@ -310,6 +310,63 @@ if (isset($_GET['api'])) {
                 echo json_encode(['success' => true, 'data' => $result]);
                 break;
 
+            case 'bubble_chart':
+                $limit = isset($_GET['limit']) ? max(10, min(50, (int)$_GET['limit'])) : 20;
+                
+                // Получаем данные для пузырьковой диаграммы
+                $sql = "
+                    SELECT 
+                        fo.sku,
+                        dp.product_name,
+                        SUM(fo.price * fo.qty) as revenue,
+                        SUM(fo.qty) as total_qty,
+                        AVG(fo.price) as avg_price,
+                        COALESCE(AVG(NULLIF(fo.cost_price, 0)), AVG(fo.price) * 0.7) as avg_cost,
+                        COUNT(DISTINCT fo.order_date) as sales_days
+                    FROM fact_orders fo
+                    JOIN dim_products dp ON fo.product_id = dp.id
+                    WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    GROUP BY fo.sku, dp.product_name
+                    ORDER BY revenue DESC
+                    LIMIT :limit
+                ";
+                $stmt = $pdo->prepare($sql);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->execute();
+                $products = $stmt->fetchAll();
+                
+                // Добавляем расчетные данные для пузырьков
+                $totalRevenue = array_sum(array_column($products, 'revenue'));
+                foreach ($products as &$product) {
+                    // X-ось: выручка
+                    $product['x'] = floatval($product['revenue']);
+                    
+                    // Y-ось: маржинальность % (расчетная)
+                    $margin = (($product['avg_price'] - $product['avg_cost']) / $product['avg_price']) * 100;
+                    $product['y'] = max(0, min(100, $margin));
+                    
+                    // Размер пузырька: количество проданных единиц
+                    $product['r'] = max(5, min(50, $product['total_qty'] / 2));
+                    
+                    // ABC категория по выручке
+                    $revenuePercent = ($product['revenue'] / $totalRevenue) * 100;
+                    if ($revenuePercent >= 5) {
+                        $product['category'] = 'A';
+                        $product['color'] = '#28a745'; // зеленый
+                    } elseif ($revenuePercent >= 1) {
+                        $product['category'] = 'B';
+                        $product['color'] = '#ffc107'; // желтый
+                    } else {
+                        $product['category'] = 'C';
+                        $product['color'] = '#6c757d'; // серый
+                    }
+                    
+                    $product['label'] = substr($product['sku'], 0, 15);
+                }
+                
+                echo json_encode(['success' => true, 'data' => $products]);
+                break;
+
             case 'export':
                 $status = $_GET['status'] ?? null;
                 $sql = "
@@ -743,6 +800,31 @@ if (isset($_GET['api'])) {
             </div>
         </div>
 
+        <!-- Пузырьковая диаграмма -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center bg-dark text-white">
+                <h5 class="mb-0">🫧 Портфель товаров (выручка vs маржа vs объем)</h5>
+                <div class="d-flex align-items-center gap-2">
+                    <small class="text-white">A-товары: зеленые | B-товары: желтые | C-товары: серые</small>
+                    <select id="bubble-limit" class="form-select form-select-sm text-dark" style="width:auto;">
+                        <option>10</option>
+                        <option selected>20</option>
+                        <option>30</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="bubbleChart" width="800" height="400"></canvas>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <strong>X-ось:</strong> Выручка за 30 дней | 
+                        <strong>Y-ось:</strong> Маржинальность % | 
+                        <strong>Размер пузырька:</strong> Объем продаж
+                    </small>
+                </div>
+            </div>
+        </div>
+
         <!-- Виджет оборачиваемости -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
@@ -805,6 +887,7 @@ if (isset($_GET['api'])) {
                 this.loadABCAnalysis();
                 this.loadOperationalKPI();
                 this.initCharts();
+                this.initBubbleChart();
             }
 
             bind() {
@@ -848,6 +931,12 @@ if (isset($_GET['api'])) {
                 const revenueDays = document.getElementById('revenue-days');
                 if (revenueDays) {
                     revenueDays.addEventListener('change', () => this.updateRevenueChart());
+                }
+
+                // Обработчик для пузырьковой диаграммы
+                const bubbleLimit = document.getElementById('bubble-limit');
+                if (bubbleLimit) {
+                    bubbleLimit.addEventListener('change', () => this.updateBubbleChart());
                 }
             }
 
@@ -1247,6 +1336,103 @@ if (isset($_GET['api'])) {
                     }
                 } catch (e) {
                     console.error('Top products chart update error', e);
+                }
+            }
+
+            initBubbleChart() {
+                const ctx = document.getElementById('bubbleChart');
+                if (!ctx) return;
+                
+                this.bubbleChart = new Chart(ctx, {
+                    type: 'bubble',
+                    data: {
+                        datasets: []
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const point = context.raw;
+                                        return [
+                                            `${point.label}`,
+                                            `Выручка: ${new Intl.NumberFormat('ru-RU').format(point.x)}₽`,
+                                            `Маржа: ${point.y.toFixed(1)}%`,
+                                            `Продано: ${Math.round(point.r * 2)} шт`
+                                        ];
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Выручка за 30 дней, ₽'
+                                },
+                                ticks: {
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('ru-RU').format(value) + '₽';
+                                    }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Маржинальность, %'
+                                },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                this.updateBubbleChart();
+            }
+
+            async updateBubbleChart() {
+                try {
+                    const limit = document.getElementById('bubble-limit')?.value || '20';
+                    const res = await fetch(`${this.apiBase}?api=bubble_chart&limit=${limit}`);
+                    const data = await res.json();
+                    
+                    if (data.success && this.bubbleChart) {
+                        // Группируем по категориям ABC
+                        const categories = {
+                            'A': { label: 'A-товары (высокая выручка)', data: [], backgroundColor: '#28a745' },
+                            'B': { label: 'B-товары (средняя выручка)', data: [], backgroundColor: '#ffc107' },
+                            'C': { label: 'C-товары (низкая выручка)', data: [], backgroundColor: '#6c757d' }
+                        };
+                        
+                        data.data.forEach(item => {
+                            const category = item.category || 'C';
+                            categories[category].data.push({
+                                x: item.x,
+                                y: item.y,
+                                r: item.r,
+                                label: item.label
+                            });
+                        });
+                        
+                        // Создаем датасеты
+                        const datasets = Object.values(categories).filter(cat => cat.data.length > 0);
+                        
+                        this.bubbleChart.data.datasets = datasets;
+                        this.bubbleChart.update();
+                    }
+                } catch (e) {
+                    console.error('Bubble chart update error', e);
                 }
             }
 
