@@ -134,6 +134,34 @@ if (isset($_GET['api'])) {
                 echo json_encode(['success' => true, 'data' => $rows]);
                 break;
 
+            case 'markup_analysis':
+                $type = $_GET['type'] ?? 'top'; // top | bottom
+                $limit = isset($_GET['limit']) ? max(1, min(20, (int)$_GET['limit'])) : 5;
+                $order = $type === 'bottom' ? 'ASC' : 'DESC';
+
+                $sql = "
+                    SELECT 
+                        fo.sku,
+                        dp.product_name,
+                        fo.price as sale_price,
+                        fo.cost_price,
+                        ROUND(((fo.price - fo.cost_price) / fo.cost_price) * 100, 2) as markup_percent,
+                        SUM(fo.qty) as total_qty,
+                        SUM(fo.price * fo.qty) as total_revenue
+                    FROM fact_orders fo
+                    JOIN dim_products dp ON fo.product_id = dp.id
+                    WHERE fo.cost_price > 0 AND fo.price > 0
+                    GROUP BY fo.sku, dp.product_name, fo.price, fo.cost_price
+                    ORDER BY markup_percent {$order}
+                    LIMIT :limit
+                ";
+                $stmt = $pdo->prepare($sql);
+                $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+                $stmt->execute();
+                $rows = $stmt->fetchAll();
+                echo json_encode(['success' => true, 'data' => $rows]);
+                break;
+
             case 'export':
                 $status = $_GET['status'] ?? null;
                 $sql = "
@@ -351,6 +379,70 @@ if (isset($_GET['api'])) {
             </div>
         </div>
 
+        <!-- Виджет анализа наценок -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-success text-white">
+                        <h5 class="mb-0">💰 Топ товары по наценке</h5>
+                        <select id="markup-top-limit" class="form-select form-select-sm text-dark" style="width:auto;">
+                            <option>3</option>
+                            <option selected>5</option>
+                            <option>10</option>
+                        </select>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0" id="markup-top-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Товар</th>
+                                        <th class="text-end">Цена</th>
+                                        <th class="text-end">Себестоимость</th>
+                                        <th class="text-end">Наценка %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="text-center py-3 text-muted">⏳ Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-warning text-dark">
+                        <h5 class="mb-0">⚠️ Товары с низкой наценкой</h5>
+                        <select id="markup-bottom-limit" class="form-select form-select-sm" style="width:auto;">
+                            <option>3</option>
+                            <option selected>5</option>
+                            <option>10</option>
+                        </select>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0" id="markup-bottom-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Товар</th>
+                                        <th class="text-end">Цена</th>
+                                        <th class="text-end">Себестоимость</th>
+                                        <th class="text-end">Наценка %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="text-center py-3 text-muted">⏳ Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Виджет оборачиваемости -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
@@ -409,6 +501,7 @@ if (isset($_GET['api'])) {
                 this.loadSummary();
                 this.loadList();
                 this.loadTurnover();
+                this.loadMarkupAnalysis();
             }
 
             bind() {
@@ -430,6 +523,16 @@ if (isset($_GET['api'])) {
                 }
                 if (this.turnoverOrder) {
                     this.turnoverOrder.addEventListener('change', () => this.loadTurnover());
+                }
+
+                // Обработчики для анализа наценок
+                const markupTopLimit = document.getElementById('markup-top-limit');
+                const markupBottomLimit = document.getElementById('markup-bottom-limit');
+                if (markupTopLimit) {
+                    markupTopLimit.addEventListener('change', () => this.loadMarkupAnalysis());
+                }
+                if (markupBottomLimit) {
+                    markupBottomLimit.addEventListener('change', () => this.loadMarkupAnalysis());
                 }
             }
 
@@ -570,6 +673,50 @@ if (isset($_GET['api'])) {
                 const params = this.getParams();
                 const url = `${this.apiBase}?api=export&${params.toString()}`;
                 window.open(url, '_blank');
+            }
+
+            async loadMarkupAnalysis() {
+                try {
+                    // Загружаем топ товары по наценке
+                    const topLimit = document.getElementById('markup-top-limit')?.value || '5';
+                    const topRes = await fetch(`${this.apiBase}?api=markup_analysis&type=top&limit=${topLimit}`);
+                    const topData = await topRes.json();
+                    
+                    if (topData.success) {
+                        const topBody = document.querySelector('#markup-top-table tbody');
+                        if (topBody) {
+                            topBody.innerHTML = topData.data.map(r => this.renderMarkupRow(r, 'success')).join('');
+                        }
+                    }
+
+                    // Загружаем товары с низкой наценкой
+                    const bottomLimit = document.getElementById('markup-bottom-limit')?.value || '5';
+                    const bottomRes = await fetch(`${this.apiBase}?api=markup_analysis&type=bottom&limit=${bottomLimit}`);
+                    const bottomData = await bottomRes.json();
+                    
+                    if (bottomData.success) {
+                        const bottomBody = document.querySelector('#markup-bottom-table tbody');
+                        if (bottomBody) {
+                            bottomBody.innerHTML = bottomData.data.map(r => this.renderMarkupRow(r, 'warning')).join('');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Markup analysis load error', e);
+                }
+            }
+
+            renderMarkupRow(r, type) {
+                const markupClass = type === 'success' ? 'text-success fw-bold' : 
+                                   r.markup_percent < 50 ? 'text-danger fw-bold' : 'text-warning fw-bold';
+                
+                return `
+                    <tr>
+                        <td><code class="text-primary">${this.escape(r.sku || '')}</code></td>
+                        <td><small>${this.escape(r.product_name || '').substring(0, 40)}...</small></td>
+                        <td class="text-end">${this.formatMoney(r.sale_price || 0)}</td>
+                        <td class="text-end">${this.formatMoney(r.cost_price || 0)}</td>
+                        <td class="text-end ${markupClass}">${r.markup_percent || 0}%</td>
+                    </tr>`;
             }
 
             formatMoney(amount) {
