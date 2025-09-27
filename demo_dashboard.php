@@ -310,7 +310,7 @@ if (isset($_GET['api'])) {
                 echo json_encode(['success' => true, 'data' => $result]);
                 break;
 
-            case 'bubble_chart':
+            case 'bubble_chart_disabled':
                 $limit = isset($_GET['limit']) ? max(10, min(50, (int)$_GET['limit'])) : 20;
                 
                 // Получаем данные для пузырьковой диаграммы
