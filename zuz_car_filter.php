@@ -32,14 +32,20 @@ if (isset($_GET['api'])) {
 
         switch ($action) {
             case 'countries':
-                // Получаем список типов автомобилей из таблицы regions
-                $sql = "SELECT DISTINCT id, name 
-                        FROM regions 
-                        WHERE name IS NOT NULL AND name != ''
-                        ORDER BY name";
-                $stmt = $pdo->query($sql);
-                $data = $stmt->fetchAll();
-                echo json_encode(['success' => true, 'data' => $data]);
+                // Получаем список стран производства на основе марок
+                $countries = [
+                    ['id' => 'germany', 'name' => 'Германия'],
+                    ['id' => 'japan', 'name' => 'Япония'],
+                    ['id' => 'usa', 'name' => 'США'],
+                    ['id' => 'italy', 'name' => 'Италия'],
+                    ['id' => 'france', 'name' => 'Франция'],
+                    ['id' => 'uk', 'name' => 'Великобритания'],
+                    ['id' => 'sweden', 'name' => 'Швеция'],
+                    ['id' => 'south_korea', 'name' => 'Южная Корея'],
+                    ['id' => 'czech', 'name' => 'Чехия'],
+                    ['id' => 'russia', 'name' => 'Россия'],
+                ];
+                echo json_encode(['success' => true, 'data' => $countries]);
                 break;
 
             case 'brands':
@@ -49,14 +55,36 @@ if (isset($_GET['api'])) {
                     break;
                 }
                 
-                // Получаем марки автомобилей для выбранной страны
-                $sql = "SELECT DISTINCT b.id, b.name, b.region_id
+                // Маппинг марок к странам
+                $brand_countries = [
+                    'germany' => ['Ауди', 'БМВ', 'Мерседес-Бенц', 'Фольксваген', 'Порше', 'Опель', 'Майбах', 'Смарт'],
+                    'japan' => ['Тойота', 'Хонда', 'Ниссан', 'Мазда', 'Субару', 'Митсубиси', 'Лексус', 'Акура', 'Инфинити'],
+                    'usa' => ['Форд', 'Шевроле', 'Кадиллак', 'Крайслер', 'Додж', 'Джип', 'Линкольн', 'Бьюик'],
+                    'italy' => ['Феррари', 'Ламборгини', 'Фиат', 'Альфа Ромео', 'Мазерати', 'Лянча'],
+                    'france' => ['Рено', 'Пежо', 'Ситроен', 'Бугатти'],
+                    'uk' => ['Ягуар', 'Ленд Ровер', 'Астон Мартин', 'Бентли', 'Роллс-Ройс', 'Мини'],
+                    'sweden' => ['Вольво', 'Сааб', 'Скания'],
+                    'south_korea' => ['Хендай', 'Киа', 'Дэу', 'Санг Йонг'],
+                    'czech' => ['Шкода'],
+                    'russia' => ['Лада', 'ГАЗ', 'УАЗ', 'Москвич']
+                ];
+                
+                $country_brands = $brand_countries[$country_id] ?? [];
+                
+                if (empty($country_brands)) {
+                    echo json_encode(['success' => true, 'data' => []]);
+                    break;
+                }
+                
+                // Получаем марки из БД, которые соответствуют выбранной стране
+                $placeholders = str_repeat('?,', count($country_brands) - 1) . '?';
+                $sql = "SELECT DISTINCT b.id, b.name
                         FROM brands b
-                        WHERE b.region_id = :country_id 
+                        WHERE b.name IN ($placeholders)
                         AND b.name IS NOT NULL AND b.name != ''
                         ORDER BY b.name";
                 $stmt = $pdo->prepare($sql);
-                $stmt->execute(['country_id' => $country_id]);
+                $stmt->execute($country_brands);
                 $data = $stmt->fetchAll();
                 echo json_encode(['success' => true, 'data' => $data]);
                 break;
@@ -203,19 +231,19 @@ if (isset($_GET['api'])) {
     <div class="zuz-header">
         <div class="container">
             <h1>🚗 ZUZ - Фильтр автомобилей</h1>
-            <p>Выберите тип автомобиля → марку → модель → год выпуска для поиска автозапчастей</p>
+            <p>Выберите страну производства → марку → модель → год выпуска для поиска автозапчастей</p>
         </div>
     </div>
 
     <div class="container">
-        <!-- Шаг 1: Выбор типа автомобиля -->
+        <!-- Шаг 1: Выбор страны производства -->
         <div class="filter-step active" id="step-country">
-            <h5><span class="step-number active" id="num-1">1</span>Выберите тип автомобиля</h5>
+            <h5><span class="step-number active" id="num-1">1</span>Выберите страну производства</h5>
             <select class="form-select" id="country-select">
-                <option value="">Загрузка типов...</option>
+                <option value="">Загрузка стран...</option>
             </select>
             <div class="mt-2">
-                <small class="text-muted">Выбранный тип: <span id="selected-country">не выбран</span></small>
+                <small class="text-muted">Выбранная страна: <span id="selected-country">не выбрана</span></small>
             </div>
         </div>
 
@@ -223,7 +251,7 @@ if (isset($_GET['api'])) {
         <div class="filter-step disabled" id="step-brand">
             <h5><span class="step-number" id="num-2">2</span>Выберите марку автомобиля</h5>
             <select class="form-select" id="brand-select" disabled>
-                <option value="">Сначала выберите тип автомобиля</option>
+                <option value="">Сначала выберите страну</option>
             </select>
             <div class="mt-2">
                 <small class="text-muted">Выбранная марка: <span id="selected-brand">не выбрана</span></small>
@@ -324,7 +352,7 @@ if (isset($_GET['api'])) {
                     
                     if (data.success) {
                         const select = document.getElementById('country-select');
-                        select.innerHTML = '<option value="">Выберите тип автомобиля...</option>';
+                        select.innerHTML = '<option value="">Выберите страну...</option>';
                         
                         data.data.forEach(country => {
                             const option = document.createElement('option');
@@ -333,11 +361,11 @@ if (isset($_GET['api'])) {
                             select.appendChild(option);
                         });
                     } else {
-                        throw new Error(data.error || 'Ошибка загрузки типов');
+                        throw new Error(data.error || 'Ошибка загрузки стран');
                     }
                 } catch (error) {
                     console.error('Error loading countries:', error);
-                    document.getElementById('country-select').innerHTML = '<option value="">Ошибка загрузки типов</option>';
+                    document.getElementById('country-select').innerHTML = '<option value="">Ошибка загрузки стран</option>';
                 }
             }
 
