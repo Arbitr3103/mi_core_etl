@@ -32,7 +32,7 @@ if (isset($_GET['api'])) {
 
         switch ($action) {
             case 'countries':
-                // Получаем список стран из таблицы regions
+                // Получаем список типов автомобилей из таблицы regions
                 $sql = "SELECT DISTINCT id, name 
                         FROM regions 
                         WHERE name IS NOT NULL AND name != ''
@@ -203,19 +203,19 @@ if (isset($_GET['api'])) {
     <div class="zuz-header">
         <div class="container">
             <h1>🚗 ZUZ - Фильтр автомобилей</h1>
-            <p>Выберите страну → марку → модель → год выпуска для поиска автозапчастей</p>
+            <p>Выберите тип автомобиля → марку → модель → год выпуска для поиска автозапчастей</p>
         </div>
     </div>
 
     <div class="container">
-        <!-- Шаг 1: Выбор страны -->
+        <!-- Шаг 1: Выбор типа автомобиля -->
         <div class="filter-step active" id="step-country">
-            <h5><span class="step-number active" id="num-1">1</span>Выберите страну изготовления</h5>
+            <h5><span class="step-number active" id="num-1">1</span>Выберите тип автомобиля</h5>
             <select class="form-select" id="country-select">
-                <option value="">Загрузка стран...</option>
+                <option value="">Загрузка типов...</option>
             </select>
             <div class="mt-2">
-                <small class="text-muted">Выбранная страна: <span id="selected-country">не выбрана</span></small>
+                <small class="text-muted">Выбранный тип: <span id="selected-country">не выбран</span></small>
             </div>
         </div>
 
@@ -223,7 +223,7 @@ if (isset($_GET['api'])) {
         <div class="filter-step disabled" id="step-brand">
             <h5><span class="step-number" id="num-2">2</span>Выберите марку автомобиля</h5>
             <select class="form-select" id="brand-select" disabled>
-                <option value="">Сначала выберите страну</option>
+                <option value="">Сначала выберите тип автомобиля</option>
             </select>
             <div class="mt-2">
                 <small class="text-muted">Выбранная марка: <span id="selected-brand">не выбрана</span></small>
@@ -324,7 +324,7 @@ if (isset($_GET['api'])) {
                     
                     if (data.success) {
                         const select = document.getElementById('country-select');
-                        select.innerHTML = '<option value="">Выберите страну...</option>';
+                        select.innerHTML = '<option value="">Выберите тип автомобиля...</option>';
                         
                         data.data.forEach(country => {
                             const option = document.createElement('option');
@@ -333,11 +333,11 @@ if (isset($_GET['api'])) {
                             select.appendChild(option);
                         });
                     } else {
-                        throw new Error(data.error || 'Ошибка загрузки стран');
+                        throw new Error(data.error || 'Ошибка загрузки типов');
                     }
                 } catch (error) {
                     console.error('Error loading countries:', error);
-                    document.getElementById('country-select').innerHTML = '<option value="">Ошибка загрузки стран</option>';
+                    document.getElementById('country-select').innerHTML = '<option value="">Ошибка загрузки типов</option>';
                 }
             }
 
