@@ -33,10 +33,10 @@ if (isset($_GET['api'])) {
         switch ($action) {
             case 'countries':
                 // Получаем список стран из таблицы regions
-                $sql = "SELECT DISTINCT id, region_name as name 
+                $sql = "SELECT DISTINCT id, name 
                         FROM regions 
-                        WHERE region_name IS NOT NULL AND region_name != ''
-                        ORDER BY region_name";
+                        WHERE name IS NOT NULL AND name != ''
+                        ORDER BY name";
                 $stmt = $pdo->query($sql);
                 $data = $stmt->fetchAll();
                 echo json_encode(['success' => true, 'data' => $data]);
@@ -50,11 +50,11 @@ if (isset($_GET['api'])) {
                 }
                 
                 // Получаем марки автомобилей для выбранной страны
-                $sql = "SELECT DISTINCT b.id, b.brand_name as name, b.region_id
+                $sql = "SELECT DISTINCT b.id, b.name, b.region_id
                         FROM brands b
                         WHERE b.region_id = :country_id 
-                        AND b.brand_name IS NOT NULL AND b.brand_name != ''
-                        ORDER BY b.brand_name";
+                        AND b.name IS NOT NULL AND b.name != ''
+                        ORDER BY b.name";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(['country_id' => $country_id]);
                 $data = $stmt->fetchAll();
@@ -69,11 +69,11 @@ if (isset($_GET['api'])) {
                 }
                 
                 // Получаем модели для выбранной марки
-                $sql = "SELECT DISTINCT m.id, m.model_name as name, m.brand_id
+                $sql = "SELECT DISTINCT m.id, m.name, m.brand_id
                         FROM car_models m
                         WHERE m.brand_id = :brand_id 
-                        AND m.model_name IS NOT NULL AND m.model_name != ''
-                        ORDER BY m.model_name";
+                        AND m.name IS NOT NULL AND m.name != ''
+                        ORDER BY m.name";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(['brand_id' => $brand_id]);
                 $data = $stmt->fetchAll();
@@ -110,7 +110,7 @@ if (isset($_GET['api'])) {
                 }
                 
                 // Получаем полные характеристики
-                $sql = "SELECT s.*, m.model_name, b.brand_name, r.region_name
+                $sql = "SELECT s.*, m.name as model_name, b.name as brand_name, r.name as region_name
                         FROM car_specifications s
                         JOIN car_models m ON s.model_id = m.id
                         JOIN brands b ON m.brand_id = b.id
