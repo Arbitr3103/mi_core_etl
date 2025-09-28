@@ -88,11 +88,11 @@ if (isset($_GET['api'])) {
                 }
                 
                 // Получаем годы выпуска для выбранной модели
-                $sql = "SELECT DISTINCT s.year_from, s.year_to, s.id, s.engine_info
+                $sql = "SELECT DISTINCT s.year_start, s.year_end, s.id, s.fastener_params
                         FROM car_specifications s
-                        WHERE s.model_id = :model_id 
-                        AND (s.year_from IS NOT NULL OR s.year_to IS NOT NULL)
-                        ORDER BY s.year_from DESC, s.year_to DESC";
+                        WHERE s.car_model_id = :model_id 
+                        AND (s.year_start IS NOT NULL OR s.year_end IS NOT NULL)
+                        ORDER BY s.year_start DESC, s.year_end DESC";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(['model_id' => $model_id]);
                 $data = $stmt->fetchAll();
@@ -101,8 +101,8 @@ if (isset($_GET['api'])) {
 
             case 'specifications':
                 $model_id = $_GET['model_id'] ?? '';
-                $year_from = $_GET['year_from'] ?? '';
-                $year_to = $_GET['year_to'] ?? '';
+                $year_start = $_GET['year_start'] ?? '';
+                $year_end = $_GET['year_end'] ?? '';
                 
                 if (!$model_id) {
                     echo json_encode(['success' => false, 'error' => 'model_id required']);
@@ -112,23 +112,23 @@ if (isset($_GET['api'])) {
                 // Получаем полные характеристики
                 $sql = "SELECT s.*, m.name as model_name, b.name as brand_name, r.name as region_name
                         FROM car_specifications s
-                        JOIN car_models m ON s.model_id = m.id
+                        JOIN car_models m ON s.car_model_id = m.id
                         JOIN brands b ON m.brand_id = b.id
                         JOIN regions r ON b.region_id = r.id
-                        WHERE s.model_id = :model_id";
+                        WHERE s.car_model_id = :model_id";
                 
                 $params = ['model_id' => $model_id];
                 
-                if ($year_from) {
-                    $sql .= " AND s.year_from = :year_from";
-                    $params['year_from'] = $year_from;
+                if ($year_start) {
+                    $sql .= " AND s.year_start = :year_start";
+                    $params['year_start'] = $year_start;
                 }
-                if ($year_to) {
-                    $sql .= " AND s.year_to = :year_to";
-                    $params['year_to'] = $year_to;
+                if ($year_end) {
+                    $sql .= " AND s.year_end = :year_end";
+                    $params['year_end'] = $year_end;
                 }
                 
-                $sql .= " ORDER BY s.year_from DESC";
+                $sql .= " ORDER BY s.year_start DESC";
                 
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($params);
@@ -445,8 +445,8 @@ if (isset($_GET['api'])) {
                         
                         data.data.forEach(year => {
                             const option = document.createElement('option');
-                            option.value = `${year.year_from}-${year.year_to}`;
-                            option.textContent = `${year.year_from || '?'} - ${year.year_to || '?'}${year.engine_info ? ' (' + year.engine_info + ')' : ''}`;
+                            option.value = `${year.year_start}-${year.year_end}`;
+                            option.textContent = `${year.year_start || '?'} - ${year.year_end || '?'}${year.fastener_params ? ' (' + year.fastener_params + ')' : ''}`;
                             select.appendChild(option);
                         });
                     } else {
@@ -473,14 +473,14 @@ if (isset($_GET['api'])) {
 
             async searchSpecifications() {
                 const modelId = this.selectedData.model.id;
-                const [yearFrom, yearTo] = this.selectedData.year.range.split('-');
+                const [yearStart, yearEnd] = this.selectedData.year.range.split('-');
                 
                 try {
                     const params = new URLSearchParams({
                         api: 'specifications',
                         model_id: modelId,
-                        year_from: yearFrom,
-                        year_to: yearTo
+                        year_start: yearStart,
+                        year_end: yearEnd
                     });
                     
                     const response = await fetch(`${this.apiBase}?${params}`);
@@ -525,8 +525,8 @@ if (isset($_GET['api'])) {
                                 ${specifications.map(spec => `
                                     <tr>
                                         <td>${spec.id}</td>
-                                        <td>${spec.year_from || '?'} - ${spec.year_to || '?'}</td>
-                                        <td>${spec.engine_info || 'Не указано'}</td>
+                                        <td>${spec.year_start || '?'} - ${spec.year_end || '?'}</td>
+                                        <td>${spec.fastener_params || 'Не указано'}</td>
                                         <td>${spec.additional_info || 'Нет дополнительной информации'}</td>
                                     </tr>
                                 `).join('')}
