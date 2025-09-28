@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Тест API Endpoints</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .header {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .endpoint-test {
+        background: white;
+        margin-bottom: 15px;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .endpoint-header {
+        background: #007bff;
+        color: white;
+        padding: 15px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .endpoint-header:hover {
+        background: #0056b3;
+      }
+      .endpoint-content {
+        padding: 15px;
+        display: none;
+      }
+      .endpoint-content.active {
+        display: block;
+      }
+      .test-button {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 10px;
+      }
+      .test-button:hover {
+        background: #218838;
+      }
+      .test-button:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+      }
+      .status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .status.success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .status.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .status.loading {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+      .response {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        margin-top: 10px;
+        font-family: monospace;
+        font-size: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .params {
+        margin: 10px 0;
+      }
+      .params input {
+        margin: 5px;
+        padding: 5px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      .toggle-icon {
+        transition: transform 0.3s;
+      }
+      .toggle-icon.rotated {
+        transform: rotate(180deg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🧪 Тест API Endpoints</h1>
+      <p>
+        <strong>Базовый URL:</strong>
+        <span id="base-url">https://api.zavodprostavok.ru/api</span>
+      </p>
+      <button onclick="testAllEndpoints()" class="test-button">
+        Тестировать все endpoints
+      </button>
+    </div>
+
+    <div id="endpoints-container">
+      <!-- Endpoints будут добавлены динамически -->
+    </div>
+
+    <script>
+      // Динамически определяем базовый URL API на основе текущего расположения
+      const API_BASE_URL = window.location.origin + "/api";
+      console.log('API_BASE_URL:', API_BASE_URL); // Для отладки
+
+      const endpoints = [
+        {
+          name: "Все страны",
+          url: "/countries.php",
+          method: "GET",
+          params: [],
+          description: "Получить список всех стран изготовления",
+        },
+        {
+          name: "Страны по марке",
+          url: "/countries-by-brand.php",
+          method: "GET",
+          params: [
+            {
+              name: "brand_id",
+              type: "number",
+              placeholder: "1",
+              required: true,
+            },
+          ],
+          description: "Получить страны для конкретной марки",
+        },
+        {
+          name: "Страны по модели",
+          url: "/countries-by-model.php",
+          method: "GET",
+          params: [
+            {
+              name: "model_id",
+              type: "number",
+              placeholder: "5",
+              required: true,
+            },
+          ],
+          description: "Получить страны для конкретной модели",
+        },
+        {
+          name: "Все марки",
+          url: "/brands.php",
+          method: "GET",
+          params: [],
+          description: "Получить список всех марок автомобилей",
+        },
+        {
+          name: "Модели",
+          url: "/models.php",
+          method: "GET",
+          params: [
+            {
+              name: "brand_id",
+              type: "number",
+              placeholder: "1",
+              required: false,
+            },
+          ],
+          description: "Получить модели (все или по марке)",
+        },
+        {
+          name: "Годы выпуска",
+          url: "/years.php",
+          method: "GET",
+          params: [
+            {
+              name: "brand_id",
+              type: "number",
+              placeholder: "1",
+              required: false,
+            },
+            {
+              name: "model_id",
+              type: "number",
+              placeholder: "5",
+              required: false,
+            },
+          ],
+          description: "Получить годы выпуска",
+        },
+        {
+          name: "Фильтрация товаров",
+          url: "/products.php",
+          method: "GET",
+          params: [
+            {
+              name: "brand_id",
+              type: "number",
+              placeholder: "1",
+              required: false,
+            },
+            {
+              name: "model_id",
+              type: "number",
+              placeholder: "5",
+              required: false,
+            },
+            {
+              name: "year",
+              type: "number",
+              placeholder: "2020",
+              required: false,
+            },
+            {
+              name: "country_id",
+              type: "number",
+              placeholder: "2",
+              required: false,
+            },
+            {
+              name: "limit",
+              type: "number",
+              placeholder: "10",
+              required: false,
+            },
+            {
+              name: "offset",
+              type: "number",
+              placeholder: "0",
+              required: false,
+            },
+          ],
+          description: "Фильтрация товаров по параметрам",
+        },
+      ];
+
+      function createEndpointHTML(endpoint, index) {
+        const paramsHTML = endpoint.params
+          .map(
+            (param) =>
+              `<input type="${param.type}" 
+                        placeholder="${param.name}: ${param.placeholder}" 
+                        data-param="${param.name}"
+                        ${param.required ? "required" : ""}>`
+          )
+          .join("");
+
+        return `
+                <div class="endpoint-test">
+                    <div class="endpoint-header" onclick="toggleEndpoint(${index})">
+                        <div>
+                            <strong>${endpoint.name}</strong>
+                            <span class="status" id="status-${index}">Не тестировался</span>
+                        </div>
+                        <span class="toggle-icon" id="toggle-${index}">▼</span>
+                    </div>
+                    <div class="endpoint-content" id="content-${index}">
+                        <p>${endpoint.description}</p>
+                        <p><strong>URL:</strong> <code>${API_BASE_URL}${
+          endpoint.url
+        }</code></p>
+                        
+                        ${
+                          endpoint.params.length > 0
+                            ? `
+                            <div class="params">
+                                <strong>Параметры:</strong><br>
+                                ${paramsHTML}
+                            </div>
+                        `
+                            : ""
+                        }
+                        
+                        <button onclick="testEndpoint(${index})" class="test-button" id="btn-${index}">
+                            Тестировать
+                        </button>
+                        
+                        <div class="response" id="response-${index}" style="display: none;"></div>
+                    </div>
+                </div>
+            `;
+      }
+
+      function toggleEndpoint(index) {
+        const content = document.getElementById(`content-${index}`);
+        const toggle = document.getElementById(`toggle-${index}`);
+
+        content.classList.toggle("active");
+        toggle.classList.toggle("rotated");
+      }
+
+      async function testEndpoint(index) {
+        const endpoint = endpoints[index];
+        const statusEl = document.getElementById(`status-${index}`);
+        const responseEl = document.getElementById(`response-${index}`);
+        const btnEl = document.getElementById(`btn-${index}`);
+
+        // Собираем параметры
+        const params = new URLSearchParams();
+        endpoint.params.forEach((param) => {
+          const input = document.querySelector(
+            `#content-${index} input[data-param="${param.name}"]`
+          );
+          if (input && input.value) {
+            params.append(param.name, input.value);
+          }
+        });
+
+        const url = `${API_BASE_URL}${endpoint.url}${
+          params.toString() ? "?" + params.toString() : ""
+        }`;
+
+        // Обновляем UI
+        statusEl.textContent = "Тестируется...";
+        statusEl.className = "status loading";
+        btnEl.disabled = true;
+        responseEl.style.display = "block";
+        responseEl.textContent = "Выполняется запрос...";
+
+        try {
+          const startTime = Date.now();
+          const response = await fetch(url);
+          const endTime = Date.now();
+          const result = await response.json();
+
+          // Обновляем статус
+          if (response.ok && result.success) {
+            statusEl.textContent = `✅ OK (${endTime - startTime}ms)`;
+            statusEl.className = "status success";
+          } else {
+            statusEl.textContent = `❌ Ошибка (${response.status})`;
+            statusEl.className = "status error";
+          }
+
+          // Показываем ответ
+          responseEl.innerHTML = `
+                    <strong>Статус:</strong> ${response.status} ${
+            response.statusText
+          }<br>
+                    <strong>Время:</strong> ${endTime - startTime}ms<br>
+                    <strong>URL:</strong> ${url}<br><br>
+                    <strong>Ответ:</strong><br>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+        } catch (error) {
+          statusEl.textContent = "❌ Сетевая ошибка";
+          statusEl.className = "status error";
+          responseEl.innerHTML = `
+                    <strong>Ошибка:</strong> ${error.message}<br>
+                    <strong>URL:</strong> ${url}
+                `;
+        } finally {
+          btnEl.disabled = false;
+        }
+      }
+
+      async function testAllEndpoints() {
+        for (let i = 0; i < endpoints.length; i++) {
+          await testEndpoint(i);
+          // Небольшая задержка между запросами
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      // Инициализация
+      document.addEventListener("DOMContentLoaded", function () {
+        const container = document.getElementById("endpoints-container");
+        container.innerHTML = endpoints
+          .map((endpoint, index) => createEndpointHTML(endpoint, index))
+          .join("");
+
+        // Обновляем базовый URL в заголовке
+        document.getElementById("base-url").textContent = API_BASE_URL;
+      });
+    </script>
+  </body>
+</html>
