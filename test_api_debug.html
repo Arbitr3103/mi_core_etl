@@ -127,15 +127,15 @@
     <script>
       // Динамически определяем базовый URL API на основе текущего расположения
       let API_BASE_URL;
-      if (window.location.hostname === "178.72.129.61") {
+      if (window.location.hostname === '178.72.129.61') {
         // Для IP адреса используем прямой путь к API
         API_BASE_URL = window.location.origin + "/api";
       } else {
         // Для домена api.zavodprostavok.ru используем стандартный путь
         API_BASE_URL = window.location.origin + "/api";
       }
-      console.log("API_BASE_URL:", API_BASE_URL); // Для отладки
-      console.log("Hostname:", window.location.hostname); // Для отладки
+      console.log('API_BASE_URL:', API_BASE_URL); // Для отладки
+      console.log('Hostname:', window.location.hostname); // Для отладки
 
       const endpoints = [
         {
