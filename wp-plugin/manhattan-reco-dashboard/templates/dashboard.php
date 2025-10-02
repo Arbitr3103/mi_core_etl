@@ -1,9 +1,25 @@
 <div class="container-fluid py-3" id="recommendations-app" data-api-base="<?php echo esc_attr( rest_url('manhattan/v1') ); ?>">
   <div class="row">
     <div class="col-12">
-      <h1 class="mb-3">📦 Рекомендации по пополнению</h1>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>📦 Manhattan Dashboard</h1>
+        
+        <!-- View Toggle Controls -->
+        <div class="view-controls">
+          <div class="btn-group" role="group" aria-label="Режим просмотра">
+            <button type="button" class="btn btn-outline-primary" id="combined-view-btn" data-view="combined">
+              Общий вид
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="separated-view-btn" data-view="separated">
+              По маркетплейсам
+            </button>
+          </div>
+        </div>
+      </div>
 
-      <div class="card mb-3" style="position: sticky; top: 0; z-index: 10;">
+      <!-- Combined View Container -->
+      <div id="combined-view" class="view-container">
+        <div class="card mb-3" style="position: sticky; top: 0; z-index: 10;">
         <div class="card-body">
           <form id="reco-filters" class="row g-2 align-items-end">
             <div class="col-md-3">
@@ -126,7 +142,157 @@
           </div>
         </div>
       </div>
+      </div> <!-- End Combined View -->
+      
+      <!-- Separated View Container -->
+      <div id="separated-view" class="view-container" style="display: none;">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="marketplace-section" data-marketplace="ozon">
+              <div class="marketplace-header">
+                <h3>📦 Ozon</h3>
+              </div>
+              <div class="marketplace-content">
+                <!-- KPI Cards -->
+                <div class="row mb-3" id="ozon-kpi">
+                  <div class="col-6">
+                    <div class="card text-center border-success">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Выручка</div>
+                        <div class="h6 text-success" id="ozon-revenue">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="card text-center border-primary">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Прибыль</div>
+                        <div class="h6 text-primary" id="ozon-profit">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="card text-center border-info">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Маржа</div>
+                        <div class="h6 text-info" id="ozon-margin">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="card text-center border-warning">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Заказы</div>
+                        <div class="h6 text-warning" id="ozon-orders">—</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Chart -->
+                <div class="card mb-3">
+                  <div class="card-header">
+                    <h6>📈 Динамика продаж</h6>
+                  </div>
+                  <div class="card-body">
+                    <canvas id="ozonChart" height="200"></canvas>
+                  </div>
+                </div>
+                
+                <!-- Top Products -->
+                <div class="card">
+                  <div class="card-header">
+                    <h6>🏆 Топ товары</h6>
+                  </div>
+                  <div class="card-body">
+                    <div id="ozon-top-products">
+                      <p class="text-muted small">Загрузка...</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-6">
+            <div class="marketplace-section" data-marketplace="wildberries">
+              <div class="marketplace-header">
+                <h3>🛍️ Wildberries</h3>
+              </div>
+              <div class="marketplace-content">
+                <!-- KPI Cards -->
+                <div class="row mb-3" id="wildberries-kpi">
+                  <div class="col-6">
+                    <div class="card text-center border-success">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Выручка</div>
+                        <div class="h6 text-success" id="wildberries-revenue">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="card text-center border-primary">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Прибыль</div>
+                        <div class="h6 text-primary" id="wildberries-profit">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="card text-center border-info">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Маржа</div>
+                        <div class="h6 text-info" id="wildberries-margin">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="card text-center border-warning">
+                      <div class="card-body p-2">
+                        <div class="small text-muted">Заказы</div>
+                        <div class="h6 text-warning" id="wildberries-orders">—</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Chart -->
+                <div class="card mb-3">
+                  <div class="card-header">
+                    <h6>📈 Динамика продаж</h6>
+                  </div>
+                  <div class="card-body">
+                    <canvas id="wildberriesChart" height="200"></canvas>
+                  </div>
+                </div>
+                
+                <!-- Top Products -->
+                <div class="card">
+                  <div class="card-header">
+                    <h6>🏆 Топ товары</h6>
+                  </div>
+                  <div class="card-body">
+                    <div id="wildberries-top-products">
+                      <p class="text-muted small">Загрузка...</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div> <!-- End Separated View -->
 
     </div>
   </div>
 </div>
+
+<script>
+// Initialize marketplace view toggle for WordPress plugin
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof MarketplaceViewToggle !== 'undefined') {
+        const apiBase = document.getElementById('recommendations-app').dataset.apiBase;
+        new MarketplaceViewToggle('recommendations-app', apiBase + '/margin');
+    }
+});
+</script>

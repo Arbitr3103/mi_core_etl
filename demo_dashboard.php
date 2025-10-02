@@ -26,6 +26,7 @@ if (isset($_GET['api'])) {
         );
 
         $action = $_GET['api'] ?? 'summary';
+        $marketplace = $_GET['marketplace'] ?? null;
 
         switch ($action) {
             case 'summary':
@@ -44,6 +45,17 @@ if (isset($_GET['api'])) {
                 break;
 
             case 'margin_summary':
+                $whereClause = "WHERE metric_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+                
+                // Add marketplace filtering if specified
+                if ($marketplace) {
+                    if ($marketplace === 'ozon') {
+                        $whereClause .= " AND (source LIKE '%ozon%' OR source LIKE '%озон%')";
+                    } elseif ($marketplace === 'wildberries') {
+                        $whereClause .= " AND (source LIKE '%wildberries%' OR source LIKE '%wb%' OR source LIKE '%вб%')";
+                    }
+                }
+                
                 $sql = "
                     SELECT 
                         SUM(revenue_sum) as total_revenue,
@@ -55,12 +67,132 @@ if (isset($_GET['api'])) {
                         ) as margin_percent,
                         COUNT(DISTINCT metric_date) as days_count,
                         MIN(metric_date) as date_from,
-                        MAX(metric_date) as date_to
+                        MAX(metric_date) as date_to,
+                        COUNT(*) as orders
                     FROM metrics_daily 
-                    WHERE metric_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    {$whereClause}
                 ";
                 $stmt = $pdo->query($sql);
                 $data = $stmt->fetch() ?: [];
+                echo json_encode(['success' => true, 'data' => $data]);
+                break;
+
+            case 'marketplace_comparison':
+                // Get data for both marketplaces
+                $ozonSql = "
+                    SELECT 
+                        'ozon' as marketplace,
+                        SUM(revenue_sum) as revenue,
+                        SUM(revenue_sum - COALESCE(cogs_sum,0) - commission_sum - shipping_sum - other_expenses_sum) as profit,
+                        ROUND(
+                            (SUM(revenue_sum - COALESCE(cogs_sum,0) - commission_sum - shipping_sum - other_expenses_sum) / SUM(revenue_sum)) * 100, 2
+                        ) as margin_percent,
+                        COUNT(*) as orders
+                    FROM metrics_daily 
+                    WHERE metric_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    AND (source LIKE '%ozon%' OR source LIKE '%озон%')
+                ";
+                
+                $wildberriesSql = "
+                    SELECT 
+                        'wildberries' as marketplace,
+                        SUM(revenue_sum) as revenue,
+                        SUM(revenue_sum - COALESCE(cogs_sum,0) - commission_sum - shipping_sum - other_expenses_sum) as profit,
+                        ROUND(
+                            (SUM(revenue_sum - COALESCE(cogs_sum,0) - commission_sum - shipping_sum - other_expenses_sum) / SUM(revenue_sum)) * 100, 2
+                        ) as margin_percent,
+                        COUNT(*) as orders
+                    FROM metrics_daily 
+                    WHERE metric_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    AND (source LIKE '%wildberries%' OR source LIKE '%wb%' OR source LIKE '%вб%')
+                ";
+                
+                $ozonStmt = $pdo->query($ozonSql);
+                $wildberriesStmt = $pdo->query($wildberriesSql);
+                
+                $ozonData = $ozonStmt->fetch() ?: ['marketplace' => 'ozon', 'revenue' => 0, 'profit' => 0, 'margin_percent' => 0, 'orders' => 0];
+                $wildberriesData = $wildberriesStmt->fetch() ?: ['marketplace' => 'wildberries', 'revenue' => 0, 'profit' => 0, 'margin_percent' => 0, 'orders' => 0];
+                
+                echo json_encode([
+                    'success' => true, 
+                    'data' => [
+                        'ozon' => $ozonData,
+                        'wildberries' => $wildberriesData
+                    ]
+                ]);
+                break;
+
+            case 'daily_chart':
+                $whereClause = "WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+                
+                // Add marketplace filtering if specified
+                if ($marketplace) {
+                    if ($marketplace === 'ozon') {
+                        $whereClause .= " AND (fo.source LIKE '%ozon%' OR fo.source LIKE '%озон%' OR dp.sku_ozon IS NOT NULL)";
+                    } elseif ($marketplace === 'wildberries') {
+                        $whereClause .= " AND (fo.source LIKE '%wildberries%' OR fo.source LIKE '%wb%' OR fo.source LIKE '%вб%' OR dp.sku_wb IS NOT NULL)";
+                    }
+                }
+                
+                $sql = "
+                    SELECT 
+                        fo.order_date as metric_date,
+                        SUM(fo.price * fo.qty) as revenue,
+                        SUM((fo.price - COALESCE(fo.cost_price, fo.price * 0.7)) * fo.qty) as profit,
+                        ROUND(
+                            (SUM((fo.price - COALESCE(fo.cost_price, fo.price * 0.7)) * fo.qty) / SUM(fo.price * fo.qty)) * 100, 2
+                        ) as margin_percent
+                    FROM fact_orders fo
+                    LEFT JOIN dim_products dp ON fo.product_id = dp.id
+                    {$whereClause}
+                    GROUP BY fo.order_date
+                    ORDER BY fo.order_date ASC
+                ";
+                $stmt = $pdo->query($sql);
+                $data = $stmt->fetchAll();
+                echo json_encode(['success' => true, 'data' => $data]);
+                break;
+
+            case 'top_products':
+                $limit = isset($_GET['limit']) ? max(1, min(20, (int)$_GET['limit'])) : 10;
+                $whereClause = "WHERE fo.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+                
+                // Add marketplace filtering if specified
+                if ($marketplace) {
+                    if ($marketplace === 'ozon') {
+                        $whereClause .= " AND (fo.source LIKE '%ozon%' OR fo.source LIKE '%озон%' OR dp.sku_ozon IS NOT NULL)";
+                    } elseif ($marketplace === 'wildberries') {
+                        $whereClause .= " AND (fo.source LIKE '%wildberries%' OR fo.source LIKE '%wb%' OR fo.source LIKE '%вб%' OR dp.sku_wb IS NOT NULL)";
+                    }
+                }
+                
+                $sql = "
+                    SELECT 
+                        CASE 
+                            WHEN ? = 'ozon' THEN COALESCE(dp.sku_ozon, fo.sku)
+                            WHEN ? = 'wildberries' THEN COALESCE(dp.sku_wb, fo.sku)
+                            ELSE fo.sku
+                        END as sku,
+                        dp.product_name,
+                        SUM(fo.price * fo.qty) as revenue,
+                        SUM(fo.qty) as total_qty,
+                        COUNT(DISTINCT fo.order_id) as orders
+                    FROM fact_orders fo
+                    LEFT JOIN dim_products dp ON fo.product_id = dp.id
+                    {$whereClause}
+                    GROUP BY 
+                        CASE 
+                            WHEN ? = 'ozon' THEN COALESCE(dp.sku_ozon, fo.sku)
+                            WHEN ? = 'wildberries' THEN COALESCE(dp.sku_wb, fo.sku)
+                            ELSE fo.sku
+                        END,
+                        dp.product_name
+                    ORDER BY revenue DESC
+                    LIMIT ?
+                ";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([$marketplace, $marketplace, $marketplace, $marketplace, $limit]);
+                $data = $stmt->fetchAll();
                 echo json_encode(['success' => true, 'data' => $data]);
                 break;
 
@@ -421,6 +553,7 @@ if (isset($_GET['api'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZUZ Dashboard - Рекомендации и маржинальность</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="src/css/marketplace-separation.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .badge-status { font-size: 0.85rem; }
@@ -437,14 +570,32 @@ if (isset($_GET['api'])) {
     <!-- Демо-хедер -->
     <div class="demo-header">
         <div class="container">
-            <h1>📊 ZUZ Dashboard</h1>
-            <p>Система рекомендаций по пополнению запасов, анализ оборачиваемости и маржинальности</p>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>📊 ZUZ Dashboard</h1>
+                    <p>Система рекомендаций по пополнению запасов, анализ оборачиваемости и маржинальности</p>
+                </div>
+                
+                <!-- View Toggle Controls -->
+                <div class="view-controls">
+                    <div class="btn-group" role="group" aria-label="Режим просмотра">
+                        <button type="button" class="btn btn-outline-light" id="combined-view-btn" data-view="combined">
+                            Общий вид
+                        </button>
+                        <button type="button" class="btn btn-outline-light" id="separated-view-btn" data-view="separated">
+                            По маркетплейсам
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="container-fluid" id="demo-app">
         
-        <!-- KPI Маржинальности -->
+        <!-- Combined View Container -->
+        <div id="combined-view" class="view-container">
+            <!-- KPI Маржинальности -->
         <div class="row mb-4" id="margin-kpi">
             <div class="col-12">
                 <h4 class="mb-3">💰 Маржинальность (30 дней)</h4>
@@ -869,6 +1020,148 @@ if (isset($_GET['api'])) {
             </small>
         </div>
     </div>
+    </div> <!-- End Combined View -->
+    
+    <!-- Separated View Container -->
+    <div id="separated-view" class="view-container" style="display: none;">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="marketplace-section" data-marketplace="ozon">
+                    <div class="marketplace-header">
+                        <h3>📦 Ozon</h3>
+                    </div>
+                    <div class="marketplace-content">
+                        <!-- KPI Cards -->
+                        <div class="row mb-3" id="ozon-kpi">
+                            <div class="col-6">
+                                <div class="card text-center border-success">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Выручка</div>
+                                        <div class="h6 text-success" id="ozon-revenue">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card text-center border-primary">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Прибыль</div>
+                                        <div class="h6 text-primary" id="ozon-profit">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card text-center border-info">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Маржа</div>
+                                        <div class="h6 text-info" id="ozon-margin">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card text-center border-warning">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Заказы</div>
+                                        <div class="h6 text-warning" id="ozon-orders">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6>📈 Динамика продаж</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="ozonChart" height="200"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Top Products -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6>🏆 Топ товары</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="ozon-top-products">
+                                    <p class="text-muted small">Загрузка...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="marketplace-section" data-marketplace="wildberries">
+                    <div class="marketplace-header">
+                        <h3>🛍️ Wildberries</h3>
+                    </div>
+                    <div class="marketplace-content">
+                        <!-- KPI Cards -->
+                        <div class="row mb-3" id="wildberries-kpi">
+                            <div class="col-6">
+                                <div class="card text-center border-success">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Выручка</div>
+                                        <div class="h6 text-success" id="wildberries-revenue">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card text-center border-primary">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Прибыль</div>
+                                        <div class="h6 text-primary" id="wildberries-profit">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card text-center border-info">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Маржа</div>
+                                        <div class="h6 text-info" id="wildberries-margin">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card text-center border-warning">
+                                    <div class="card-body p-2">
+                                        <div class="small text-muted">Заказы</div>
+                                        <div class="h6 text-warning" id="wildberries-orders">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6>📈 Динамика продаж</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="wildberriesChart" height="200"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Top Products -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6>🏆 Топ товары</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="wildberries-top-products">
+                                    <p class="text-muted small">Загрузка...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> <!-- End Separated View -->
+    
+    </div> <!-- End demo-app -->
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -1457,7 +1750,163 @@ if (isset($_GET['api'])) {
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => new DemoDashboard());
+        // Marketplace View Toggle Functionality
+        class MarketplaceViewToggle {
+            constructor() {
+                this.combinedViewBtn = document.getElementById('combined-view-btn');
+                this.separatedViewBtn = document.getElementById('separated-view-btn');
+                this.combinedView = document.getElementById('combined-view');
+                this.separatedView = document.getElementById('separated-view');
+                
+                this.init();
+            }
+            
+            init() {
+                // Load saved view preference
+                const savedView = localStorage.getItem('demo-dashboard-view-mode') || 'combined';
+                this.switchView(savedView);
+                
+                // Event listeners
+                this.combinedViewBtn.addEventListener('click', () => this.switchView('combined'));
+                this.separatedViewBtn.addEventListener('click', () => this.switchView('separated'));
+            }
+            
+            switchView(mode) {
+                if (mode === 'separated') {
+                    this.combinedView.style.display = 'none';
+                    this.separatedView.style.display = 'block';
+                    this.combinedViewBtn.classList.remove('active');
+                    this.separatedViewBtn.classList.add('active');
+                    this.loadMarketplaceData();
+                } else {
+                    this.combinedView.style.display = 'block';
+                    this.separatedView.style.display = 'none';
+                    this.combinedViewBtn.classList.add('active');
+                    this.separatedViewBtn.classList.remove('active');
+                }
+                localStorage.setItem('demo-dashboard-view-mode', mode);
+            }
+            
+            async loadMarketplaceData() {
+                await Promise.all([
+                    this.loadMarketplaceSpecificData('ozon'),
+                    this.loadMarketplaceSpecificData('wildberries')
+                ]);
+            }
+            
+            async loadMarketplaceSpecificData(marketplace) {
+                try {
+                    // Load KPI data
+                    const kpiResponse = await fetch(`?api=margin_summary&marketplace=${marketplace}`);
+                    const kpiData = await kpiResponse.json();
+                    if (kpiData.success) {
+                        this.renderMarketplaceKPI(marketplace, kpiData.data);
+                    }
+                    
+                    // Load chart data
+                    const chartResponse = await fetch(`?api=daily_chart&marketplace=${marketplace}`);
+                    const chartData = await chartResponse.json();
+                    if (chartData.success) {
+                        this.renderMarketplaceChart(marketplace, chartData.data);
+                    }
+                    
+                    // Load top products
+                    const productsResponse = await fetch(`?api=top_products&marketplace=${marketplace}&limit=5`);
+                    const productsData = await productsResponse.json();
+                    if (productsData.success) {
+                        this.renderMarketplaceTopProducts(marketplace, productsData.data);
+                    }
+                } catch (error) {
+                    console.error(`Error loading ${marketplace} data:`, error);
+                }
+            }
+            
+            renderMarketplaceKPI(marketplace, data) {
+                const revenue = data.total_revenue || 0;
+                const profit = data.total_profit || 0;
+                const marginPercent = data.margin_percent || 0;
+                const orders = data.orders || 0;
+                
+                document.getElementById(`${marketplace}-revenue`).textContent = 
+                    revenue.toLocaleString('ru-RU') + ' ₽';
+                document.getElementById(`${marketplace}-profit`).textContent = 
+                    profit.toLocaleString('ru-RU') + ' ₽';
+                document.getElementById(`${marketplace}-margin`).textContent = 
+                    marginPercent + '%';
+                document.getElementById(`${marketplace}-orders`).textContent = orders;
+            }
+            
+            renderMarketplaceChart(marketplace, data) {
+                const ctx = document.getElementById(`${marketplace}Chart`);
+                if (!ctx) return;
+                
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(item => new Date(item.metric_date).toLocaleDateString('ru-RU')),
+                        datasets: [{
+                            label: 'Выручка',
+                            data: data.map(item => item.revenue || 0),
+                            borderColor: marketplace === 'ozon' ? '#0066cc' : '#8b00ff',
+                            backgroundColor: marketplace === 'ozon' ? 'rgba(0, 102, 204, 0.1)' : 'rgba(139, 0, 255, 0.1)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Выручка (₽)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+            
+            renderMarketplaceTopProducts(marketplace, data) {
+                const container = document.getElementById(`${marketplace}-top-products`);
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<p class="text-muted small">Нет данных</p>';
+                    return;
+                }
+                
+                const html = data.map((product, index) => `
+                    <div class="d-flex justify-content-between align-items-center py-1 ${index < data.length - 1 ? 'border-bottom' : ''}">
+                        <div class="small">
+                            <div class="fw-bold">${product.sku || 'N/A'}</div>
+                            <div class="text-muted" style="font-size: 0.8em;">${(product.product_name || '').substring(0, 30)}...</div>
+                        </div>
+                        <div class="text-end small">
+                            <div class="fw-bold text-success">${(product.revenue || 0).toLocaleString('ru-RU')} ₽</div>
+                            <div class="text-muted">${product.orders || 0} заказов</div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = html;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new DemoDashboard();
+            new MarketplaceViewToggle();
+        });
     </script>
+    
+    <!-- Include marketplace JavaScript components -->
+    <script src="src/js/MarketplaceViewToggle.js"></script>
+    <script src="src/js/MarketplaceDataRenderer.js"></script>
+    <script src="src/js/MarketplaceDashboardIntegration.js"></script>
 </body>
 </html>

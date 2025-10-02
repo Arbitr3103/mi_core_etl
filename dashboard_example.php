@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Дашборд маржинальности</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="src/css/marketplace-separation.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .kpi-card {
@@ -40,15 +41,25 @@
     $startDate = $_GET['start_date'] ?? date('Y-m-01');
     $endDate = $_GET['end_date'] ?? date('Y-m-d');
     $clientId = $_GET['client_id'] ?? null;
+    $marketplace = $_GET['marketplace'] ?? null;
     
     // Получаем данные
     try {
-        $kpiMetrics = $api->getKPIMetrics($startDate, $endDate, $clientId);
-        $chartData = $api->getDailyMarginChart($startDate, $endDate, $clientId);
+        if ($marketplace) {
+            $kpiMetrics = $api->getMarginSummaryByMarketplace($startDate, $endDate, $marketplace, $clientId);
+            $chartData = $api->getDailyMarginChartByMarketplace($startDate, $endDate, $marketplace, $clientId);
+            $topProducts = $api->getTopProductsByMarketplace($marketplace, 10, $startDate, $endDate);
+        } else {
+            $kpiMetrics = $api->getKPIMetrics($startDate, $endDate, $clientId);
+            $chartData = $api->getDailyMarginChart($startDate, $endDate, $clientId);
+            $topProducts = [];
+        }
+        
         $costBreakdown = $api->getCostBreakdown($startDate, $endDate, $clientId);
         $topDays = $api->getTopMarginDays($startDate, $endDate, 5, $clientId);
         $clients = $api->getClients();
         $trend = $api->getMarginTrend($startDate, $endDate, $clientId);
+        $marketplaceComparison = $api->getMarketplaceComparison($startDate, $endDate, $clientId);
         
         $dataLoaded = true;
     } catch (Exception $e) {
@@ -60,7 +71,21 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-12">
-                <h1 class="mb-4">📊 Дашборд маржинальности</h1>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1>📊 Дашборд маржинальности</h1>
+                    
+                    <!-- View Toggle Controls -->
+                    <div class="view-controls">
+                        <div class="btn-group" role="group" aria-label="Режим просмотра">
+                            <button type="button" class="btn btn-outline-primary" id="combined-view-btn" data-view="combined">
+                                Общий вид
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="separated-view-btn" data-view="separated">
+                                По маркетплейсам
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 
                 <?php if (!$dataLoaded): ?>
                     <div class="alert alert-danger">
@@ -80,7 +105,7 @@
                                 <label class="form-label">Конечная дата</label>
                                 <input type="date" class="form-control" name="end_date" value="<?= $endDate ?>">
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label class="form-label">Клиент</label>
                                 <select class="form-control" name="client_id">
                                     <option value="">Все клиенты</option>
@@ -91,6 +116,14 @@
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Маркетплейс</label>
+                                <select class="form-control" name="marketplace">
+                                    <option value="">Все маркетплейсы</option>
+                                    <option value="ozon" <?= $marketplace == 'ozon' ? 'selected' : '' ?>>Ozon</option>
+                                    <option value="wildberries" <?= $marketplace == 'wildberries' ? 'selected' : '' ?>>Wildberries</option>
+                                </select>
+                            </div>
                             <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
                                 <button type="submit" class="btn btn-primary d-block w-100">Применить</button>
@@ -99,23 +132,25 @@
                     </div>
                 </div>
                 
-                <!-- KPI метрики -->
-                <div class="row mb-4">
-                    <?php foreach ($kpiMetrics as $key => $metric): ?>
-                        <div class="col-md-2">
-                            <div class="card kpi-card">
-                                <div class="card-body text-center">
-                                    <div class="kpi-value">
-                                        <?= $metric['value'] ?>
-                                        <?= $metric['format'] === 'percent' ? '%' : '' ?>
-                                        <?= $metric['format'] === 'currency' ? ' ₽' : '' ?>
+                <!-- Combined View Container -->
+                <div id="combined-view" class="view-container">
+                    <!-- KPI метрики -->
+                    <div class="row mb-4">
+                        <?php foreach ($kpiMetrics as $key => $metric): ?>
+                            <div class="col-md-2">
+                                <div class="card kpi-card">
+                                    <div class="card-body text-center">
+                                        <div class="kpi-value">
+                                            <?= $metric['value'] ?>
+                                            <?= $metric['format'] === 'percent' ? '%' : '' ?>
+                                            <?= $metric['format'] === 'currency' ? ' ₽' : '' ?>
+                                        </div>
+                                        <div class="small"><?= $metric['label'] ?></div>
                                     </div>
-                                    <div class="small"><?= $metric['label'] ?></div>
                                 </div>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+                        <?php endforeach; ?>
+                    </div>
                 
                 <!-- Тренд маржинальности -->
                 <div class="row mb-4">
@@ -243,6 +278,73 @@
                         </div>
                     </div>
                 </div>
+                </div> <!-- End Combined View -->
+                
+                <!-- Separated View Container -->
+                <div id="separated-view" class="view-container" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="marketplace-section" data-marketplace="ozon">
+                                <div class="marketplace-header">
+                                    <h3>📦 Ozon</h3>
+                                </div>
+                                <div class="marketplace-content">
+                                    <div class="row mb-3" id="ozon-kpi">
+                                        <!-- KPI cards will be populated by JavaScript -->
+                                    </div>
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h6>📈 Динамика продаж</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <canvas id="ozonChart" height="200"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6>🏆 Топ товары</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="ozon-top-products">
+                                                <!-- Top products will be populated by JavaScript -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="marketplace-section" data-marketplace="wildberries">
+                                <div class="marketplace-header">
+                                    <h3>🛍️ Wildberries</h3>
+                                </div>
+                                <div class="marketplace-content">
+                                    <div class="row mb-3" id="wildberries-kpi">
+                                        <!-- KPI cards will be populated by JavaScript -->
+                                    </div>
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h6>📈 Динамика продаж</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <canvas id="wildberriesChart" height="200"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6>🏆 Топ товары</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="wildberries-top-products">
+                                                <!-- Top products will be populated by JavaScript -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- End Separated View -->
                 
                 <?php endif; ?>
             </div>
@@ -370,6 +472,197 @@
             }
         });
         <?php endif; ?>
+        
+        // Initialize marketplace view toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const combinedViewBtn = document.getElementById('combined-view-btn');
+            const separatedViewBtn = document.getElementById('separated-view-btn');
+            const combinedView = document.getElementById('combined-view');
+            const separatedView = document.getElementById('separated-view');
+            
+            // Load saved view preference
+            const savedView = localStorage.getItem('dashboard-view-mode') || 'combined';
+            
+            function switchView(mode) {
+                if (mode === 'separated') {
+                    combinedView.style.display = 'none';
+                    separatedView.style.display = 'block';
+                    combinedViewBtn.classList.remove('active');
+                    separatedViewBtn.classList.add('active');
+                    loadMarketplaceData();
+                } else {
+                    combinedView.style.display = 'block';
+                    separatedView.style.display = 'none';
+                    combinedViewBtn.classList.add('active');
+                    separatedViewBtn.classList.remove('active');
+                }
+                localStorage.setItem('dashboard-view-mode', mode);
+            }
+            
+            // Set initial view
+            switchView(savedView);
+            
+            // Event listeners
+            combinedViewBtn.addEventListener('click', () => switchView('combined'));
+            separatedViewBtn.addEventListener('click', () => switchView('separated'));
+            
+            function loadMarketplaceData() {
+                const startDate = '<?= $startDate ?>';
+                const endDate = '<?= $endDate ?>';
+                const clientId = '<?= $clientId ?>';
+                
+                // Load data for both marketplaces
+                loadMarketplaceSpecificData('ozon', startDate, endDate, clientId);
+                loadMarketplaceSpecificData('wildberries', startDate, endDate, clientId);
+            }
+            
+            function loadMarketplaceSpecificData(marketplace, startDate, endDate, clientId) {
+                const params = new URLSearchParams({
+                    start_date: startDate,
+                    end_date: endDate,
+                    marketplace: marketplace
+                });
+                if (clientId) params.append('client_id', clientId);
+                
+                // Load KPI data
+                fetch(`margin_api.php?action=margin_summary&${params}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            renderMarketplaceKPI(marketplace, data.data);
+                        }
+                    })
+                    .catch(error => console.error(`Error loading ${marketplace} KPI:`, error));
+                
+                // Load chart data
+                fetch(`margin_api.php?action=daily_chart&${params}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            renderMarketplaceChart(marketplace, data.data);
+                        }
+                    })
+                    .catch(error => console.error(`Error loading ${marketplace} chart:`, error));
+                
+                // Load top products
+                fetch(`margin_api.php?action=top_products&${params}&limit=5`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            renderMarketplaceTopProducts(marketplace, data.data);
+                        }
+                    })
+                    .catch(error => console.error(`Error loading ${marketplace} top products:`, error));
+            }
+            
+            function renderMarketplaceKPI(marketplace, data) {
+                const container = document.getElementById(`${marketplace}-kpi`);
+                const revenue = data.revenue || 0;
+                const profit = data.profit || 0;
+                const marginPercent = data.margin_percent || 0;
+                const orders = data.orders || 0;
+                
+                container.innerHTML = `
+                    <div class="col-6">
+                        <div class="card text-center border-success">
+                            <div class="card-body p-2">
+                                <div class="small text-muted">Выручка</div>
+                                <div class="h6 text-success">${revenue.toLocaleString('ru-RU')} ₽</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center border-primary">
+                            <div class="card-body p-2">
+                                <div class="small text-muted">Прибыль</div>
+                                <div class="h6 text-primary">${profit.toLocaleString('ru-RU')} ₽</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center border-info">
+                            <div class="card-body p-2">
+                                <div class="small text-muted">Маржа</div>
+                                <div class="h6 text-info">${marginPercent}%</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center border-warning">
+                            <div class="card-body p-2">
+                                <div class="small text-muted">Заказы</div>
+                                <div class="h6 text-warning">${orders}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            function renderMarketplaceChart(marketplace, data) {
+                const ctx = document.getElementById(`${marketplace}Chart`).getContext('2d');
+                
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(item => new Date(item.metric_date).toLocaleDateString('ru-RU')),
+                        datasets: [{
+                            label: 'Выручка',
+                            data: data.map(item => item.revenue || 0),
+                            borderColor: marketplace === 'ozon' ? '#0066cc' : '#8b00ff',
+                            backgroundColor: marketplace === 'ozon' ? 'rgba(0, 102, 204, 0.1)' : 'rgba(139, 0, 255, 0.1)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Выручка (₽)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function renderMarketplaceTopProducts(marketplace, data) {
+                const container = document.getElementById(`${marketplace}-top-products`);
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<p class="text-muted small">Нет данных</p>';
+                    return;
+                }
+                
+                const html = data.map((product, index) => `
+                    <div class="d-flex justify-content-between align-items-center py-1 ${index < data.length - 1 ? 'border-bottom' : ''}">
+                        <div class="small">
+                            <div class="fw-bold">${product.sku || 'N/A'}</div>
+                            <div class="text-muted" style="font-size: 0.8em;">${(product.product_name || '').substring(0, 30)}...</div>
+                        </div>
+                        <div class="text-end small">
+                            <div class="fw-bold text-success">${(product.revenue || 0).toLocaleString('ru-RU')} ₽</div>
+                            <div class="text-muted">${product.orders || 0} заказов</div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = html;
+            }
+        });
     </script>
+    
+    <!-- Include marketplace JavaScript components -->
+    <script src="src/js/MarketplaceViewToggle.js"></script>
+    <script src="src/js/MarketplaceDataRenderer.js"></script>
+    <script src="src/js/MarketplaceDashboardIntegration.js"></script>
 </body>
 </html>

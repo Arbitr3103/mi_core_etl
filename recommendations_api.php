@@ -38,11 +38,19 @@ try {
     $api = new RecommendationsAPI($DB_HOST, $DB_NAME, $DB_USER, $DB_PASS);
 
     $action = $_GET['action'] ?? 'summary';
+    $marketplace = !empty($_GET['marketplace']) ? trim($_GET['marketplace']) : null;
 
     switch ($action) {
         case 'summary':
-            $data = $api->getSummary();
-            echo json_encode(['success' => true, 'data' => $data]);
+            $data = $api->getSummary($marketplace);
+            echo json_encode([
+                'success' => true, 
+                'data' => $data,
+                'meta' => [
+                    'marketplace' => $marketplace,
+                    'generated_at' => date('Y-m-d H:i:s')
+                ]
+            ]);
             break;
 
         case 'list':
@@ -51,7 +59,7 @@ try {
             $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
             $search = $_GET['search'] ?? null;
 
-            $rows = $api->getRecommendations($status, $limit, $offset, $search);
+            $rows = $api->getRecommendations($status, $limit, $offset, $search, $marketplace);
             echo json_encode([
                 'success' => true,
                 'data' => $rows,
@@ -59,15 +67,23 @@ try {
                     'limit' => $limit,
                     'offset' => $offset,
                     'count' => count($rows)
+                ],
+                'meta' => [
+                    'marketplace' => $marketplace,
+                    'generated_at' => date('Y-m-d H:i:s')
                 ]
             ]);
             break;
 
         case 'export':
             $status = $_GET['status'] ?? null;
-            $csv = $api->exportCSV($status);
+            $csv = $api->exportCSV($status, $marketplace);
             header('Content-Type: text/csv; charset=utf-8');
-            header('Content-Disposition: attachment; filename="stock_recommendations.csv"');
+            $filename = 'stock_recommendations';
+            if ($marketplace) {
+                $filename .= '_' . $marketplace;
+            }
+            header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
             echo $csv;
             break;
 
@@ -75,8 +91,33 @@ try {
             // Топ по оборачиваемости из v_product_turnover_30d
             $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
             $order = $_GET['order'] ?? 'ASC';
-            $rows = $api->getTurnoverTop($limit, $order);
-            echo json_encode(['success' => true, 'data' => $rows]);
+            $rows = $api->getTurnoverTop($limit, $order, $marketplace);
+            echo json_encode([
+                'success' => true, 
+                'data' => $rows,
+                'meta' => [
+                    'marketplace' => $marketplace,
+                    'generated_at' => date('Y-m-d H:i:s')
+                ]
+            ]);
+            break;
+            
+        case 'separated_view':
+            // Get recommendations for both marketplaces in a single response
+            $status = $_GET['status'] ?? null;
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+            $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
+            $search = $_GET['search'] ?? null;
+            
+            $data = $api->getRecommendationsByMarketplace($status, $limit, $offset, $search);
+            echo json_encode([
+                'success' => true,
+                'data' => $data,
+                'meta' => [
+                    'view_mode' => 'separated',
+                    'generated_at' => date('Y-m-d H:i:s')
+                ]
+            ]);
             break;
 
         default:

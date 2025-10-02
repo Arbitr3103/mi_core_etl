@@ -1,0 +1,297 @@
+<!-- Marketplace Separated View Template -->
+<!-- This template provides the HTML structure for side-by-side marketplace display -->
+
+<div id="separated-view" class="view-container" style="display: none">
+  <div class="row">
+    <!-- Ozon Marketplace Section -->
+    <div class="col-md-6">
+      <div class="marketplace-section" data-marketplace="ozon">
+        <h3>
+          <i class="fas fa-box"></i>
+          Ozon
+        </h3>
+        <div class="marketplace-content">
+          <!-- KPI Cards for Ozon -->
+          <div class="marketplace-kpi-grid" id="ozon-kpi-grid">
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Выручка</div>
+              <div class="kpi-value" id="ozon-revenue">-</div>
+              <div class="kpi-change neutral" id="ozon-revenue-change"></div>
+            </div>
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Заказы</div>
+              <div class="kpi-value" id="ozon-orders">-</div>
+              <div class="kpi-change neutral" id="ozon-orders-change"></div>
+            </div>
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Маржа %</div>
+              <div class="kpi-value" id="ozon-margin">-</div>
+              <div class="kpi-change neutral" id="ozon-margin-change"></div>
+            </div>
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Средний чек</div>
+              <div class="kpi-value" id="ozon-avg-order">-</div>
+              <div class="kpi-change neutral" id="ozon-avg-order-change"></div>
+            </div>
+          </div>
+
+          <!-- Daily Chart for Ozon -->
+          <div class="marketplace-chart-container">
+            <div class="chart-title">Динамика продаж по дням</div>
+            <canvas id="ozon-daily-chart" width="400" height="200"></canvas>
+            <div
+              class="chart-loading"
+              id="ozon-chart-loading"
+              style="display: none"
+            >
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <div>Загрузка графика...</div>
+            </div>
+            <div
+              class="chart-error"
+              id="ozon-chart-error"
+              style="display: none"
+            >
+              <i class="fas fa-exclamation-triangle"></i>
+              <div>Ошибка загрузки данных графика</div>
+            </div>
+          </div>
+
+          <!-- Top Products for Ozon -->
+          <div class="marketplace-products-table">
+            <h5 class="mb-3">Топ товаров</h5>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Название</th>
+                    <th>Выручка</th>
+                    <th>Маржа %</th>
+                    <th>Заказы</th>
+                  </tr>
+                </thead>
+                <tbody id="ozon-products-tbody">
+                  <tr>
+                    <td colspan="5" class="text-center text-muted">
+                      <div class="marketplace-loading">
+                        <div
+                          class="spinner-border spinner-border-sm"
+                          role="status"
+                        ></div>
+                        <span>Загрузка данных...</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Empty State for Ozon -->
+          <div
+            class="marketplace-empty-state"
+            id="ozon-empty-state"
+            style="display: none"
+          >
+            <i class="fas fa-inbox"></i>
+            <h4>Нет данных по Ozon</h4>
+            <p>За выбранный период данные по маркетплейсу Ozon отсутствуют</p>
+          </div>
+
+          <!-- Error State for Ozon -->
+          <div
+            class="marketplace-error"
+            id="ozon-error-state"
+            style="display: none"
+          >
+            <div class="error-title">Ошибка загрузки данных Ozon</div>
+            <div class="error-message" id="ozon-error-message"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wildberries Marketplace Section -->
+    <div class="col-md-6">
+      <div class="marketplace-section" data-marketplace="wildberries">
+        <h3>
+          <i class="fas fa-shopping-bag"></i>
+          Wildberries
+        </h3>
+        <div class="marketplace-content">
+          <!-- KPI Cards for Wildberries -->
+          <div class="marketplace-kpi-grid" id="wildberries-kpi-grid">
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Выручка</div>
+              <div class="kpi-value" id="wildberries-revenue">-</div>
+              <div
+                class="kpi-change neutral"
+                id="wildberries-revenue-change"
+              ></div>
+            </div>
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Заказы</div>
+              <div class="kpi-value" id="wildberries-orders">-</div>
+              <div
+                class="kpi-change neutral"
+                id="wildberries-orders-change"
+              ></div>
+            </div>
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Маржа %</div>
+              <div class="kpi-value" id="wildberries-margin">-</div>
+              <div
+                class="kpi-change neutral"
+                id="wildberries-margin-change"
+              ></div>
+            </div>
+            <div class="marketplace-kpi-card">
+              <div class="kpi-label">Средний чек</div>
+              <div class="kpi-value" id="wildberries-avg-order">-</div>
+              <div
+                class="kpi-change neutral"
+                id="wildberries-avg-order-change"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Daily Chart for Wildberries -->
+          <div class="marketplace-chart-container">
+            <div class="chart-title">Динамика продаж по дням</div>
+            <canvas
+              id="wildberries-daily-chart"
+              width="400"
+              height="200"
+            ></canvas>
+            <div
+              class="chart-loading"
+              id="wildberries-chart-loading"
+              style="display: none"
+            >
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <div>Загрузка графика...</div>
+            </div>
+            <div
+              class="chart-error"
+              id="wildberries-chart-error"
+              style="display: none"
+            >
+              <i class="fas fa-exclamation-triangle"></i>
+              <div>Ошибка загрузки данных графика</div>
+            </div>
+          </div>
+
+          <!-- Top Products for Wildberries -->
+          <div class="marketplace-products-table">
+            <h5 class="mb-3">Топ товаров</h5>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Название</th>
+                    <th>Выручка</th>
+                    <th>Маржа %</th>
+                    <th>Заказы</th>
+                  </tr>
+                </thead>
+                <tbody id="wildberries-products-tbody">
+                  <tr>
+                    <td colspan="5" class="text-center text-muted">
+                      <div class="marketplace-loading">
+                        <div
+                          class="spinner-border spinner-border-sm"
+                          role="status"
+                        ></div>
+                        <span>Загрузка данных...</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Empty State for Wildberries -->
+          <div
+            class="marketplace-empty-state"
+            id="wildberries-empty-state"
+            style="display: none"
+          >
+            <i class="fas fa-inbox"></i>
+            <h4>Нет данных по Wildberries</h4>
+            <p>
+              За выбранный период данные по маркетплейсу Wildberries отсутствуют
+            </p>
+          </div>
+
+          <!-- Error State for Wildberries -->
+          <div
+            class="marketplace-error"
+            id="wildberries-error-state"
+            style="display: none"
+          >
+            <div class="error-title">Ошибка загрузки данных Wildberries</div>
+            <div class="error-message" id="wildberries-error-message"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison Section (Optional) -->
+  <div
+    class="row mt-4"
+    id="marketplace-comparison-section"
+    style="display: none"
+  >
+    <div class="col-12">
+      <div class="marketplace-section">
+        <h3>
+          <i class="fas fa-balance-scale"></i>
+          Сравнение маркетплейсов
+        </h3>
+        <div class="marketplace-content">
+          <div class="marketplace-chart-container">
+            <div class="chart-title">Сравнительная динамика</div>
+            <canvas id="comparison-chart" width="800" height="300"></canvas>
+            <div
+              class="chart-loading"
+              id="comparison-chart-loading"
+              style="display: none"
+            >
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <div>Загрузка сравнительного графика...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript Template for Dynamic Content -->
+<script type="text/template" id="product-row-template">
+  <tr>
+      <td>
+          <span class="product-sku">{{sku}}</span>
+      </td>
+      <td>{{name}}</td>
+      <td class="product-revenue">{{revenue}}</td>
+      <td class="product-margin {{margin_class}}">{{margin}}%</td>
+      <td>{{orders}}</td>
+  </tr>
+</script>
+
+<script type="text/template" id="empty-products-template">
+  <tr>
+      <td colspan="5" class="text-center text-muted">
+          <div class="marketplace-empty-state">
+              <i class="fas fa-search"></i>
+              <h5>Товары не найдены</h5>
+              <p>За выбранный период товары не найдены</p>
+          </div>
+      </td>
+  </tr>
+</script>

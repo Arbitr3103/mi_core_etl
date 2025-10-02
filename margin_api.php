@@ -18,14 +18,25 @@ try {
     $startDate = $_GET['start_date'] ?? date('Y-m-01');
     $endDate = $_GET['end_date'] ?? date('Y-m-d');
     $clientId = !empty($_GET['client_id']) ? (int)$_GET['client_id'] : null;
+    $marketplace = !empty($_GET['marketplace']) ? trim($_GET['marketplace']) : null;
     
     switch ($action) {
         case 'summary':
-            $data = $api->getMarginSummary($startDate, $endDate, $clientId);
+            // Use marketplace-specific method if marketplace parameter is provided
+            if ($marketplace !== null) {
+                $data = $api->getMarginSummaryByMarketplace($startDate, $endDate, $marketplace, $clientId);
+            } else {
+                $data = $api->getMarginSummary($startDate, $endDate, $clientId);
+            }
             break;
             
         case 'chart':
-            $data = $api->getDailyMarginChart($startDate, $endDate, $clientId);
+            // Use marketplace-specific method if marketplace parameter is provided
+            if ($marketplace !== null) {
+                $data = $api->getDailyMarginChartByMarketplace($startDate, $endDate, $marketplace, $clientId);
+            } else {
+                $data = $api->getDailyMarginChart($startDate, $endDate, $clientId);
+            }
             break;
             
         case 'breakdown':
@@ -39,6 +50,12 @@ try {
         case 'top_days':
             $limit = (int)($_GET['limit'] ?? 10);
             $data = $api->getTopMarginDays($startDate, $endDate, $limit, $clientId);
+            break;
+            
+        case 'top_products':
+            $limit = (int)($_GET['limit'] ?? 10);
+            $minRevenue = (float)($_GET['min_revenue'] ?? 0);
+            $data = $api->getTopProductsByMarketplace($marketplace, $limit, $startDate, $endDate, $minRevenue, $clientId);
             break;
             
         case 'clients':
@@ -68,6 +85,69 @@ try {
             
         case 'weekday_stats':
             $data = $api->getWeekdayStats($startDate, $endDate, $clientId);
+            break;
+            
+        case 'marketplace_comparison':
+            $data = $api->getMarketplaceComparison($startDate, $endDate, $clientId);
+            break;
+            
+        case 'separated_view':
+            // Get data for both marketplaces in a single response
+            try {
+                $ozonData = [
+                    'summary' => $api->getMarginSummaryByMarketplace($startDate, $endDate, 'ozon', $clientId),
+                    'chart' => $api->getDailyMarginChartByMarketplace($startDate, $endDate, 'ozon', $clientId),
+                    'top_products' => $api->getTopProductsByMarketplace('ozon', 10, $startDate, $endDate, 0, $clientId)
+                ];
+            } catch (Exception $e) {
+                $ozonData = [
+                    'error' => 'Данные по Ozon недоступны: ' . $e->getMessage(),
+                    'summary' => null,
+                    'chart' => [],
+                    'top_products' => []
+                ];
+            }
+            
+            try {
+                $wildberriesData = [
+                    'summary' => $api->getMarginSummaryByMarketplace($startDate, $endDate, 'wildberries', $clientId),
+                    'chart' => $api->getDailyMarginChartByMarketplace($startDate, $endDate, 'wildberries', $clientId),
+                    'top_products' => $api->getTopProductsByMarketplace('wildberries', 10, $startDate, $endDate, 0, $clientId)
+                ];
+            } catch (Exception $e) {
+                $wildberriesData = [
+                    'error' => 'Данные по Wildberries недоступны: ' . $e->getMessage(),
+                    'summary' => null,
+                    'chart' => [],
+                    'top_products' => []
+                ];
+            }
+            
+            $data = [
+                'view_mode' => 'separated',
+                'marketplaces' => [
+                    'ozon' => [
+                        'name' => 'Ozon',
+                        'display_name' => '📦 Ozon',
+                        'data' => $ozonData
+                    ],
+                    'wildberries' => [
+                        'name' => 'Wildberries',
+                        'display_name' => '🛍️ Wildberries',
+                        'data' => $wildberriesData
+                    ]
+                ],
+                'comparison' => null
+            ];
+            
+            // Add comparison data if both marketplaces have data
+            if (!isset($ozonData['error']) && !isset($wildberriesData['error'])) {
+                try {
+                    $data['comparison'] = $api->getMarketplaceComparison($startDate, $endDate, $clientId);
+                } catch (Exception $e) {
+                    $data['comparison'] = ['error' => 'Сравнение недоступно: ' . $e->getMessage()];
+                }
+            }
             break;
             
         case 'export':
@@ -123,6 +203,7 @@ try {
             'start_date' => $startDate,
             'end_date' => $endDate,
             'client_id' => $clientId,
+            'marketplace' => $marketplace,
             'generated_at' => date('Y-m-d H:i:s')
         ]
     ]);
