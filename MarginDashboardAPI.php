@@ -418,6 +418,55 @@ class MarginDashboardAPI {
     // ==================== MARKETPLACE-SPECIFIC METHODS ====================
     
     /**
+     * Получить статистику по маркетплейсам с использованием dim_sources
+     */
+    public function getMarketplaceStats($startDate, $endDate, $clientId = null) {
+        $this->log("Getting marketplace stats: $startDate to $endDate, client: $clientId");
+        
+        $sql = "
+            SELECT 
+                s.code as marketplace_code,
+                s.name as marketplace_name,
+                COUNT(DISTINCT fo.order_id) as total_orders,
+                ROUND(SUM(fo.qty * fo.price), 2) as total_revenue,
+                ROUND(SUM(fo.qty * COALESCE(fo.cost_price, 0)), 2) as total_cogs,
+                ROUND(SUM(fo.qty * fo.price * 0.15), 2) as total_commission,
+                ROUND(SUM(fo.qty * fo.price * 0.05), 2) as total_shipping,
+                ROUND(SUM(fo.qty * fo.price * 0.02), 2) as total_other_expenses,
+                ROUND(SUM(fo.qty * fo.price) - SUM(fo.qty * COALESCE(fo.cost_price, 0)) - SUM(fo.qty * fo.price * 0.22), 2) as total_profit,
+                CASE 
+                    WHEN SUM(fo.qty * fo.price) > 0 
+                    THEN ROUND((SUM(fo.qty * fo.price) - SUM(fo.qty * COALESCE(fo.cost_price, 0)) - SUM(fo.qty * fo.price * 0.22)) * 100.0 / SUM(fo.qty * fo.price), 2)
+                    ELSE NULL 
+                END as avg_margin_percent,
+                ROUND(AVG(fo.price), 2) as avg_price
+            FROM fact_orders fo
+            JOIN dim_sources s ON fo.source_id = s.id
+            WHERE fo.order_date BETWEEN :start_date AND :end_date
+        ";
+        
+        $params = [
+            'start_date' => $startDate,
+            'end_date' => $endDate
+        ];
+        
+        if ($clientId) {
+            $sql .= " AND fo.client_id = :client_id";
+            $params['client_id'] = $clientId;
+        }
+        
+        $sql .= " GROUP BY s.id, s.code, s.name ORDER BY total_revenue DESC";
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        
+        $result = $stmt->fetchAll();
+        $this->log("Marketplace stats result: " . json_encode($result));
+        
+        return $result;
+    }
+
+    /**
      * Получить общую статистику маржинальности за период с фильтрацией по маркетплейсу
      * 
      * @param string $startDate - начальная дата периода (YYYY-MM-DD)
@@ -461,10 +510,9 @@ class MarginDashboardAPI {
                     MAX(fo.order_date) as period_end,
                     COUNT(DISTINCT DATE(fo.order_date)) as days_count
                 FROM fact_orders fo
-                JOIN sources s ON fo.source_id = s.id
+                JOIN dim_sources s ON fo.source_id = s.id
                 LEFT JOIN dim_products dp ON fo.product_id = dp.id
                 WHERE fo.order_date BETWEEN :start_date AND :end_date
-                    AND fo.transaction_type IN ('продажа', 'sale', 'order')
             ";
             
             $params = [
