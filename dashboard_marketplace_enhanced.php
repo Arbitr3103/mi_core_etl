@@ -42,12 +42,20 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>🚀 Дашборд маржинальности по маркетплейсам</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { background: #f8f9fa; }
+        body { 
+            background: #f8f9fa; 
+            overflow-x: hidden;
+        }
+        
+        .container-fluid {
+            max-width: 100vw;
+            overflow-x: hidden;
+        }
         
         .kpi-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -137,15 +145,85 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         
         .bg-purple { background-color: #8b00ff !important; }
         
+        .table-responsive {
+            max-width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
         .table th { 
             font-weight: 600; 
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             white-space: nowrap;
+            min-width: 80px;
         }
         
         .table td {
             vertical-align: middle;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            min-width: 80px;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+            
+            .card {
+                margin-bottom: 15px;
+            }
+            
+            .table th, .table td {
+                font-size: 0.7rem;
+                padding: 0.4rem;
+                min-width: 60px;
+            }
+            
+            .kpi-card .kpi-value {
+                font-size: 1.5rem;
+            }
+            
+            .kpi-card .small {
+                font-size: 0.7rem;
+            }
+            
+            .btn-group {
+                flex-wrap: wrap;
+            }
+            
+            .btn-group .btn {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.8rem;
+            }
+            
+            .modal-dialog {
+                margin: 0.5rem;
+            }
+        }
+        
+        /* Extra small devices */
+        @media (max-width: 576px) {
+            .table th, .table td {
+                font-size: 0.65rem;
+                padding: 0.3rem;
+                min-width: 50px;
+            }
+            
+            .row.g-3 > * {
+                margin-bottom: 0.5rem;
+            }
+            
+            .view-toggle .btn-group {
+                width: 100%;
+            }
+            
+            .view-toggle .btn {
+                flex: 1;
+                font-size: 0.7rem;
+            }
         }
         
         .table code {
