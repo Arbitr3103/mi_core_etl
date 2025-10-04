@@ -8,11 +8,11 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
-require_once 'InventoryAPI.php';
+require_once 'InventoryAPI_Fixed.php';
 
 try {
     // Подключение к базе данных
-    $api = new InventoryAPI('localhost', 'mi_core_db', 'mi_core_user', 'secure_password_123');
+    $api = new InventoryAPI_Fixed('localhost', 'mi_core_db', 'mi_core_user', 'secure_password_123');
     
     $action = $_GET['action'] ?? 'inventory';
     
