@@ -134,6 +134,72 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         .metric-badge.positive { background: #d4edda; color: #155724; }
         .metric-badge.negative { background: #f8d7da; color: #721c24; }
         .metric-badge.neutral { background: #e2e3e5; color: #383d41; }
+        
+        .bg-purple { background-color: #8b00ff !important; }
+        
+        .table th { 
+            font-weight: 600; 
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        
+        .table td {
+            vertical-align: middle;
+            font-size: 0.9rem;
+        }
+        
+        .table code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .spinner-border {
+            color: #007bff;
+        }
+        
+        .nav-tabs .nav-link {
+            font-weight: 500;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        
+        .sortable:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .sort-icon {
+            font-size: 0.8rem;
+            margin-left: 5px;
+        }
+        
+        .inventory-row:hover {
+            background-color: rgba(0, 123, 255, 0.1);
+        }
+        
+        .modal-body .card {
+            border: 1px solid #e9ecef;
+        }
+        
+        .modal-body .table-sm td {
+            padding: 0.25rem 0.5rem;
+            border: none;
+        }
+        
+        .modal-body .table-sm td:first-child {
+            width: 40%;
+        }
     </style>
 </head>
 <body>
@@ -152,6 +218,9 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                             
                             <input type="radio" class="btn-check" name="viewMode" id="separated" value="separated" <?= $viewMode === 'separated' ? 'checked' : '' ?>>
                             <label class="btn btn-outline-primary" for="separated">🏪 По маркетплейсам</label>
+                            
+                            <input type="radio" class="btn-check" name="viewMode" id="inventory" value="inventory" <?= $viewMode === 'inventory' ? 'checked' : '' ?>>
+                            <label class="btn btn-outline-primary" for="inventory">📦 Остатки товаров</label>
                         </div>
                     </div>
                 </div>
@@ -304,6 +373,135 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory View -->
+        <div id="inventoryView" style="display: <?= $viewMode === 'inventory' ? 'block' : 'none' ?>">
+            <!-- Inventory Filters -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">🏪 Маркетплейс:</label>
+                            <select id="inventoryMarketplace" class="form-control">
+                                <option value="">Все маркетплейсы</option>
+                                <option value="Ozon">📦 Ozon</option>
+                                <option value="Wildberries">🛍️ Wildberries</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">🏭 Склад:</label>
+                            <select id="inventoryWarehouse" class="form-control">
+                                <option value="">Все склады</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">⚠️ Уровень остатков:</label>
+                            <select id="inventoryStockLevel" class="form-control">
+                                <option value="">Все уровни</option>
+                                <option value="critical">🔴 Критические (≤5)</option>
+                                <option value="low">🟡 Низкие (≤20)</option>
+                                <option value="medium">🟠 Средние (≤50)</option>
+                                <option value="good">🟢 Хорошие (>50)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">🔍 Поиск:</label>
+                            <input type="text" id="inventorySearch" class="form-control" placeholder="SKU или название товара">
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <button type="button" id="applyInventoryFilters" class="btn btn-primary">🔍 Применить фильтры</button>
+                            <button type="button" id="resetInventoryFilters" class="btn btn-outline-secondary">🔄 Сбросить</button>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button type="button" id="exportInventoryCSV" class="btn btn-success">📤 Экспорт CSV</button>
+                            <button type="button" id="refreshInventory" class="btn btn-outline-primary">🔄 Обновить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Summary KPI -->
+            <div id="inventorySummaryKPI" class="row mb-4">
+                <!-- KPI cards will be loaded here -->
+            </div>
+
+            <!-- Inventory Tabs -->
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" id="inventoryTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="all-inventory-tab" data-bs-toggle="tab" data-bs-target="#all-inventory" type="button" role="tab">
+                                📋 Все остатки
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="ozon-inventory-tab" data-bs-toggle="tab" data-bs-target="#ozon-inventory" type="button" role="tab">
+                                📦 Ozon
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="wb-inventory-tab" data-bs-toggle="tab" data-bs-target="#wb-inventory" type="button" role="tab">
+                                🛍️ Wildberries
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="critical-inventory-tab" data-bs-toggle="tab" data-bs-target="#critical-inventory" type="button" role="tab">
+                                ⚠️ Критические остатки
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="inventoryTabContent">
+                        <!-- All Inventory Tab -->
+                        <div class="tab-pane fade show active" id="all-inventory" role="tabpanel">
+                            <div id="allInventoryTable">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Загрузка...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Ozon Inventory Tab -->
+                        <div class="tab-pane fade" id="ozon-inventory" role="tabpanel">
+                            <div id="ozonInventoryTable">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Загрузка...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Wildberries Inventory Tab -->
+                        <div class="tab-pane fade" id="wb-inventory" role="tabpanel">
+                            <div id="wbInventoryTable">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Загрузка...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Critical Inventory Tab -->
+                        <div class="tab-pane fade" id="critical-inventory" role="tabpanel">
+                            <div id="criticalInventoryTable">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Загрузка...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -475,6 +673,24 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         </div>
     </div>
 
+    <!-- Product Detail Modal -->
+    <div class="modal fade" id="productDetailModal" tabindex="-1" aria-labelledby="productDetailModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="productDetailModalLabel">📦 Детали товара</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="productDetailContent">
+                    <!-- Content will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // View toggle functionality
@@ -482,17 +698,548 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             radio.addEventListener('change', function() {
                 const combinedView = document.getElementById('combinedView');
                 const separatedView = document.getElementById('separatedView');
+                const inventoryView = document.getElementById('inventoryView');
                 const viewInput = document.getElementById('viewInput');
                 
+                // Hide all views
+                combinedView.style.display = 'none';
+                separatedView.style.display = 'none';
+                inventoryView.style.display = 'none';
+                
+                // Show selected view
                 if (this.value === 'separated') {
-                    combinedView.style.display = 'none';
                     separatedView.style.display = 'block';
+                } else if (this.value === 'inventory') {
+                    inventoryView.style.display = 'block';
+                    loadInventoryData();
                 } else {
                     combinedView.style.display = 'block';
-                    separatedView.style.display = 'none';
                 }
                 
                 viewInput.value = this.value;
+            });
+        });
+
+        // Inventory functionality
+        let currentInventoryFilters = {};
+        
+        function loadInventoryData() {
+            loadInventorySummary();
+            loadWarehouses();
+            loadInventoryTable('all');
+        }
+        
+        function loadInventorySummary() {
+            fetch('inventory_api_endpoint.php?action=summary')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderInventorySummaryKPI(data.data);
+                    }
+                })
+                .catch(error => console.error('Error loading inventory summary:', error));
+        }
+        
+        function renderInventorySummaryKPI(summaryData) {
+            const container = document.getElementById('inventorySummaryKPI');
+            
+            let totalProducts = 0;
+            let totalQuantity = 0;
+            let totalValue = 0;
+            let criticalItems = 0;
+            
+            summaryData.forEach(item => {
+                totalProducts += parseInt(item.total_products);
+                totalQuantity += parseInt(item.total_quantity);
+                totalValue += parseFloat(item.total_inventory_value);
+                criticalItems += parseInt(item.critical_items);
+            });
+            
+            container.innerHTML = `
+                <div class="col-md-3">
+                    <div class="kpi-card">
+                        <div class="card-body text-center">
+                            <div class="kpi-value">${totalProducts.toLocaleString()}</div>
+                            <div class="small">📦 Всего товаров</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="kpi-card">
+                        <div class="card-body text-center">
+                            <div class="kpi-value">${totalQuantity.toLocaleString()}</div>
+                            <div class="small">📊 Общее количество</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="kpi-card">
+                        <div class="card-body text-center">
+                            <div class="kpi-value">${totalValue.toLocaleString()} ₽</div>
+                            <div class="small">💰 Стоимость остатков</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="kpi-card ${criticalItems > 0 ? 'bg-danger' : ''}">
+                        <div class="card-body text-center">
+                            <div class="kpi-value">${criticalItems}</div>
+                            <div class="small">⚠️ Критические остатки</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function loadWarehouses(marketplace = '') {
+            const url = marketplace ? `inventory_api_endpoint.php?action=warehouses&marketplace=${marketplace}` : 'inventory_api_endpoint.php?action=warehouses';
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const warehouseSelect = document.getElementById('inventoryWarehouse');
+                        warehouseSelect.innerHTML = '<option value="">Все склады</option>';
+                        
+                        data.data.forEach(warehouse => {
+                            warehouseSelect.innerHTML += `<option value="${warehouse}">${warehouse}</option>`;
+                        });
+                    }
+                })
+                .catch(error => console.error('Error loading warehouses:', error));
+        }
+        
+        function loadInventoryTable(type, page = 1) {
+            const filters = getCurrentInventoryFilters();
+            let marketplace = '';
+            let containerId = '';
+            
+            switch(type) {
+                case 'ozon':
+                    marketplace = 'Ozon';
+                    containerId = 'ozonInventoryTable';
+                    break;
+                case 'wb':
+                    marketplace = 'Wildberries';
+                    containerId = 'wbInventoryTable';
+                    break;
+                case 'critical':
+                    containerId = 'criticalInventoryTable';
+                    break;
+                default:
+                    containerId = 'allInventoryTable';
+            }
+            
+            const params = new URLSearchParams({
+                action: type === 'critical' ? 'critical_stock' : 'inventory',
+                page: page,
+                limit: 50,
+                ...filters
+            });
+            
+            if (marketplace) {
+                params.append('marketplace', marketplace);
+            }
+            
+            fetch(`inventory_api_endpoint.php?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderInventoryTable(data, containerId, type, page);
+                    }
+                })
+                .catch(error => console.error('Error loading inventory table:', error));
+        }
+        
+        function getCurrentInventoryFilters() {
+            return {
+                marketplace: document.getElementById('inventoryMarketplace').value,
+                warehouse: document.getElementById('inventoryWarehouse').value,
+                stock_level: document.getElementById('inventoryStockLevel').value,
+                search: document.getElementById('inventorySearch').value
+            };
+        }
+        
+        function renderInventoryTable(data, containerId, type, currentPage) {
+            const container = document.getElementById(containerId);
+            
+            if (type === 'critical') {
+                // Render critical stock table
+                let tableHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-hover sortable-table">
+                            <thead class="table-danger">
+                                <tr>
+                                    <th class="sortable" data-sort="product_name">
+                                        Товар <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="display_sku">
+                                        SKU <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="source">
+                                        Маркетплейс <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="warehouse_name">
+                                        Склад <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="quantity">
+                                        Остаток <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="reserved_quantity">
+                                        Зарезервировано <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="available_quantity">
+                                        Доступно <i class="sort-icon">↕️</i>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                data.data.forEach(item => {
+                    const stockBadge = getStockLevelBadge(item.quantity);
+                    tableHTML += `
+                        <tr>
+                            <td>
+                                <strong>${item.product_name || 'Товар #' + item.product_id}</strong>
+                            </td>
+                            <td><code>${item.display_sku}</code></td>
+                            <td><span class="badge bg-primary">${item.source}</span></td>
+                            <td>${item.warehouse_name}</td>
+                            <td>${stockBadge} ${item.quantity}</td>
+                            <td>${item.reserved_quantity}</td>
+                            <td><strong>${item.available_quantity}</strong></td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += '</tbody></table></div>';
+                container.innerHTML = tableHTML;
+            } else {
+                // Render regular inventory table
+                let tableHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-hover sortable-table">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th class="sortable" data-sort="product_name">
+                                        Товар <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="display_sku">
+                                        SKU <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="marketplace">
+                                        Маркетплейс <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="warehouse_name">
+                                        Склад <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="storage_type">
+                                        Тип хранения <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="quantity">
+                                        Остаток <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="reserved_quantity">
+                                        Зарезервировано <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="available_quantity">
+                                        Доступно <i class="sort-icon">↕️</i>
+                                    </th>
+                                    <th class="sortable" data-sort="inventory_value">
+                                        Стоимость <i class="sort-icon">↕️</i>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                data.data.forEach(item => {
+                    const stockBadge = getStockLevelBadge(item.quantity);
+                    const marketplaceBadge = item.marketplace === 'Ozon' ? 'bg-primary' : 'bg-purple';
+                    
+                    tableHTML += `
+                        <tr class="inventory-row" data-product='${JSON.stringify(item)}'>
+                            <td>
+                                <strong>${item.product_name || 'Товар #' + item.product_id}</strong>
+                                <br><small class="text-muted">ID: ${item.product_id}</small>
+                            </td>
+                            <td><code>${item.display_sku}</code></td>
+                            <td><span class="badge ${marketplaceBadge}">${item.marketplace}</span></td>
+                            <td>${item.warehouse_name}</td>
+                            <td><span class="badge bg-secondary">${item.storage_type}</span></td>
+                            <td>${stockBadge} ${item.quantity}</td>
+                            <td>${item.reserved_quantity}</td>
+                            <td><strong>${item.available_quantity}</strong></td>
+                            <td>
+                                ${parseFloat(item.inventory_value).toLocaleString()} ₽
+                                <br><small class="text-muted">${parseFloat(item.cost_price || 0).toLocaleString()} ₽/шт</small>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += '</tbody></table></div>';
+                
+                // Add pagination if available
+                if (data.pagination && data.pagination.pages > 1) {
+                    tableHTML += renderPagination(data.pagination, type);
+                }
+                
+                container.innerHTML = tableHTML;
+                
+                // Add click handlers for product rows
+                container.querySelectorAll('.inventory-row').forEach(row => {
+                    row.style.cursor = 'pointer';
+                    row.addEventListener('click', function() {
+                        const productData = JSON.parse(this.getAttribute('data-product'));
+                        showProductDetail(productData);
+                    });
+                });
+                
+                // Add sorting functionality
+                container.querySelectorAll('.sortable').forEach(header => {
+                    header.style.cursor = 'pointer';
+                    header.addEventListener('click', function() {
+                        const sortField = this.getAttribute('data-sort');
+                        sortTable(container.querySelector('tbody'), sortField);
+                        updateSortIcons(container, this);
+                    });
+                });
+            }
+        }
+        
+        function showProductDetail(product) {
+            const modalContent = document.getElementById('productDetailContent');
+            const modalTitle = document.getElementById('productDetailModalLabel');
+            
+            modalTitle.textContent = `📦 ${product.product_name || 'Товар #' + product.product_id}`;
+            
+            const stockLevel = getStockLevelText(product.quantity);
+            const lastUpdated = product.last_updated ? new Date(product.last_updated).toLocaleString('ru-RU') : 'Не указано';
+            
+            modalContent.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>📋 Основная информация</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>ID товара:</strong></td><td>${product.product_id}</td></tr>
+                            <tr><td><strong>Название:</strong></td><td>${product.product_name || 'Не указано'}</td></tr>
+                            <tr><td><strong>SKU:</strong></td><td><code>${product.display_sku}</code></td></tr>
+                            <tr><td><strong>SKU Ozon:</strong></td><td><code>${product.sku_ozon || 'Не указано'}</code></td></tr>
+                            <tr><td><strong>SKU WB:</strong></td><td><code>${product.sku_wb || 'Не указано'}</code></td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>🏪 Информация о складе</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Маркетплейс:</strong></td><td><span class="badge ${product.marketplace === 'Ozon' ? 'bg-primary' : 'bg-purple'}">${product.marketplace}</span></td></tr>
+                            <tr><td><strong>Склад:</strong></td><td>${product.warehouse_name}</td></tr>
+                            <tr><td><strong>Тип хранения:</strong></td><td><span class="badge bg-secondary">${product.storage_type}</span></td></tr>
+                            <tr><td><strong>Обновлено:</strong></td><td>${lastUpdated}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6>📊 Остатки</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div class="h4 text-primary">${product.quantity}</div>
+                                        <small>Всего</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="h4 text-warning">${product.reserved_quantity}</div>
+                                        <small>Зарезервировано</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="h4 text-success">${product.available_quantity}</div>
+                                        <small>Доступно</small>
+                                    </div>
+                                </div>
+                                <div class="mt-3 text-center">
+                                    <span class="badge ${getStockLevelBadgeClass(product.quantity)} fs-6">${stockLevel}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>💰 Стоимость</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="d-flex justify-content-between">
+                                            <span>Себестоимость за единицу:</span>
+                                            <strong>${parseFloat(product.cost_price || 0).toLocaleString()} ₽</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mt-2">
+                                            <span>Общая стоимость остатков:</span>
+                                            <strong class="text-success">${parseFloat(product.inventory_value).toLocaleString()} ₽</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const modal = new bootstrap.Modal(document.getElementById('productDetailModal'));
+            modal.show();
+        }
+        
+        function getStockLevelText(quantity) {
+            if (quantity <= 5) return 'Критический уровень';
+            if (quantity <= 20) return 'Низкий уровень';
+            if (quantity <= 50) return 'Средний уровень';
+            return 'Хороший уровень';
+        }
+        
+        function getStockLevelBadgeClass(quantity) {
+            if (quantity <= 5) return 'bg-danger';
+            if (quantity <= 20) return 'bg-warning';
+            if (quantity <= 50) return 'bg-info';
+            return 'bg-success';
+        }
+        
+        function sortTable(tbody, field) {
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            rows.sort((a, b) => {
+                const aData = JSON.parse(a.getAttribute('data-product'));
+                const bData = JSON.parse(b.getAttribute('data-product'));
+                
+                let aValue = aData[field];
+                let bValue = bData[field];
+                
+                // Handle numeric fields
+                if (['quantity', 'reserved_quantity', 'available_quantity', 'inventory_value', 'cost_price'].includes(field)) {
+                    aValue = parseFloat(aValue) || 0;
+                    bValue = parseFloat(bValue) || 0;
+                    return bValue - aValue; // Descending for numbers
+                }
+                
+                // Handle string fields
+                aValue = (aValue || '').toString().toLowerCase();
+                bValue = (bValue || '').toString().toLowerCase();
+                
+                return aValue.localeCompare(bValue);
+            });
+            
+            // Clear tbody and append sorted rows
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+        }
+        
+        function updateSortIcons(container, clickedHeader) {
+            // Reset all sort icons
+            container.querySelectorAll('.sort-icon').forEach(icon => {
+                icon.textContent = '↕️';
+            });
+            
+            // Update clicked header icon
+            const icon = clickedHeader.querySelector('.sort-icon');
+            icon.textContent = '🔽';
+        }
+        
+        function getStockLevelBadge(quantity) {
+            if (quantity <= 5) return '<span class="badge bg-danger">🔴</span>';
+            if (quantity <= 20) return '<span class="badge bg-warning">🟡</span>';
+            if (quantity <= 50) return '<span class="badge bg-info">🟠</span>';
+            return '<span class="badge bg-success">🟢</span>';
+        }
+        
+        function renderPagination(pagination, type) {
+            let paginationHTML = '<nav class="mt-3"><ul class="pagination justify-content-center">';
+            
+            // Previous button
+            if (pagination.page > 1) {
+                paginationHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadInventoryTable('${type}', ${pagination.page - 1})">Предыдущая</a></li>`;
+            }
+            
+            // Page numbers
+            const startPage = Math.max(1, pagination.page - 2);
+            const endPage = Math.min(pagination.pages, pagination.page + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const activeClass = i === pagination.page ? 'active' : '';
+                paginationHTML += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="loadInventoryTable('${type}', ${i})">${i}</a></li>`;
+            }
+            
+            // Next button
+            if (pagination.page < pagination.pages) {
+                paginationHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadInventoryTable('${type}', ${pagination.page + 1})">Следующая</a></li>`;
+            }
+            
+            paginationHTML += '</ul></nav>';
+            return paginationHTML;
+        }
+        
+        // Event listeners for inventory
+        document.addEventListener('DOMContentLoaded', function() {
+            // Apply filters button
+            document.getElementById('applyInventoryFilters')?.addEventListener('click', function() {
+                currentInventoryFilters = getCurrentInventoryFilters();
+                loadInventoryTable('all');
+                loadInventoryTable('ozon');
+                loadInventoryTable('wb');
+                loadInventoryTable('critical');
+            });
+            
+            // Reset filters button
+            document.getElementById('resetInventoryFilters')?.addEventListener('click', function() {
+                document.getElementById('inventoryMarketplace').value = '';
+                document.getElementById('inventoryWarehouse').value = '';
+                document.getElementById('inventoryStockLevel').value = '';
+                document.getElementById('inventorySearch').value = '';
+                currentInventoryFilters = {};
+                loadInventoryData();
+            });
+            
+            // Marketplace change - reload warehouses
+            document.getElementById('inventoryMarketplace')?.addEventListener('change', function() {
+                loadWarehouses(this.value);
+            });
+            
+            // Export CSV button
+            document.getElementById('exportInventoryCSV')?.addEventListener('click', function() {
+                const filters = getCurrentInventoryFilters();
+                const params = new URLSearchParams({
+                    action: 'export_csv',
+                    ...filters
+                });
+                
+                window.open(`inventory_api_endpoint.php?${params}`, '_blank');
+            });
+            
+            // Refresh button
+            document.getElementById('refreshInventory')?.addEventListener('click', function() {
+                loadInventoryData();
+            });
+            
+            // Tab change events
+            document.querySelectorAll('#inventoryTabs button[data-bs-toggle="tab"]').forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function(event) {
+                    const targetId = event.target.getAttribute('data-bs-target');
+                    
+                    switch(targetId) {
+                        case '#all-inventory':
+                            loadInventoryTable('all');
+                            break;
+                        case '#ozon-inventory':
+                            loadInventoryTable('ozon');
+                            break;
+                        case '#wb-inventory':
+                            loadInventoryTable('wb');
+                            break;
+                        case '#critical-inventory':
+                            loadInventoryTable('critical');
+                            break;
+                    }
+                });
             });
         });
 
