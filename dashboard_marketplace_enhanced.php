@@ -46,11 +46,11 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
     <title>🚀 Дашборд маржинальности по маркетплейсам</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="src/js/OzonFunnelChart.js"></script>
-    <script src="src/js/OzonAnalyticsIntegration.js"></script>
-    <script src="src/js/OzonDemographics.js"></script>
-    <script src="src/js/OzonExportManager.js"></script>
-    <script src="src/js/OzonSecurityIntegration.js"></script>
+    <script src="https://api.zavodprostavok.ru/js/OzonFunnelChart.js"></script>
+    <script src="https://api.zavodprostavok.ru/js/OzonAnalyticsIntegration.js"></script>
+    <script src="https://api.zavodprostavok.ru/js/OzonDemographics.js"></script>
+    <script src="https://api.zavodprostavok.ru/js/OzonExportManager.js"></script>
+    <script src="https://api.zavodprostavok.ru/js/OzonSecurityIntegration.js"></script>
     <style>
         body { 
             background: #f8f9fa; 
@@ -1667,7 +1667,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         
         function loadAnalyticsFilters() {
             // Load products for filter
-            fetch('src/api/ozon-analytics.php?action=products')
+            fetch('api/ozon-analytics.php?action=products')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1682,7 +1682,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 .catch(error => console.error('Error loading products:', error));
             
             // Load campaigns for filter
-            fetch('src/api/ozon-analytics.php?action=campaigns')
+            fetch('api/ozon-analytics.php?action=campaigns')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1710,7 +1710,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             const filters = getCurrentAnalyticsFilters();
             const params = new URLSearchParams(filters);
             
-            fetch(`src/api/ozon-analytics.php?action=campaigns-data&${params}`)
+            fetch(`api/ozon-analytics.php?action=campaigns-data&${params}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1822,7 +1822,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             // Initialize main Ozon Analytics integration
             if (typeof OzonAnalyticsIntegration !== 'undefined') {
                 window.ozonAnalytics = new OzonAnalyticsIntegration({
-                    apiBaseUrl: 'src/api/ozon-analytics.php',
+                    apiBaseUrl: 'api/ozon-analytics.php',
                     funnelChartContainer: 'funnelChart',
                     kpiContainer: 'analyticsKPI',
                     autoRefresh: false,
@@ -1843,7 +1843,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                     if (!ozonDemographics) {
                         ozonDemographics = new OzonDemographics({
                             containerId: 'demographicsContainer',
-                            apiBaseUrl: '/src/api/ozon-analytics.php',
+                            apiBaseUrl: 'api/ozon-analytics.php',
                             autoRefresh: false
                         });
                     }
@@ -1878,7 +1878,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 const filters = getCurrentAnalyticsFilters();
                 const params = new URLSearchParams(filters);
                 
-                fetch(`src/api/ozon-analytics.php?action=export&${params}`)
+                fetch(`api/ozon-analytics.php?action=export&${params}`)
                     .then(response => response.blob())
                     .then(blob => {
                         const url = window.URL.createObjectURL(blob);

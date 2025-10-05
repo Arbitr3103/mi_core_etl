@@ -1,0 +1,40 @@
+# Настройки для API endpoints
+RewriteEngine On
+
+# Разрешаем CORS для всех API endpoints
+Header always set Access-Control-Allow-Origin "*"
+Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+
+# Обработка OPTIONS запросов для CORS
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Настройки PHP
+php_value max_execution_time 30
+php_value memory_limit 128M
+php_value post_max_size 10M
+php_value upload_max_filesize 10M
+
+# Кэширование для статических ресурсов
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType application/json "access plus 5 minutes"
+</IfModule>
+
+# Безопасность
+<Files "*.php">
+    Order allow,deny
+    Allow from all
+</Files>
+
+# Запрет доступа к служебным файлам
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
+
+<Files "*.log">
+    Order allow,deny
+    Deny from all
+</Files>
