@@ -120,14 +120,11 @@ class OzonAnalyticsAPI {
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
             'metrics' => [
-                'hits_view_search',
-                'hits_view_pdp', 
-                'hits_tocart_search',
-                'hits_tocart_pdp',
+                'revenue',
                 'ordered_units',
-                'revenue'
+                'hits_view_pdp'
             ],
-            'dimension' => ['sku'],
+            // 'dimension' => ['sku'], // Временно убираем
             'sort' => [
                 [
                     'key' => 'hits_view_search',
@@ -139,6 +136,9 @@ class OzonAnalyticsAPI {
         
         try {
             $response = $this->makeRequest('POST', $url, $data, $headers);
+            
+            // ВРЕМЕННОЕ ЛОГИРОВАНИЕ для диагностики
+            error_log("OZON API RAW RESPONSE: " . json_encode($response));
             
             // Обрабатываем и нормализуем данные
             $processedData = $this->processFunnelData($response, $dateFrom, $dateTo, $filters);
