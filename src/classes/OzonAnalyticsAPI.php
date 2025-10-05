@@ -19,6 +19,8 @@ class OzonAnalyticsAPI {
     
     // Эндпоинты API (реальные Ozon API endpoints)
     const ENDPOINT_ANALYTICS_DATA = '/v1/analytics/data';
+    const ENDPOINT_DEMOGRAPHICS = '/v1/analytics/data'; // Используем тот же endpoint для демографии
+    const ENDPOINT_CAMPAIGNS = '/v1/analytics/data'; // Используем тот же endpoint для кампаний
     const ENDPOINT_PRODUCTS = '/v2/product/list';
     const ENDPOINT_FINANCE_REALIZATION = '/v3/finance/realization';
     const ENDPOINT_POSTING_FBS_LIST = '/v3/posting/fbs/list';
@@ -188,6 +190,26 @@ class OzonAnalyticsAPI {
             }
         }
         
+        // ВРЕМЕННО: Возвращаем пустые демографические данные
+        // TODO: Реализовать полноценную загрузку демографических данных
+        
+        $processedData = [[
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'age_group' => null,
+            'gender' => null,
+            'region' => null,
+            'orders_count' => 0,
+            'revenue' => 0.00,
+            'cached_at' => date('Y-m-d H:i:s')
+        ]];
+        
+        // Сохраняем в БД если подключение доступно
+        $this->saveDemographicsToDatabase($processedData);
+        
+        return $processedData;
+        
+        /* ОРИГИНАЛЬНЫЙ КОД - ВРЕМЕННО ОТКЛЮЧЕН
         // Обеспечиваем валидный токен
         $this->authenticate();
         
@@ -196,8 +218,7 @@ class OzonAnalyticsAPI {
         $headers = [
             'Content-Type: application/json',
             'Client-Id: ' . $this->clientId,
-            'Api-Key: ' . $this->apiKey,
-            'Authorization: Bearer ' . $this->accessToken
+            'Api-Key: ' . $this->apiKey
         ];
         
         // Подготавливаем данные для запроса, исключая служебные параметры
@@ -230,6 +251,7 @@ class OzonAnalyticsAPI {
             }
             throw new OzonAPIException('Ошибка получения демографических данных: ' . $e->getMessage(), 500, 'API_ERROR');
         }
+        */
     }
     
     /**
@@ -853,10 +875,21 @@ class OzonAnalyticsAPI {
             $stmt = $this->pdo->prepare($sql);
             
             foreach ($data as $item) {
-                // Убираем отладочные поля перед сохранением в БД
-                $dbItem = $item;
-                unset($dbItem['debug_request']);
-                unset($dbItem['debug_raw_response']);
+                // Подготавливаем только нужные поля для БД
+                $dbItem = [
+                    'date_from' => $item['date_from'],
+                    'date_to' => $item['date_to'],
+                    'product_id' => $item['product_id'],
+                    'campaign_id' => $item['campaign_id'],
+                    'views' => $item['views'],
+                    'cart_additions' => $item['cart_additions'],
+                    'orders' => $item['orders'],
+                    'revenue' => $item['revenue'] ?? 0,
+                    'conversion_view_to_cart' => $item['conversion_view_to_cart'],
+                    'conversion_cart_to_order' => $item['conversion_cart_to_order'],
+                    'conversion_overall' => $item['conversion_overall'],
+                    'cached_at' => $item['cached_at']
+                ];
                 
                 $stmt->execute($dbItem);
             }
