@@ -16,8 +16,8 @@ require_once 'src/classes/OzonAnalyticsAPI.php';
 function getDatabaseConnection() {
     $host = '127.0.0.1';
     $dbname = 'mi_core_db';
-    $username = 'ingest_user';
-    $password = 'xK9#mQ7$vN2@pL!rT4wY';
+    $username = 'mi_core_user';
+    $password = 'secure_password_123';
     
     try {
         $dsn = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";

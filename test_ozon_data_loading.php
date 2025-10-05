@@ -20,8 +20,8 @@ echo str_repeat("=", 50) . "\n\n";
 $dbConfig = [
     'host' => $_ENV['DB_HOST'] ?? '127.0.0.1',
     'dbname' => $_ENV['DB_NAME'] ?? 'mi_core_db', 
-    'username' => $_ENV['DB_USER'] ?? 'ingest_user',
-    'password' => $_ENV['DB_PASSWORD'] ?? 'xK9#mQ7$vN2@pL!rT4wY'
+    'username' => $_ENV['DB_USER'] ?? 'mi_core_user',
+    'password' => $_ENV['DB_PASSWORD'] ?? 'secure_password_123'
 ];
 
 try {

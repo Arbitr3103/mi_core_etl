@@ -20,10 +20,10 @@ echo str_repeat("=", 60) . "\n\n";
 echo "1️⃣ Проверка подключения к базе данных...\n";
 
 $dbConfig = [
-    'host' => $_ENV['DB_HOST'] ?? '127.0.0.1',
-    'dbname' => $_ENV['DB_NAME'] ?? 'mi_core_db',
-    'username' => $_ENV['DB_USER'] ?? 'ingest_user',
-    'password' => $_ENV['DB_PASSWORD'] ?? 'xK9#mQ7$vN2@pL!rT4wY'
+    'host' => 'localhost',
+    'dbname' => 'mi_core_db',
+    'username' => 'mi_core_user',
+    'password' => 'secure_password_123'
 ];
 
 try {
