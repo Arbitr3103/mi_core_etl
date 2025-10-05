@@ -524,10 +524,11 @@ class OzonAnalyticsAPI {
     private function processFunnelData($response, $dateFrom, $dateTo, $filters) {
         $processedData = [];
         
-        // Проверяем структуру ответа Ozon API
-        if (!isset($response['data']) || !is_array($response['data'])) {
+        // Проверяем структуру ответа Ozon API (может быть 'data' или 'result')
+        $dataArray = $response['data'] ?? $response['result'] ?? [];
+        
+        if (!is_array($dataArray) || empty($dataArray)) {
             // Если данных нет, возвращаем пустой массив с базовой структурой
-            if (empty($response['data'])) {
                 return [[
                     'date_from' => $dateFrom,
                     'date_to' => $dateTo,
@@ -546,8 +547,8 @@ class OzonAnalyticsAPI {
         }
         
         // Обрабатываем данные из ответа Ozon API
-        // Структура Ozon API: {"data": [{"dimensions": [{"id": "1750881567", "name": "Товар"}], "metrics": [4312240, 8945, 1234]}]}
-        foreach ($response['data'] as $item) {
+        // Структура Ozon API: {"result": [{"dimensions": [{"id": "1750881567", "name": "Товар"}], "metrics": [4312240, 8945, 1234]}]}
+        foreach ($dataArray as $item) {
             // Извлекаем product_id из dimensions
             $productId = null;
             if (isset($item['dimensions']) && is_array($item['dimensions'])) {
