@@ -1666,23 +1666,27 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         }
         
         function loadAnalyticsFilters() {
-            // Load products for filter
-            fetch('api/ozon-analytics.php?action=products')
+            // Load products for filter - using funnel-data to get product list
+            fetch('api/ozon-analytics.php?action=funnel-data&start_date=2025-09-01&end_date=2025-09-28')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         const productSelect = document.getElementById('analyticsProduct');
                         productSelect.innerHTML = '<option value="">Все товары</option>';
                         
-                        data.data.forEach(product => {
-                            productSelect.innerHTML += `<option value="${product.id}">${product.name}</option>`;
+                        // Extract unique products from funnel data
+                        const uniqueProducts = [...new Set(data.data.map(item => item.product_id))];
+                        uniqueProducts.forEach(productId => {
+                            if (productId) {
+                                productSelect.innerHTML += `<option value="${productId}">Товар ${productId}</option>`;
+                            }
                         });
                     }
                 })
                 .catch(error => console.error('Error loading products:', error));
             
             // Load campaigns for filter
-            fetch('api/ozon-analytics.php?action=campaigns')
+            fetch('api/ozon-analytics.php?action=campaigns&date_from=2025-09-01&date_to=2025-09-28')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1690,7 +1694,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                         campaignSelect.innerHTML = '<option value="">Все кампании</option>';
                         
                         data.data.forEach(campaign => {
-                            campaignSelect.innerHTML += `<option value="${campaign.id}">${campaign.name}</option>`;
+                            campaignSelect.innerHTML += `<option value="${campaign.campaign_id || campaign.id}">${campaign.campaign_name || campaign.name}</option>`;
                         });
                     }
                 })
@@ -1710,7 +1714,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             const filters = getCurrentAnalyticsFilters();
             const params = new URLSearchParams(filters);
             
-            fetch(`api/ozon-analytics.php?action=campaigns-data&${params}`)
+            fetch(`api/ozon-analytics.php?action=campaigns&${params}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1823,7 +1827,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             if (typeof OzonAnalyticsIntegration !== 'undefined') {
                 window.ozonAnalytics = new OzonAnalyticsIntegration({
                     apiBaseUrl: 'api/ozon-analytics.php',
-                    funnelChartContainer: 'funnelChart',
+                    funnelChartContainer: 'ozonFunnelChart',
                     kpiContainer: 'analyticsKPI',
                     autoRefresh: false,
                     refreshInterval: 300000 // 5 minutes
