@@ -1828,6 +1828,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 window.ozonAnalytics = new OzonAnalyticsIntegration({
                     apiBaseUrl: 'api/ozon-analytics.php',
                     funnelChartContainer: 'ozonFunnelChart',
+                    demographicsContainer: 'demographicsContainer',
                     kpiContainer: 'analyticsKPI',
                     autoRefresh: false,
                     refreshInterval: 300000 // 5 minutes

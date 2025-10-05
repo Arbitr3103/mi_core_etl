@@ -2,8 +2,15 @@
  * OzonAnalyticsIntegration - Основной класс интеграции с Ozon Analytics
  */
 class OzonAnalyticsIntegration {
-  constructor() {
-    this.apiBaseUrl = "/api/ozon-analytics.php";
+  constructor(options = {}) {
+    this.apiBaseUrl = options.apiBaseUrl || "/api/ozon-analytics.php";
+    this.funnelChartContainer =
+      options.funnelChartContainer || "ozon-funnel-chart";
+    this.demographicsContainer =
+      options.demographicsContainer || "ozon-demographics";
+    this.kpiContainer = options.kpiContainer || "analyticsKPI";
+    this.autoRefresh = options.autoRefresh || false;
+    this.refreshInterval = options.refreshInterval || 300000;
     this.funnelChart = null;
     this.demographics = null;
     this.isLoading = false;
@@ -32,7 +39,7 @@ class OzonAnalyticsIntegration {
    */
   initFunnelChart() {
     if (typeof OzonFunnelChart !== "undefined") {
-      this.funnelChart = new OzonFunnelChart("ozon-funnel-chart");
+      this.funnelChart = new OzonFunnelChart(this.funnelChartContainer);
       this.funnelChart.init();
     } else {
       console.warn("OzonFunnelChart not available");
@@ -44,7 +51,7 @@ class OzonAnalyticsIntegration {
    */
   initDemographics() {
     if (typeof OzonDemographics !== "undefined") {
-      this.demographics = new OzonDemographics("ozon-demographics");
+      this.demographics = new OzonDemographics(this.demographicsContainer);
       this.demographics.init();
     } else {
       console.warn("OzonDemographics not available");
