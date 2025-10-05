@@ -7,6 +7,7 @@ echo "🧪 Тестирование реального Ozon API\n";
 echo "==================================\n\n";
 
 // Подключаем классы
+require_once 'src/classes/OzonDataCache.php';
 require_once 'src/classes/OzonAnalyticsAPI.php';
 
 try {
