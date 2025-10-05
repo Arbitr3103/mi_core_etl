@@ -171,9 +171,9 @@ try {
                 sendError('Метод не поддерживается', 405);
             }
             
-            // Get and validate parameters
-            $dateFrom = $_GET['date_from'] ?? '';
-            $dateTo = $_GET['date_to'] ?? '';
+            // Get and validate parameters (поддерживаем оба формата)
+            $dateFrom = $_GET['date_from'] ?? $_GET['start_date'] ?? '';
+            $dateTo = $_GET['date_to'] ?? $_GET['end_date'] ?? '';
             $productId = $_GET['product_id'] ?? null;
             $campaignId = $_GET['campaign_id'] ?? null;
             $useCache = isset($_GET['use_cache']) ? (bool)$_GET['use_cache'] : true;
@@ -204,9 +204,9 @@ try {
                 sendError('Метод не поддерживается', 405);
             }
             
-            // Get and validate parameters
-            $dateFrom = $_GET['date_from'] ?? '';
-            $dateTo = $_GET['date_to'] ?? '';
+            // Get and validate parameters (поддерживаем оба формата)
+            $dateFrom = $_GET['date_from'] ?? $_GET['start_date'] ?? '';
+            $dateTo = $_GET['date_to'] ?? $_GET['end_date'] ?? '';
             $region = $_GET['region'] ?? null;
             $ageGroup = $_GET['age_group'] ?? null;
             $gender = $_GET['gender'] ?? null;
