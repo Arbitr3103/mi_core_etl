@@ -38,6 +38,10 @@ class OzonAnalyticsIntegration {
    * Инициализация графика воронки
    */
   initFunnelChart() {
+    console.log(
+      "Initializing funnel chart with container ID:",
+      this.funnelChartContainer
+    );
     if (typeof OzonFunnelChart !== "undefined") {
       this.funnelChart = new OzonFunnelChart(this.funnelChartContainer);
       this.funnelChart.init();
@@ -50,6 +54,10 @@ class OzonAnalyticsIntegration {
    * Инициализация демографических данных
    */
   initDemographics() {
+    console.log(
+      "Initializing demographics with container ID:",
+      this.demographicsContainer
+    );
     if (typeof OzonDemographics !== "undefined") {
       this.demographics = new OzonDemographics(this.demographicsContainer);
       this.demographics.init();
