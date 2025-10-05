@@ -1662,7 +1662,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             loadAnalyticsFilters();
             loadFunnelData();
             // Demographics data loading is now handled by the OzonDemographics component
-            loadCampaignsData();
+            // loadCampaignsData(); // ОТКЛЮЧЕНО - кампании недоступны в текущей версии API
         }
         
         function loadAnalyticsFilters() {
@@ -1685,7 +1685,8 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 })
                 .catch(error => console.error('Error loading products:', error));
             
-            // Load campaigns for filter
+            // Load campaigns for filter - ОТКЛЮЧЕНО (недоступно в API)
+            /*
             fetch('api/ozon-analytics.php?action=campaigns&date_from=2025-09-01&date_to=2025-09-28')
                 .then(response => response.json())
                 .then(data => {
@@ -1699,6 +1700,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                     }
                 })
                 .catch(error => console.error('Error loading campaigns:', error));
+            */
         }
         
         function loadFunnelData() {
@@ -1710,6 +1712,8 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         
         // Demographics data loading is now handled by the OzonDemographics component
         
+        // ОТКЛЮЧЕНО - кампании недоступны в текущей версии API
+        /*
         function loadCampaignsData() {
             const filters = getCurrentAnalyticsFilters();
             const params = new URLSearchParams(filters);
@@ -1723,6 +1727,7 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 })
                 .catch(error => console.error('Error loading campaigns data:', error));
         }
+        */
         
         function getCurrentAnalyticsFilters() {
             return {
@@ -1861,10 +1866,11 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             // Apply filters button
             document.getElementById('applyAnalyticsFilters')?.addEventListener('click', function() {
                 loadFunnelData();
-                if (ozonDemographics) {
-                    ozonDemographics.loadDemographicsData(true);
-                }
-                loadCampaignsData();
+                // Демография и кампании отключены - недоступны в API
+                // if (ozonDemographics) {
+                //     ozonDemographics.loadDemographicsData(true);
+                // }
+                // loadCampaignsData();
             });
             
             // Reset filters button
@@ -1875,10 +1881,11 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 document.getElementById('analyticsCampaign').value = '';
                 
                 loadFunnelData();
-                if (ozonDemographics) {
-                    ozonDemographics.loadDemographicsData(true);
-                }
-                loadCampaignsData();
+                // Демография и кампании отключены - недоступны в API
+                // if (ozonDemographics) {
+                //     ozonDemographics.loadDemographicsData(true);
+                // }
+                // loadCampaignsData();
             });
             
             // Export data button
@@ -1904,9 +1911,10 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             // Refresh button
             document.getElementById('refreshAnalytics')?.addEventListener('click', function() {
                 loadOzonAnalyticsData();
-                if (ozonDemographics) {
-                    ozonDemographics.loadDemographicsData(true);
-                }
+                // Демография отключена - недоступна в API
+                // if (ozonDemographics) {
+                //     ozonDemographics.loadDemographicsData(true);
+                // }
             });
         });
     </script>
