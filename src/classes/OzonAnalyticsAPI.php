@@ -18,8 +18,8 @@ class OzonAnalyticsAPI {
     const RATE_LIMIT_DELAY = 1; // секунда между запросами
     
     // Эндпоинты API (реальные Ozon API endpoints)
-    const ENDPOINT_PRODUCTS = '/v2/product/list';
     const ENDPOINT_ANALYTICS_DATA = '/v1/analytics/data';
+    const ENDPOINT_PRODUCTS = '/v2/product/list';
     const ENDPOINT_FINANCE_REALIZATION = '/v3/finance/realization';
     const ENDPOINT_POSTING_FBS_LIST = '/v3/posting/fbs/list';
     
@@ -104,26 +104,36 @@ class OzonAnalyticsAPI {
             }
         }
         
-        // Обеспечиваем валидный токен
+        // Обеспечиваем валидную аутентификацию
         $this->authenticate();
         
-        $url = self::API_BASE_URL . self::ENDPOINT_FUNNEL;
+        $url = self::API_BASE_URL . self::ENDPOINT_ANALYTICS_DATA;
         
         $headers = [
             'Content-Type: application/json',
             'Client-Id: ' . $this->clientId,
-            'Api-Key: ' . $this->apiKey,
-            'Authorization: Bearer ' . $this->accessToken
+            'Api-Key: ' . $this->apiKey
         ];
         
-        // Подготавливаем данные для запроса, исключая служебные параметры
-        $requestFilters = $filters;
-        unset($requestFilters['use_cache']);
-        
+        // Подготавливаем данные для запроса в формате Ozon API
         $data = [
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
-            'filters' => $requestFilters
+            'metrics' => [
+                'hits_view_search',
+                'hits_view_pdp', 
+                'hits_tocart_search',
+                'hits_tocart_pdp',
+                'ordered_units',
+                'revenue'
+            ],
+            'dimension' => ['sku'],
+            'sort' => [
+                [
+                    'key' => 'hits_view_search',
+                    'order' => 'DESC'
+                ]
+            ]
         ];
         
         try {
