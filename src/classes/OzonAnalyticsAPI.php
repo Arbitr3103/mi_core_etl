@@ -133,7 +133,8 @@ class OzonAnalyticsAPI {
                     'key' => 'hits_view_search',
                     'order' => 'DESC'
                 ]
-            ]
+            ],
+            'limit' => 1000
         ];
         
         try {
