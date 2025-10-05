@@ -129,8 +129,9 @@ class OzonFunnelChart {
    * Обновление статистики
    */
   updateStats(stats) {
-    const statsContainer = document.getElementById(this.containerId + "_stats");
-    if (!statsContainer) return;
+    // Обновляем метрики конверсии напрямую через классы
+    const conversionRates = document.querySelectorAll(".conversion-rate");
+    if (conversionRates.length < 3) return;
 
     const conversionViewToCart =
       stats.views > 0
@@ -143,45 +144,16 @@ class OzonFunnelChart {
     const conversionOverall =
       stats.views > 0 ? ((stats.orders / stats.views) * 100).toFixed(2) : 0;
 
-    statsContainer.innerHTML = `
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h5 class="card-title">Просмотры</h5>
-                            <h3 class="text-primary">${stats.views.toLocaleString()}</h3>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h5 class="card-title">В корзину</h5>
-                            <h3 class="text-warning">${stats.cart_additions.toLocaleString()}</h3>
-                            <small class="text-muted">${conversionViewToCart}% от просмотров</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h5 class="card-title">Заказы</h5>
-                            <h3 class="text-success">${stats.orders.toLocaleString()}</h3>
-                            <small class="text-muted">${conversionCartToOrder}% от корзины</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h5 class="card-title">Выручка</h5>
-                            <h3 class="text-info">${stats.revenue.toLocaleString()} ₽</h3>
-                            <small class="text-muted">${conversionOverall}% общая конверсия</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    // Обновляем метрики конверсии в существующих элементах
+    conversionRates[0].textContent = conversionViewToCart + "%";
+    conversionRates[1].textContent = conversionCartToOrder + "%";
+    conversionRates[2].textContent = conversionOverall + "%";
+
+    console.log("Conversion rates updated:", {
+      viewToCart: conversionViewToCart + "%",
+      cartToOrder: conversionCartToOrder + "%",
+      overall: conversionOverall + "%",
+    });
   }
 
   /**

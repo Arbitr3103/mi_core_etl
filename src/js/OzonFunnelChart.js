@@ -1,525 +1,189 @@
 /**
- * Ozon Funnel Chart Component
- *
- * Создает и управляет визуализацией воронки продаж Ozon с использованием Chart.js
- * Поддерживает отображение конверсий между этапами и обновление при изменении фильтров
- *
- * @version 1.0
- * @author Manhattan System
+ * OzonFunnelChart - Класс для отображения воронки продаж Ozon
  */
-
 class OzonFunnelChart {
-  constructor(containerId, options = {}) {
+  constructor(containerId) {
     this.containerId = containerId;
     this.container = document.getElementById(containerId);
     this.chart = null;
-    this.data = null;
-
-    // Default options
-    this.options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      showConversions: true,
-      showPercentages: true,
-      animationDuration: 800,
-      colors: {
-        views: "#0066cc",
-        cartAdditions: "#4CAF50",
-        orders: "#FF9800",
-        conversions: "#9C27B0",
-      },
-      ...options,
-    };
-
-    this.init();
+    this.data = [];
   }
 
   /**
-   * Initialize the chart container
+   * Инициализация графика
    */
   init() {
     if (!this.container) {
-      console.error(`Container with ID '${this.containerId}' not found`);
+      console.error("Container not found:", this.containerId);
       return;
     }
 
-    // Create canvas element if it doesn't exist
-    let canvas = this.container.querySelector("canvas");
-    if (!canvas) {
-      canvas = document.createElement("canvas");
-      canvas.id = this.containerId + "_canvas";
-      this.container.appendChild(canvas);
-    }
+    // Создаем canvas для Chart.js
+    this.container.innerHTML =
+      '<canvas id="' + this.containerId + '_canvas"></canvas>';
 
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
+    const canvas = document.getElementById(this.containerId + "_canvas");
+    const ctx = canvas.getContext("2d");
 
-    // Loading state is handled by OzonErrorHandler
+    // Инициализируем Chart.js
+    this.chart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Воронка продаж",
+            data: [],
+            backgroundColor: [
+              "rgba(54, 162, 235, 0.8)",
+              "rgba(255, 206, 86, 0.8)",
+              "rgba(75, 192, 192, 0.8)",
+            ],
+            borderColor: [
+              "rgba(54, 162, 235, 1)",
+              "rgba(255, 206, 86, 1)",
+              "rgba(75, 192, 192, 1)",
+            ],
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: "Воронка продаж Ozon",
+          },
+          legend: {
+            display: false,
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function (value) {
+                return value.toLocaleString();
+              },
+            },
+          },
+        },
+      },
+    });
+
+    console.log("OzonFunnelChart initialized");
   }
 
   /**
-   * Render the funnel chart with provided data
-   * @param {Object} data - Funnel data from API
+   * Обновление данных графика
    */
-  renderFunnel(data) {
-    if (!data || !this.ctx) {
-      console.error("Invalid data or canvas context");
+  updateData(data) {
+    if (!this.chart || !data || !Array.isArray(data)) {
+      console.error("Chart not initialized or invalid data");
       return;
     }
 
     this.data = data;
 
-    // Destroy existing chart
-    if (this.chart) {
-      this.chart.destroy();
-    }
+    // Агрегируем данные
+    let totalViews = 0;
+    let totalCartAdditions = 0;
+    let totalOrders = 0;
+    let totalRevenue = 0;
 
-    // Prepare chart data
-    const chartData = this.prepareChartData(data);
-
-    // Create new chart
-    this.chart = new Chart(this.ctx, {
-      type: "bar",
-      data: chartData,
-      options: this.getChartOptions(),
+    data.forEach((item) => {
+      totalViews += item.views || 0;
+      totalCartAdditions += item.cart_additions || 0;
+      totalOrders += item.orders || 0;
+      totalRevenue += item.revenue || 0;
     });
 
-    // Add conversion labels if enabled
-    if (this.options.showConversions) {
-      this.addConversionLabels(data);
-    }
-  }
-
-  /**
-   * Prepare data for Chart.js
-   * @param {Object} data - Raw funnel data
-   * @returns {Object} Chart.js compatible data
-   */
-  prepareChartData(data) {
-    const totals = data.totals || {};
-    const views = totals.views || 0;
-    const cartAdditions = totals.cart_additions || 0;
-    const orders = totals.orders || 0;
-
-    return {
-      labels: ["👁️ Просмотры", "🛒 В корзину", "📦 Заказы"],
-      datasets: [
-        {
-          label: "Количество",
-          data: [views, cartAdditions, orders],
-          backgroundColor: [
-            this.options.colors.views,
-            this.options.colors.cartAdditions,
-            this.options.colors.orders,
-          ],
-          borderColor: [
-            this.options.colors.views,
-            this.options.colors.cartAdditions,
-            this.options.colors.orders,
-          ],
-          borderWidth: 2,
-          borderRadius: 8,
-          borderSkipped: false,
-        },
-      ],
-    };
-  }
-
-  /**
-   * Get Chart.js options configuration
-   * @returns {Object} Chart options
-   */
-  getChartOptions() {
-    return {
-      responsive: this.options.responsive,
-      maintainAspectRatio: this.options.maintainAspectRatio,
-      animation: {
-        duration: this.options.animationDuration,
-        easing: "easeInOutQuart",
-      },
-      plugins: {
-        title: {
-          display: true,
-          text: "🔄 Воронка продаж Ozon",
-          font: {
-            size: 18,
-            weight: "bold",
-          },
-          padding: 20,
-        },
-        legend: {
-          display: false,
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              const value = context.parsed.y;
-              const percentage = this.calculateStagePercentage(
-                context.dataIndex,
-                value
-              );
-              return `${
-                context.label
-              }: ${value.toLocaleString()} (${percentage}%)`;
-            },
-          },
-        },
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: function (value) {
-              return value.toLocaleString();
-            },
-          },
-          title: {
-            display: true,
-            text: "Количество",
-          },
-        },
-        x: {
-          title: {
-            display: true,
-            text: "Этапы воронки",
-          },
-        },
-      },
-      onHover: (event, activeElements) => {
-        event.native.target.style.cursor =
-          activeElements.length > 0 ? "pointer" : "default";
-      },
-      onClick: (event, activeElements) => {
-        if (activeElements.length > 0) {
-          const dataIndex = activeElements[0].index;
-          this.onStageClick(dataIndex);
-        }
-      },
-    };
-  }
-
-  /**
-   * Calculate percentage for a specific stage
-   * @param {number} stageIndex - Stage index (0=views, 1=cart, 2=orders)
-   * @param {number} value - Stage value
-   * @returns {string} Percentage string
-   */
-  calculateStagePercentage(stageIndex, value) {
-    if (!this.data || !this.data.totals) return "0.0";
-
-    const totals = this.data.totals;
-    const views = totals.views || 0;
-
-    if (views === 0) return "0.0";
-
-    const percentage = (value / views) * 100;
-    return percentage.toFixed(1);
-  }
-
-  /**
-   * Add conversion rate labels between stages
-   * @param {Object} data - Funnel data
-   */
-  addConversionLabels(data) {
-    const totals = data.totals || {};
-    const conversionViewToCart = totals.conversion_view_to_cart || 0;
-    const conversionCartToOrder = totals.conversion_cart_to_order || 0;
-    const conversionOverall = totals.conversion_overall || 0;
-
-    // Create conversion labels container
-    let labelsContainer = this.container.querySelector(".conversion-labels");
-    if (!labelsContainer) {
-      labelsContainer = document.createElement("div");
-      labelsContainer.className = "conversion-labels mt-3";
-      this.container.appendChild(labelsContainer);
-    }
-
-    labelsContainer.innerHTML = `
-            <div class="row text-center">
-                <div class="col-md-4">
-                    <div class="conversion-metric">
-                        <div class="conversion-arrow">👁️ → 🛒</div>
-                        <div class="conversion-rate">${conversionViewToCart.toFixed(
-                          1
-                        )}%</div>
-                        <div class="conversion-label">Просмотры в корзину</div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="conversion-metric">
-                        <div class="conversion-arrow">🛒 → 📦</div>
-                        <div class="conversion-rate">${conversionCartToOrder.toFixed(
-                          1
-                        )}%</div>
-                        <div class="conversion-label">Корзина в заказ</div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="conversion-metric">
-                        <div class="conversion-arrow">👁️ → 📦</div>
-                        <div class="conversion-rate overall">${conversionOverall.toFixed(
-                          1
-                        )}%</div>
-                        <div class="conversion-label">Общая конверсия</div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-    // Add CSS styles if not already present
-    this.addConversionStyles();
-  }
-
-  /**
-   * Add CSS styles for conversion labels
-   */
-  addConversionStyles() {
-    const styleId = "ozon-funnel-styles";
-    if (document.getElementById(styleId)) return;
-
-    const style = document.createElement("style");
-    style.id = styleId;
-    style.textContent = `
-            .conversion-labels {
-                background: #f8f9fa;
-                border-radius: 10px;
-                padding: 20px;
-                margin-top: 20px;
-            }
-            
-            .conversion-metric {
-                padding: 15px;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                margin-bottom: 10px;
-                transition: transform 0.2s ease;
-            }
-            
-            .conversion-metric:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            }
-            
-            .conversion-arrow {
-                font-size: 1.2rem;
-                margin-bottom: 8px;
-                color: #6c757d;
-            }
-            
-            .conversion-rate {
-                font-size: 1.8rem;
-                font-weight: bold;
-                color: #0066cc;
-                margin-bottom: 5px;
-            }
-            
-            .conversion-rate.overall {
-                color: #28a745;
-                font-size: 2rem;
-            }
-            
-            .conversion-label {
-                font-size: 0.9rem;
-                color: #6c757d;
-                font-weight: 500;
-            }
-            
-            .funnel-loading {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 300px;
-                flex-direction: column;
-                color: #6c757d;
-            }
-            
-            .funnel-loading .spinner-border {
-                margin-bottom: 15px;
-            }
-            
-            .funnel-error {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 300px;
-                flex-direction: column;
-                color: #dc3545;
-                background: #fff5f5;
-                border-radius: 8px;
-                border: 1px solid #f5c6cb;
-            }
-            
-            .funnel-error .error-icon {
-                font-size: 3rem;
-                margin-bottom: 15px;
-            }
-            
-            @media (max-width: 768px) {
-                .conversion-metric {
-                    margin-bottom: 15px;
-                }
-                
-                .conversion-rate {
-                    font-size: 1.5rem;
-                }
-                
-                .conversion-rate.overall {
-                    font-size: 1.7rem;
-                }
-            }
-        `;
-
-    document.head.appendChild(style);
-  }
-
-  /**
-   * Update chart data without full re-render
-   * @param {Object} newData - New funnel data
-   */
-  updateData(newData) {
-    if (!this.chart || !newData) {
-      this.renderFunnel(newData);
-      return;
-    }
-
-    this.data = newData;
-    const totals = newData.totals || {};
-
-    // Update chart data
+    // Обновляем график
+    this.chart.data.labels = ["Просмотры", "В корзину", "Заказы"];
     this.chart.data.datasets[0].data = [
-      totals.views || 0,
-      totals.cart_additions || 0,
-      totals.orders || 0,
+      totalViews,
+      totalCartAdditions,
+      totalOrders,
     ];
 
-    // Update chart
-    this.chart.update("active");
+    this.chart.update();
 
-    // Update conversion labels
-    if (this.options.showConversions) {
-      this.addConversionLabels(newData);
-    }
-  }
-
-  /**
-   * Handle stage click events
-   * @param {number} stageIndex - Clicked stage index
-   */
-  onStageClick(stageIndex) {
-    const stages = ["views", "cart_additions", "orders"];
-    const stageName = stages[stageIndex];
-
-    // Emit custom event
-    const event = new CustomEvent("funnelStageClick", {
-      detail: {
-        stage: stageName,
-        stageIndex: stageIndex,
-        data: this.data,
-      },
+    // Обновляем статистику
+    this.updateStats({
+      views: totalViews,
+      cart_additions: totalCartAdditions,
+      orders: totalOrders,
+      revenue: totalRevenue,
     });
 
-    this.container.dispatchEvent(event);
+    console.log("OzonFunnelChart data updated:", {
+      views: totalViews,
+      cart_additions: totalCartAdditions,
+      orders: totalOrders,
+      revenue: totalRevenue,
+    });
   }
 
   /**
-   * Show loading state (deprecated - handled by OzonErrorHandler)
-   * @deprecated Use OzonErrorHandler for loading states
+   * Обновление статистики
    */
-  showLoading() {
-    // Loading state is now handled by OzonErrorHandler
-    console.warn(
-      "showLoading() is deprecated. Loading states are handled by OzonErrorHandler."
-    );
+  updateStats(stats) {
+    // Обновляем метрики конверсии напрямую через классы
+    const conversionRates = document.querySelectorAll(".conversion-rate");
+    if (conversionRates.length < 3) return;
+
+    const conversionViewToCart =
+      stats.views > 0
+        ? ((stats.cart_additions / stats.views) * 100).toFixed(2)
+        : 0;
+    const conversionCartToOrder =
+      stats.cart_additions > 0
+        ? ((stats.orders / stats.cart_additions) * 100).toFixed(2)
+        : 0;
+    const conversionOverall =
+      stats.views > 0 ? ((stats.orders / stats.views) * 100).toFixed(2) : 0;
+
+    // Обновляем метрики конверсии в существующих элементах
+    conversionRates[0].textContent = conversionViewToCart + "%";
+    conversionRates[1].textContent = conversionCartToOrder + "%";
+    conversionRates[2].textContent = conversionOverall + "%";
+
+    console.log("Conversion rates updated:", {
+      viewToCart: conversionViewToCart + "%",
+      cartToOrder: conversionCartToOrder + "%",
+      overall: conversionOverall + "%",
+    });
   }
 
   /**
-   * Hide loading state (deprecated - handled by OzonErrorHandler)
-   * @deprecated Use OzonErrorHandler for loading states
+   * Показать сообщение об отсутствии данных
    */
-  hideLoading() {
-    // Loading state is now handled by OzonErrorHandler
-    const loading = this.container.querySelector(".funnel-loading");
-    if (loading) {
-      loading.remove();
-    }
+  showNoData() {
+    if (!this.container) return;
+
+    this.container.innerHTML = `
+            <div class="alert alert-info text-center">
+                <h4>📊 Нет данных для отображения</h4>
+                <p>Выберите другой период или проверьте подключение к API Ozon</p>
+            </div>
+        `;
   }
 
   /**
-   * Show error state (deprecated - handled by OzonErrorHandler)
-   * @deprecated Use OzonErrorHandler for error states
-   * @param {string} message - Error message
+   * Показать ошибку
    */
-  showError(message = "Ошибка загрузки данных") {
-    // Error state is now handled by OzonErrorHandler
-    console.warn(
-      "showError() is deprecated. Error states are handled by OzonErrorHandler."
-    );
-  }
+  showError(message) {
+    if (!this.container) return;
 
-  /**
-   * Resize chart (useful for responsive layouts)
-   */
-  resize() {
-    if (this.chart) {
-      this.chart.resize();
-    }
-  }
-
-  /**
-   * Destroy chart and clean up
-   */
-  destroy() {
-    if (this.chart) {
-      this.chart.destroy();
-      this.chart = null;
-    }
-
-    // Remove conversion labels
-    const labelsContainer = this.container.querySelector(".conversion-labels");
-    if (labelsContainer) {
-      labelsContainer.remove();
-    }
-
-    this.data = null;
-  }
-
-  /**
-   * Export chart as image
-   * @param {string} format - Image format ('png', 'jpeg')
-   * @returns {string} Base64 encoded image
-   */
-  exportAsImage(format = "png") {
-    if (!this.chart) {
-      console.error("Chart not initialized");
-      return null;
-    }
-
-    return this.chart.toBase64Image(`image/${format}`, 1.0);
-  }
-
-  /**
-   * Get current chart data
-   * @returns {Object} Current data
-   */
-  getData() {
-    return this.data;
-  }
-
-  /**
-   * Set chart options
-   * @param {Object} newOptions - New options to merge
-   */
-  setOptions(newOptions) {
-    this.options = { ...this.options, ...newOptions };
-
-    if (this.chart && this.data) {
-      this.renderFunnel(this.data);
-    }
+    this.container.innerHTML = `
+            <div class="alert alert-danger text-center">
+                <h4>❌ Ошибка загрузки данных</h4>
+                <p>${message}</p>
+            </div>
+        `;
   }
 }
 
-// Export for use in other modules
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = OzonFunnelChart;
-}
+// Экспортируем класс для использования
+window.OzonFunnelChart = OzonFunnelChart;
