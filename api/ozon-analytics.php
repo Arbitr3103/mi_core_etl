@@ -16,8 +16,8 @@
  */
 
 // Include required classes
-require_once __DIR__ . '/../classes/OzonDataCache.php';
-require_once __DIR__ . '/../classes/OzonAnalyticsAPI.php';
+require_once __DIR__ . '/classes/OzonDataCache.php';
+require_once __DIR__ . '/classes/OzonAnalyticsAPI.php';
 // Security classes are optional for now
 // require_once __DIR__ . '/../classes/OzonSecurityManager.php';
 // require_once __DIR__ . '/../classes/OzonSecurityMiddleware.php';
