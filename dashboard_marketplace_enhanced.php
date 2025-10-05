@@ -1834,6 +1834,9 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                     refreshInterval: 300000 // 5 minutes
                 });
                 
+                // Инициализируем компоненты
+                window.ozonAnalytics.init();
+                
                 // Initialize when ozon-analytics view is active
                 const ozonAnalyticsView = document.getElementById('ozonAnalyticsView');
                 if (ozonAnalyticsView && ozonAnalyticsView.style.display !== 'none') {
