@@ -1819,6 +1819,23 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         
         // Event listeners for Ozon Analytics
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize main Ozon Analytics integration
+            if (typeof OzonAnalyticsIntegration !== 'undefined') {
+                window.ozonAnalytics = new OzonAnalyticsIntegration({
+                    apiBaseUrl: 'src/api/ozon-analytics.php',
+                    funnelChartContainer: 'funnelChart',
+                    kpiContainer: 'analyticsKPI',
+                    autoRefresh: false,
+                    refreshInterval: 300000 // 5 minutes
+                });
+                
+                // Initialize when ozon-analytics view is active
+                const ozonAnalyticsView = document.getElementById('ozonAnalyticsView');
+                if (ozonAnalyticsView && ozonAnalyticsView.style.display !== 'none') {
+                    loadOzonAnalyticsData();
+                }
+            }
+            
             // Initialize demographics dashboard when the tab is shown
             const demographicsTab = document.getElementById('demographics-tab');
             if (demographicsTab) {
