@@ -6,13 +6,10 @@ class OzonAnalyticsIntegration {
     this.apiBaseUrl = options.apiBaseUrl || "/api/ozon-analytics.php";
     this.funnelChartContainer =
       options.funnelChartContainer || "ozon-funnel-chart";
-    this.demographicsContainer =
-      options.demographicsContainer || "ozon-demographics";
     this.kpiContainer = options.kpiContainer || "analyticsKPI";
     this.autoRefresh = options.autoRefresh || false;
     this.refreshInterval = options.refreshInterval || 300000;
     this.funnelChart = null;
-    this.demographics = null;
     this.isLoading = false;
     this.currentData = null;
   }
@@ -25,7 +22,6 @@ class OzonAnalyticsIntegration {
 
     // Инициализируем компоненты
     this.initFunnelChart();
-    this.initDemographics();
     this.bindEvents();
 
     // Загружаем начальные данные
@@ -51,19 +47,11 @@ class OzonAnalyticsIntegration {
   }
 
   /**
-   * Инициализация демографических данных
+   * Инициализация демографических данных - ОТКЛЮЧЕНО
+   * Демографические данные недоступны в API Ozon
    */
   initDemographics() {
-    console.log(
-      "Initializing demographics with container ID:",
-      this.demographicsContainer
-    );
-    if (typeof OzonDemographics !== "undefined") {
-      this.demographics = new OzonDemographics(this.demographicsContainer);
-      this.demographics.init();
-    } else {
-      console.warn("OzonDemographics not available");
-    }
+    console.log("Demographics disabled - not available in Ozon API");
   }
 
   /**
@@ -164,19 +152,11 @@ class OzonAnalyticsIntegration {
       // Загружаем данные воронки
       const funnelData = await this.loadFunnelData(startDate, endDate, filters);
 
-      // Загружаем демографические данные
-      const demographicsData = await this.loadDemographicsData(
-        startDate,
-        endDate,
-        filters
-      );
-
-      // Обновляем компоненты
-      this.updateComponents(funnelData, demographicsData);
+      // Обновляем компоненты (без демографии)
+      this.updateComponents(funnelData, null);
 
       this.currentData = {
         funnel: funnelData,
-        demographics: demographicsData,
         period: { startDate, endDate },
         filters,
       };
@@ -219,30 +199,12 @@ class OzonAnalyticsIntegration {
   }
 
   /**
-   * Загрузка демографических данных
+   * Загрузка демографических данных - ОТКЛЮЧЕНО
+   * Демографические данные недоступны в API Ozon
    */
   async loadDemographicsData(startDate, endDate, filters = {}) {
-    const params = new URLSearchParams({
-      action: "demographics",
-      start_date: startDate,
-      end_date: endDate,
-      ...filters,
-    });
-
-    try {
-      const response = await fetch(`${this.apiBaseUrl}?${params}`);
-
-      if (!response.ok) {
-        console.warn("Demographics data not available");
-        return [];
-      }
-
-      const data = await response.json();
-      return data.success ? data.data || [] : [];
-    } catch (error) {
-      console.warn("Error loading demographics:", error);
-      return [];
-    }
+    console.log("Demographics loading skipped - not available in Ozon API");
+    return null;
   }
 
   /**
@@ -258,14 +220,8 @@ class OzonAnalyticsIntegration {
       }
     }
 
-    // Обновляем демографические данные
-    if (this.demographics) {
-      if (demographicsData && demographicsData.length > 0) {
-        this.demographics.updateData(demographicsData);
-      } else {
-        this.demographics.showNoData();
-      }
-    }
+    // Демографические данные отключены - недоступны в API
+    // if (this.demographics) { ... }
 
     // Обновляем таблицу данных
     this.updateDataTable(funnelData);
