@@ -124,7 +124,7 @@ class OzonAnalyticsAPI {
                 'ordered_units',
                 'hits_view_pdp'
             ],
-            // 'dimension' => ['sku'], // Временно убираем
+            'dimension' => ['sku'], // Обязательный параметр для Ozon API
             'sort' => [
                 [
                     'key' => 'revenue',
