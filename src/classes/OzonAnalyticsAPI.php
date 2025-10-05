@@ -17,11 +17,11 @@ class OzonAnalyticsAPI {
     const MAX_RETRIES = 3;
     const RATE_LIMIT_DELAY = 1; // секунда между запросами
     
-    // Эндпоинты API
-    const ENDPOINT_AUTH = '/v1/auth/token';
-    const ENDPOINT_FUNNEL = '/v1/analytics/funnel';
-    const ENDPOINT_DEMOGRAPHICS = '/v1/analytics/demographics';
-    const ENDPOINT_CAMPAIGNS = '/v1/analytics/campaigns';
+    // Эндпоинты API (реальные Ozon API endpoints)
+    const ENDPOINT_PRODUCTS = '/v2/product/list';
+    const ENDPOINT_ANALYTICS_DATA = '/v1/analytics/data';
+    const ENDPOINT_FINANCE_REALIZATION = '/v3/finance/realization';
+    const ENDPOINT_POSTING_FBS_LIST = '/v3/posting/fbs/list';
     
     private $clientId;
     private $apiKey;
@@ -58,51 +58,20 @@ class OzonAnalyticsAPI {
     }
     
     /**
-     * Аутентификация и получение токена доступа
+     * Аутентификация - Ozon API использует Client-Id и Api-Key напрямую
      * 
-     * @return string токен доступа
+     * @return string возвращает 'authenticated' если ключи настроены
      * @throws OzonAPIException при ошибках аутентификации
      */
     public function authenticate() {
-        // Проверяем, не истек ли текущий токен
-        if ($this->isTokenValid()) {
-            return $this->accessToken;
+        // Ozon API не требует отдельной аутентификации
+        // Используем Client-Id и Api-Key напрямую в заголовках запросов
+        
+        if (empty($this->clientId) || empty($this->apiKey)) {
+            throw new OzonAPIException('Client ID и API Key должны быть настроены', 401, 'AUTHENTICATION_ERROR');
         }
         
-        $url = self::API_BASE_URL . self::ENDPOINT_AUTH;
-        
-        $headers = [
-            'Content-Type: application/json',
-            'Client-Id: ' . $this->clientId,
-            'Api-Key: ' . $this->apiKey
-        ];
-        
-        $data = [
-            'client_id' => $this->clientId,
-            'api_key' => $this->apiKey
-        ];
-        
-        try {
-            $response = $this->makeRequest('POST', $url, $data, $headers);
-            
-            if (!isset($response['access_token'])) {
-                throw new OzonAPIException('Токен доступа не получен', 401, 'AUTHENTICATION_ERROR');
-            }
-            
-            $this->accessToken = $response['access_token'];
-            $this->tokenExpiry = time() + self::TOKEN_LIFETIME;
-            
-            // Сохраняем токен в БД если подключение доступно
-            $this->saveTokenToDatabase();
-            
-            return $this->accessToken;
-            
-        } catch (Exception $e) {
-            if ($e instanceof OzonAPIException) {
-                throw $e;
-            }
-            throw new OzonAPIException('Ошибка аутентификации: ' . $e->getMessage(), 500, 'AUTHENTICATION_ERROR');
-        }
+        return 'authenticated';
     }
     
     /**
