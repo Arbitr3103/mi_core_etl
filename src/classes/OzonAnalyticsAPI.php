@@ -127,21 +127,29 @@ class OzonAnalyticsAPI {
             // 'dimension' => ['sku'], // Временно убираем
             'sort' => [
                 [
-                    'key' => 'hits_view_search',
+                    'key' => 'revenue',
                     'order' => 'DESC'
                 ]
             ],
             'limit' => 1000
         ];
         
+        // ВРЕМЕННАЯ ДИАГНОСТИКА - добавляем запрос в ответ
+        $debugRequest = [
+            'url' => $url,
+            'headers' => $headers,
+            'data' => $data
+        ];
+        
         try {
             $response = $this->makeRequest('POST', $url, $data, $headers);
             
-            // ВРЕМЕННОЕ ЛОГИРОВАНИЕ для диагностики
-            error_log("OZON API RAW RESPONSE: " . json_encode($response));
-            
-            // Обрабатываем и нормализуем данные
+            // ВРЕМЕННАЯ ДИАГНОСТИКА - добавляем сырой ответ в результат
             $processedData = $this->processFunnelData($response, $dateFrom, $dateTo, $filters);
+            
+            // Добавляем отладочную информацию
+            $processedData[0]['debug_request'] = $debugRequest;
+            $processedData[0]['debug_raw_response'] = $response;
             
             // Сохраняем в кэш и БД
             if ($this->cache) {
