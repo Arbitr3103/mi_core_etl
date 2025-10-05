@@ -85,10 +85,47 @@ class OzonAnalyticsIntegration {
    * Загрузка начальных данных
    */
   loadInitialData() {
-    // Получаем параметры из URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const startDate = urlParams.get("start_date") || this.getDefaultStartDate();
-    const endDate = urlParams.get("end_date") || this.getDefaultEndDate();
+    // Получаем даты из полей формы или URL
+    let startDate, endDate;
+
+    // Сначала пробуем получить из полей аналитики
+    const analyticsStartDate = document.getElementById("analyticsStartDate");
+    const analyticsEndDate = document.getElementById("analyticsEndDate");
+
+    if (
+      analyticsStartDate &&
+      analyticsEndDate &&
+      analyticsStartDate.value &&
+      analyticsEndDate.value
+    ) {
+      startDate = analyticsStartDate.value;
+      endDate = analyticsEndDate.value;
+      console.log("Got dates from analytics form fields:", {
+        startDate,
+        endDate,
+      });
+    } else {
+      // Если нет полей аналитики, пробуем основные поля формы
+      const mainStartDate = document.querySelector('input[name="start_date"]');
+      const mainEndDate = document.querySelector('input[name="end_date"]');
+
+      if (
+        mainStartDate &&
+        mainEndDate &&
+        mainStartDate.value &&
+        mainEndDate.value
+      ) {
+        startDate = mainStartDate.value;
+        endDate = mainEndDate.value;
+        console.log("Got dates from main form fields:", { startDate, endDate });
+      } else {
+        // В крайнем случае используем URL параметры или значения по умолчанию
+        const urlParams = new URLSearchParams(window.location.search);
+        startDate = urlParams.get("start_date") || this.getDefaultStartDate();
+        endDate = urlParams.get("end_date") || this.getDefaultEndDate();
+        console.log("Got dates from URL or defaults:", { startDate, endDate });
+      }
+    }
 
     this.loadData(startDate, endDate);
   }
