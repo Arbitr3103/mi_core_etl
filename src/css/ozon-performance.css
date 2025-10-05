@@ -1,0 +1,495 @@
+/**
+ * Ozon Performance Optimizations CSS
+ * 
+ * CSS optimizations for better performance and user experience
+ * Includes lazy loading, virtual scrolling, and animation optimizations
+ */
+
+/* Lazy Loading Optimizations */
+.ozon-lazy-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.lazy-items-container {
+  min-height: 200px;
+}
+
+.lazy-loading,
+.lazy-error,
+.lazy-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.lazy-loading {
+  color: #6c757d;
+}
+
+.lazy-error {
+  color: #dc3545;
+  background-color: #fff5f5;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.lazy-empty {
+  color: #6c757d;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.loading-more {
+  text-align: center;
+  padding: 20px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Virtual Scrolling */
+.virtual-scroll-container {
+  position: relative;
+  overflow: auto;
+}
+
+.virtual-viewport {
+  position: relative;
+}
+
+.virtual-item {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition: none; /* Disable transitions for better performance */
+}
+
+/* Performance Optimizations */
+.ozon-analytics-view {
+  contain: layout style paint; /* CSS containment for better performance */
+}
+
+.ozon-chart-container {
+  contain: layout style paint;
+  will-change: transform; /* Hint for GPU acceleration */
+}
+
+.ozon-table-container {
+  contain: layout style;
+  overflow: auto;
+  max-height: 500px;
+}
+
+/* Smooth scrolling optimizations */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+}
+
+/* Animation optimizations */
+.ozon-fade-in {
+  animation: ozonFadeIn 0.3s ease-in-out;
+}
+
+.ozon-slide-in {
+  animation: ozonSlideIn 0.3s ease-out;
+}
+
+.ozon-scale-in {
+  animation: ozonScaleIn 0.2s ease-out;
+}
+
+@keyframes ozonFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ozonSlideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes ozonScaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Loading states */
+.ozon-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: ozonSkeleton 1.5s infinite;
+}
+
+@keyframes ozonSkeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.ozon-skeleton-text {
+  height: 1em;
+  border-radius: 4px;
+  margin-bottom: 0.5em;
+}
+
+.ozon-skeleton-text:last-child {
+  margin-bottom: 0;
+  width: 60%;
+}
+
+/* Debounced input indicators */
+.ozon-input-debouncing {
+  position: relative;
+}
+
+.ozon-input-debouncing::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  border: 2px solid #007bff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: translateY(-50%) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+
+/* Memory usage indicator */
+.ozon-memory-indicator {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 9999;
+  display: none;
+}
+
+.ozon-memory-indicator.warning {
+  background: rgba(255, 193, 7, 0.9);
+  color: black;
+  display: block;
+}
+
+.ozon-memory-indicator.critical {
+  background: rgba(220, 53, 69, 0.9);
+  color: white;
+  display: block;
+}
+
+/* Performance metrics display */
+.ozon-performance-metrics {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: monospace;
+  z-index: 9998;
+  display: none;
+  max-width: 300px;
+}
+
+.ozon-performance-metrics.visible {
+  display: block;
+}
+
+.ozon-performance-metrics .metric {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.ozon-performance-metrics .metric:last-child {
+  margin-bottom: 0;
+}
+
+.ozon-performance-metrics .metric-value {
+  font-weight: bold;
+}
+
+.ozon-performance-metrics .metric-value.good {
+  color: #28a745;
+}
+
+.ozon-performance-metrics .metric-value.warning {
+  color: #ffc107;
+}
+
+.ozon-performance-metrics .metric-value.critical {
+  color: #dc3545;
+}
+
+/* Responsive optimizations */
+@media (max-width: 768px) {
+  .ozon-table-container {
+    max-height: 300px;
+  }
+
+  .virtual-scroll-container {
+    height: 300px !important;
+  }
+
+  .ozon-performance-metrics {
+    font-size: 10px;
+    padding: 5px;
+    max-width: 200px;
+  }
+
+  .ozon-memory-indicator {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .lazy-error {
+    border-width: 2px;
+  }
+
+  .lazy-empty {
+    border: 1px solid #6c757d;
+  }
+
+  .ozon-skeleton {
+    background: linear-gradient(90deg, #000 25%, #333 50%, #000 75%);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .ozon-fade-in,
+  .ozon-slide-in,
+  .ozon-scale-in {
+    animation: none;
+  }
+
+  .ozon-skeleton {
+    animation: none;
+    background: #f0f0f0;
+  }
+
+  .ozon-input-debouncing::after {
+    animation: none;
+    display: none;
+  }
+
+  .smooth-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+/* Print optimizations */
+@media print {
+  .ozon-memory-indicator,
+  .ozon-performance-metrics,
+  .lazy-loading,
+  .loading-more {
+    display: none !important;
+  }
+
+  .ozon-table-container {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .virtual-scroll-container {
+    height: auto !important;
+    overflow: visible;
+  }
+}
+
+/* Focus management for accessibility */
+.ozon-lazy-container:focus-within {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.virtual-item:focus {
+  outline: 1px solid #007bff;
+  outline-offset: 1px;
+}
+
+/* Utility classes for performance */
+.ozon-gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.ozon-no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.ozon-hardware-accelerated {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Cache status indicators */
+.ozon-cache-hit {
+  position: relative;
+}
+
+.ozon-cache-hit::before {
+  content: "⚡";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 12px;
+  color: #28a745;
+  z-index: 1;
+}
+
+.ozon-cache-miss {
+  position: relative;
+}
+
+.ozon-cache-miss::before {
+  content: "🔄";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 12px;
+  color: #ffc107;
+  z-index: 1;
+  animation: spin 2s linear infinite;
+}
+
+/* Loading spinner optimizations */
+.ozon-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+.ozon-spinner-sm {
+  width: 16px;
+  height: 16px;
+  border-width: 1px;
+}
+
+.ozon-spinner-lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+/* Intersection observer targets */
+.ozon-intersection-target {
+  height: 1px;
+  width: 100%;
+  pointer-events: none;
+}
+
+/* Scroll indicators */
+.ozon-scroll-indicator {
+  position: sticky;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(
+    to right,
+    #007bff 0%,
+    #007bff var(--scroll-progress, 0%),
+    transparent var(--scroll-progress, 0%)
+  );
+  z-index: 10;
+}
+
+/* Data table optimizations */
+.ozon-data-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ozon-data-table th,
+.ozon-data-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ozon-data-table .col-actions {
+  width: 100px;
+}
+
+.ozon-data-table .col-id {
+  width: 80px;
+}
+
+.ozon-data-table .col-date {
+  width: 120px;
+}
+
+.ozon-data-table .col-number {
+  width: 100px;
+  text-align: right;
+}
+
+/* Tooltip optimizations */
+.ozon-tooltip {
+  position: absolute;
+  z-index: 1000;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.ozon-tooltip.visible {
+  opacity: 1;
+}

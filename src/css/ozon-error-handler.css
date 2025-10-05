@@ -1,0 +1,325 @@
+/**
+ * Ozon Error Handler Styles
+ * 
+ * Стили для обработки ошибок и индикаторов загрузки Ozon Analytics
+ */
+
+/* Глобальные стили загрузки */
+body.ozon-loading {
+  cursor: wait;
+}
+
+.ozon-nav-loading {
+  display: none;
+  margin-left: 10px;
+}
+
+/* Контейнеры ошибок */
+.ozon-error-container {
+  position: relative;
+}
+
+.ozon-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 1000;
+  display: none;
+  backdrop-filter: blur(2px);
+}
+
+/* Состояния загрузки */
+.ozon-loading-state {
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  min-height: 200px;
+}
+
+.ozon-loading-state .spinner-border {
+  color: #0066cc;
+}
+
+.ozon-loading-state .progress {
+  background-color: #e9ecef;
+}
+
+.ozon-loading-state .progress-bar {
+  background-color: #0066cc;
+}
+
+/* Fallback состояния */
+.ozon-fallback-state {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  min-height: 200px;
+}
+
+.ozon-fallback-state .fallback-icon {
+  opacity: 0.6;
+}
+
+.ozon-fallback-state .fallback-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.ozon-fallback-state .fallback-description {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.ozon-fallback-state .fallback-suggestions {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 15px;
+  margin: 15px 0;
+}
+
+.ozon-fallback-state .fallback-suggestions h6 {
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ozon-fallback-state .fallback-suggestions ul {
+  margin-bottom: 0;
+}
+
+.ozon-fallback-state .fallback-suggestions li {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.ozon-fallback-state .fallback-actions {
+  margin-top: 20px;
+}
+
+.ozon-fallback-state .fallback-data-notice {
+  border-top: 1px solid #e9ecef;
+  padding-top: 15px;
+}
+
+/* Специфичные состояния загрузки для компонентов */
+
+/* Воронка продаж */
+#ozonFunnelChart .ozon-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+#ozonFunnelChart .ozon-loading-state h6 {
+  color: #495057;
+  font-weight: 600;
+}
+
+#ozonFunnelChart .ozon-loading-state p {
+  color: #6c757d;
+  margin-bottom: 0;
+}
+
+/* Демография */
+#ozonDemographics .ozon-loading-state {
+  min-height: 300px;
+}
+
+#ozonDemographics .spinner-grow {
+  color: #17a2b8;
+}
+
+/* Кампании */
+#ozonCampaigns .ozon-loading-state {
+  min-height: 150px;
+}
+
+#ozonCampaigns .spinner-border-sm {
+  color: #28a745;
+}
+
+/* Кнопка экспорта в состоянии загрузки */
+#exportAnalyticsData:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+#exportAnalyticsData .spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Toast уведомления для Ozon */
+.toast.text-bg-success .toast-header {
+  background-color: rgba(25, 135, 84, 0.1);
+  border-bottom: 1px solid rgba(25, 135, 84, 0.2);
+}
+
+.toast.text-bg-warning .toast-header {
+  background-color: rgba(255, 193, 7, 0.1);
+  border-bottom: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+.toast.text-bg-danger .toast-header {
+  background-color: rgba(220, 53, 69, 0.1);
+  border-bottom: 1px solid rgba(220, 53, 69, 0.2);
+}
+
+.toast.text-bg-info .toast-header {
+  background-color: rgba(13, 202, 240, 0.1);
+  border-bottom: 1px solid rgba(13, 202, 240, 0.2);
+}
+
+/* Анимации */
+@keyframes ozonPulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.ozon-loading-state .spinner-border,
+.ozon-loading-state .spinner-grow {
+  animation: ozonPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes ozonSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ozon-fallback-state {
+  animation: ozonSlideIn 0.3s ease-out;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .ozon-loading-state {
+    min-height: 150px;
+  }
+
+  .ozon-loading-state h6 {
+    font-size: 1rem;
+  }
+
+  .ozon-loading-state p {
+    font-size: 0.9rem;
+  }
+
+  .ozon-fallback-state {
+    padding: 20px 15px;
+  }
+
+  .ozon-fallback-state .fallback-title {
+    font-size: 1rem;
+  }
+
+  .ozon-fallback-state .fallback-description {
+    font-size: 0.9rem;
+  }
+
+  .ozon-fallback-state .fallback-suggestions {
+    padding: 12px;
+  }
+
+  .ozon-fallback-state .fallback-actions .btn {
+    margin-bottom: 10px;
+    width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .ozon-loading-overlay {
+    backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .ozon-loading-state {
+    border-radius: 6px;
+    min-height: 120px;
+  }
+
+  .ozon-fallback-state {
+    border-radius: 6px;
+    min-height: 150px;
+  }
+
+  .ozon-fallback-state .fallback-suggestions {
+    margin: 10px 0;
+  }
+}
+
+/* Темная тема (если используется) */
+@media (prefers-color-scheme: dark) {
+  .ozon-loading-state {
+    background: #2d3748;
+    border-color: #4a5568;
+    color: #e2e8f0;
+  }
+
+  .ozon-fallback-state {
+    background: #2d3748;
+    border-color: #4a5568;
+    color: #e2e8f0;
+  }
+
+  .ozon-fallback-state .fallback-suggestions {
+    background: #1a202c;
+  }
+
+  .ozon-loading-overlay {
+    background: rgba(45, 55, 72, 0.9);
+  }
+}
+
+/* Высокий контраст для доступности */
+@media (prefers-contrast: high) {
+  .ozon-loading-state,
+  .ozon-fallback-state {
+    border-width: 2px;
+  }
+
+  .ozon-fallback-state .fallback-suggestions {
+    border: 1px solid #6c757d;
+  }
+}
+
+/* Уменьшенная анимация для пользователей с ограниченными возможностями */
+@media (prefers-reduced-motion: reduce) {
+  .ozon-loading-state .spinner-border,
+  .ozon-loading-state .spinner-grow {
+    animation: none;
+  }
+
+  .ozon-fallback-state {
+    animation: none;
+  }
+
+  .ozon-loading-state .progress-bar {
+    animation: none;
+  }
+}
+
+/* Печать */
+@media print {
+  .ozon-loading-state,
+  .ozon-fallback-state,
+  .ozon-loading-overlay {
+    display: none !important;
+  }
+}

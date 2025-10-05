@@ -46,6 +46,11 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
     <title>🚀 Дашборд маржинальности по маркетплейсам</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="src/js/OzonFunnelChart.js"></script>
+    <script src="src/js/OzonAnalyticsIntegration.js"></script>
+    <script src="src/js/OzonDemographics.js"></script>
+    <script src="src/js/OzonExportManager.js"></script>
+    <script src="src/js/OzonSecurityIntegration.js"></script>
     <style>
         body { 
             background: #f8f9fa; 
@@ -278,6 +283,18 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
         .modal-body .table-sm td:first-child {
             width: 40%;
         }
+        
+        /* Ozon Analytics Styles */
+        .kpi-value.updating {
+            opacity: 0.6;
+            transform: scale(0.95);
+            transition: all 0.3s ease;
+        }
+        
+        .chart-container {
+            position: relative;
+            min-height: 300px;
+        }
     </style>
 </head>
 <body>
@@ -299,6 +316,9 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                             
                             <input type="radio" class="btn-check" name="viewMode" id="inventory" value="inventory" <?= $viewMode === 'inventory' ? 'checked' : '' ?>>
                             <label class="btn btn-outline-primary" for="inventory">📦 Остатки товаров</label>
+                            
+                            <input type="radio" class="btn-check" name="viewMode" id="ozon-analytics" value="ozon-analytics" <?= $viewMode === 'ozon-analytics' ? 'checked' : '' ?>>
+                            <label class="btn btn-outline-primary" for="ozon-analytics">📊 Аналитика Ozon</label>
                         </div>
                     </div>
                 </div>
@@ -585,6 +605,195 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             </div>
         </div>
 
+        <!-- Ozon Analytics View -->
+        <div id="ozonAnalyticsView" style="display: <?= $viewMode === 'ozon-analytics' ? 'block' : 'none' ?>">
+            <!-- Analytics Filters -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">📅 Период с:</label>
+                            <input type="date" id="analyticsStartDate" class="form-control" value="<?= htmlspecialchars($startDate) ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">📅 по:</label>
+                            <input type="date" id="analyticsEndDate" class="form-control" value="<?= htmlspecialchars($endDate) ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">📦 Товар:</label>
+                            <select id="analyticsProduct" class="form-control">
+                                <option value="">Все товары</option>
+                                <!-- Options will be loaded dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">📢 Кампания:</label>
+                            <select id="analyticsCampaign" class="form-control">
+                                <option value="">Все кампании</option>
+                                <!-- Options will be loaded dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <button type="button" id="applyAnalyticsFilters" class="btn btn-primary">🔍 Применить фильтры</button>
+                            <button type="button" id="resetAnalyticsFilters" class="btn btn-outline-secondary">🔄 Сбросить</button>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <a href="src/ozon_settings.php" class="btn btn-outline-secondary" data-permission="manage_settings">⚙️ Настройки API</a>
+                            <button type="button" id="exportAnalyticsData" class="btn btn-success" data-permission="export_data" data-rate-limit="export_data">📤 Экспорт данных</button>
+                            <button type="button" id="refreshAnalytics" class="btn btn-outline-primary" data-permission="view_funnel" data-rate-limit="view_funnel">🔄 Обновить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics KPI -->
+            <div id="analyticsKPI" class="row mb-4">
+                <div class="col-md-3">
+                    <div class="kpi-card ozon">
+                        <div class="card-body text-center">
+                            <div class="kpi-value" id="totalViews">-</div>
+                            <div class="small">👁️ Просмотры</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="kpi-card ozon">
+                        <div class="card-body text-center">
+                            <div class="kpi-value" id="totalCartAdditions">-</div>
+                            <div class="small">🛒 В корзину</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="kpi-card ozon">
+                        <div class="card-body text-center">
+                            <div class="kpi-value" id="totalOrders">-</div>
+                            <div class="small">📦 Заказы</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="kpi-card ozon">
+                        <div class="card-body text-center">
+                            <div class="kpi-value" id="overallConversion">-</div>
+                            <div class="small">📈 Конверсия</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tabs -->
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" id="analyticsTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="funnel-tab" data-bs-toggle="tab" data-bs-target="#funnel-analytics" type="button" role="tab">
+                                🔄 Воронка продаж
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="demographics-tab" data-bs-toggle="tab" data-bs-target="#demographics-analytics" type="button" role="tab">
+                                👥 Демография
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="campaigns-tab" data-bs-toggle="tab" data-bs-target="#campaigns-analytics" type="button" role="tab">
+                                📢 Кампании
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="analyticsTabContent">
+                        <!-- Funnel Analytics Tab -->
+                        <div class="tab-pane fade show active" id="funnel-analytics" role="tabpanel">
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">🔄 Воронка продаж Ozon</h6>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-success" data-quick-export="funnel" data-original-text="📄 CSV">
+                                                    📄 CSV
+                                                </button>
+                                                <button type="button" class="btn btn-outline-info" onclick="window.ozonExportManager.quickExport('funnel', 'json')">
+                                                    📋 JSON
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="ozonFunnelChart" class="chart-container" style="height: 500px;">
+                                                <div class="text-center py-4">
+                                                    <div class="spinner-border" role="status">
+                                                        <span class="visually-hidden">Загрузка...</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Demographics Analytics Tab -->
+                        <div class="tab-pane fade" id="demographics-analytics" role="tabpanel">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">👥 Демографические данные</h6>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-success" data-quick-export="demographics" data-original-text="📄 CSV">
+                                            📄 CSV
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" onclick="window.ozonExportManager.quickExport('demographics', 'json')">
+                                            📋 JSON
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="demographicsContainer">
+                                        <!-- Demographics dashboard will be initialized here -->
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Загрузка демографических данных...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Campaigns Analytics Tab -->
+                        <div class="tab-pane fade" id="campaigns-analytics" role="tabpanel">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">📢 Эффективность рекламных кампаний</h6>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-success" data-quick-export="campaigns" data-original-text="📄 CSV">
+                                            📄 CSV
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" onclick="window.ozonExportManager.quickExport('campaigns', 'json')">
+                                            📋 JSON
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="campaignsTable">
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Загрузка...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Separated View -->
         <div id="separatedView" style="display: <?= $viewMode === 'separated' ? 'block' : 'none' ?>">
             <div class="row">
@@ -777,12 +986,14 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 const combinedView = document.getElementById('combinedView');
                 const separatedView = document.getElementById('separatedView');
                 const inventoryView = document.getElementById('inventoryView');
+                const ozonAnalyticsView = document.getElementById('ozonAnalyticsView');
                 const viewInput = document.getElementById('viewInput');
                 
                 // Hide all views
                 combinedView.style.display = 'none';
                 separatedView.style.display = 'none';
                 inventoryView.style.display = 'none';
+                ozonAnalyticsView.style.display = 'none';
                 
                 // Show selected view
                 if (this.value === 'separated') {
@@ -790,6 +1001,9 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
                 } else if (this.value === 'inventory') {
                     inventoryView.style.display = 'block';
                     loadInventoryData();
+                } else if (this.value === 'ozon-analytics') {
+                    ozonAnalyticsView.style.display = 'block';
+                    loadOzonAnalyticsData();
                 } else {
                     combinedView.style.display = 'block';
                 }
@@ -1439,6 +1653,237 @@ $wbTopProducts = $api->getTopProductsByMarketplace('WB', $startDate, $endDate, 5
             }
         });
         <?php endif; ?>
+
+        // Ozon Analytics functionality
+        let currentAnalyticsFilters = {};
+        let funnelChart = null;
+        
+        function loadOzonAnalyticsData() {
+            loadAnalyticsFilters();
+            loadFunnelData();
+            // Demographics data loading is now handled by the OzonDemographics component
+            loadCampaignsData();
+        }
+        
+        function loadAnalyticsFilters() {
+            // Load products for filter
+            fetch('src/api/ozon-analytics.php?action=products')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const productSelect = document.getElementById('analyticsProduct');
+                        productSelect.innerHTML = '<option value="">Все товары</option>';
+                        
+                        data.data.forEach(product => {
+                            productSelect.innerHTML += `<option value="${product.id}">${product.name}</option>`;
+                        });
+                    }
+                })
+                .catch(error => console.error('Error loading products:', error));
+            
+            // Load campaigns for filter
+            fetch('src/api/ozon-analytics.php?action=campaigns')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const campaignSelect = document.getElementById('analyticsCampaign');
+                        campaignSelect.innerHTML = '<option value="">Все кампании</option>';
+                        
+                        data.data.forEach(campaign => {
+                            campaignSelect.innerHTML += `<option value="${campaign.id}">${campaign.name}</option>`;
+                        });
+                    }
+                })
+                .catch(error => console.error('Error loading campaigns:', error));
+        }
+        
+        function loadFunnelData() {
+            // The OzonAnalyticsIntegration class now handles funnel data loading
+            if (window.ozonAnalytics) {
+                window.ozonAnalytics.loadFunnelData();
+            }
+        }
+        
+        // Demographics data loading is now handled by the OzonDemographics component
+        
+        function loadCampaignsData() {
+            const filters = getCurrentAnalyticsFilters();
+            const params = new URLSearchParams(filters);
+            
+            fetch(`src/api/ozon-analytics.php?action=campaigns-data&${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderCampaignsTable(data.data);
+                    }
+                })
+                .catch(error => console.error('Error loading campaigns data:', error));
+        }
+        
+        function getCurrentAnalyticsFilters() {
+            return {
+                start_date: document.getElementById('analyticsStartDate').value,
+                end_date: document.getElementById('analyticsEndDate').value,
+                product_id: document.getElementById('analyticsProduct').value,
+                campaign_id: document.getElementById('analyticsCampaign').value
+            };
+        }
+        
+        function updateAnalyticsKPI(data) {
+            document.getElementById('totalViews').textContent = data.total_views ? data.total_views.toLocaleString() : '-';
+            document.getElementById('totalCartAdditions').textContent = data.total_cart_additions ? data.total_cart_additions.toLocaleString() : '-';
+            document.getElementById('totalOrders').textContent = data.total_orders ? data.total_orders.toLocaleString() : '-';
+            document.getElementById('overallConversion').textContent = data.overall_conversion ? data.overall_conversion + '%' : '-';
+        }
+        
+        function renderFunnelChart(data) {
+            // The OzonFunnelChart class now handles funnel chart rendering
+            if (window.ozonAnalytics && window.ozonAnalytics.funnelChart) {
+                window.ozonAnalytics.funnelChart.renderFunnel(data);
+            }
+        }
+        
+        function renderConversionMetrics(data) {
+            // Conversion metrics are now handled by the OzonFunnelChart component
+            // This function is kept for backward compatibility
+            const totals = data.totals || data;
+            const container = document.getElementById('conversionMetrics');
+            
+            if (container) {
+                container.innerHTML = `
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Просмотры → Корзина:</span>
+                            <strong>${(totals.conversion_view_to_cart || 0).toFixed(1)}%</strong>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Корзина → Заказ:</span>
+                            <strong>${(totals.conversion_cart_to_order || 0).toFixed(1)}%</strong>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Общая конверсия:</span>
+                            <strong>${(totals.conversion_overall || 0).toFixed(1)}%</strong>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Age, gender, and region chart rendering is now handled by the OzonDemographics component
+        
+        function renderCampaignsTable(campaignsData) {
+            const container = document.getElementById('campaignsTable');
+            
+            let html = '<div class="table-responsive"><table class="table table-hover">';
+            html += `
+                <thead class="table-dark">
+                    <tr>
+                        <th>Кампания</th>
+                        <th>Показы</th>
+                        <th>Клики</th>
+                        <th>CTR</th>
+                        <th>Расходы</th>
+                        <th>Заказы</th>
+                        <th>Выручка</th>
+                        <th>ROAS</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            campaignsData.forEach(campaign => {
+                html += `
+                    <tr>
+                        <td><strong>${campaign.campaign_name}</strong></td>
+                        <td>${campaign.impressions.toLocaleString()}</td>
+                        <td>${campaign.clicks.toLocaleString()}</td>
+                        <td>${campaign.ctr}%</td>
+                        <td>${campaign.spend.toLocaleString()} ₽</td>
+                        <td>${campaign.orders}</td>
+                        <td>${campaign.revenue.toLocaleString()} ₽</td>
+                        <td>${campaign.roas}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+        
+        // Global variables for analytics components
+        let ozonDemographics = null;
+        
+        // Event listeners for Ozon Analytics
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize demographics dashboard when the tab is shown
+            const demographicsTab = document.getElementById('demographics-tab');
+            if (demographicsTab) {
+                demographicsTab.addEventListener('shown.bs.tab', function() {
+                    if (!ozonDemographics) {
+                        ozonDemographics = new OzonDemographics({
+                            containerId: 'demographicsContainer',
+                            apiBaseUrl: '/src/api/ozon-analytics.php',
+                            autoRefresh: false
+                        });
+                    }
+                });
+            }
+            
+            // Apply filters button
+            document.getElementById('applyAnalyticsFilters')?.addEventListener('click', function() {
+                loadFunnelData();
+                if (ozonDemographics) {
+                    ozonDemographics.loadDemographicsData(true);
+                }
+                loadCampaignsData();
+            });
+            
+            // Reset filters button
+            document.getElementById('resetAnalyticsFilters')?.addEventListener('click', function() {
+                document.getElementById('analyticsStartDate').value = '<?= $startDate ?>';
+                document.getElementById('analyticsEndDate').value = '<?= $endDate ?>';
+                document.getElementById('analyticsProduct').value = '';
+                document.getElementById('analyticsCampaign').value = '';
+                
+                loadFunnelData();
+                if (ozonDemographics) {
+                    ozonDemographics.loadDemographicsData(true);
+                }
+                loadCampaignsData();
+            });
+            
+            // Export data button
+            document.getElementById('exportAnalyticsData')?.addEventListener('click', function() {
+                const filters = getCurrentAnalyticsFilters();
+                const params = new URLSearchParams(filters);
+                
+                fetch(`src/api/ozon-analytics.php?action=export&${params}`)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = `ozon_analytics_${new Date().toISOString().split('T')[0]}.csv`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    })
+                    .catch(error => console.error('Error exporting data:', error));
+            });
+            
+            // Refresh button
+            document.getElementById('refreshAnalytics')?.addEventListener('click', function() {
+                loadOzonAnalyticsData();
+                if (ozonDemographics) {
+                    ozonDemographics.loadDemographicsData(true);
+                }
+            });
+        });
     </script>
 </body>
 </html>
