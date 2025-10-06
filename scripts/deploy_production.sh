@@ -9,8 +9,8 @@ set -e
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DEPLOYMENT_LOG="/var/log/inventory_sync/deployment.log"
-BACKUP_DIR="/backup/inventory_sync_deployment"
+DEPLOYMENT_LOG="logs/inventory_sync/deployment.log"
+BACKUP_DIR="backup/inventory_sync_deployment"
 SERVICE_NAME="inventory_sync"
 
 # Load environment variables
