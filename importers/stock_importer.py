@@ -69,7 +69,7 @@ class StockImporter:
         """
         logger.info("🔄 Начинаем получение остатков с Ozon...")
         
-        url = "https://api-seller.ozon.ru/v3/product/info/stocks"
+        url = "https://api-seller.ozon.ru/v4/product/info/stocks"
         headers = {
             "Client-Id": config.OZON_CLIENT_ID,
             "Api-Key": config.OZON_API_KEY,
@@ -84,11 +84,8 @@ class StockImporter:
             while True:
                 payload = {
                     "filter": {
-                        "offer_id": [],
-                        "product_id": [],
                         "visibility": "ALL"
                     },
-                    "last_id": last_id,
                     "limit": limit
                 }
                 
@@ -102,9 +99,6 @@ class StockImporter:
                 
                 items = data['result']['items']
                 logger.info(f"Получено {len(items)} товаров с Ozon (last_id: {last_id})")
-                
-                # Обновляем last_id для следующего запроса
-                last_id = data.get('result', {}).get('last_id', '')
                 
                 for item in items:
                     # Получаем информацию о товаре из БД
@@ -126,8 +120,8 @@ class StockImporter:
                         }
                         inventory_data.append(inventory_record)
                 
-                # Если нет last_id или получили меньше лимита, значит это последняя страница
-                if not last_id or len(items) < limit:
+                # Если получили меньше лимита, значит это последняя страница
+                if len(items) < limit:
                     break
                 
                 time.sleep(0.1)  # Небольшая задержка между запросами
