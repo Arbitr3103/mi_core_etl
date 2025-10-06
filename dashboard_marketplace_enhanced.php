@@ -1,15 +1,36 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 
-// Подключение к БД
+// Подключение к БД - используем те же параметры что и в Python импортере
 $host = 'localhost';
 $dbname = 'mi_core_db';
-$username = 'v_admin';
-$password = 'Qwerty123!';
+
+// Попробуем разные варианты подключения
+$connection_attempts = [
+    ['username' => 'v_admin', 'password' => 'Qwerty123!'],
+    ['username' => 'root', 'password' => 'Qwerty123!'],
+    ['username' => 'mi_core_user', 'password' => 'Qwerty123!'],
+];
+
+$pdo = null;
+$connection_error = '';
+
+foreach ($connection_attempts as $attempt) {
+    try {
+        $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $attempt['username'], $attempt['password']);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        break; // Успешное подключение
+    } catch(PDOException $e) {
+        $connection_error = $e->getMessage();
+        continue; // Пробуем следующий вариант
+    }
+}
+
+if (!$pdo) {
+    die("Ошибка подключения к БД: " . $connection_error . "<br><br>Проверьте параметры подключения в config.py");
+}
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Получаем статистику остатков Ozon
     $stmt = $pdo->query("
