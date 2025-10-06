@@ -1,0 +1,308 @@
+{
+  "validation_info": {
+    "timestamp": "2025-10-06T16:56:45.718032",
+    "script_directory": "/Users/vladimirbragin/CascadeProjects/mi_core_etl",
+    "python_version": "3.12.6"
+  },
+  "summary": {
+    "total_checks": 31,
+    "passed_checks": 30,
+    "failed_checks": 0,
+    "warning_checks": 1,
+    "critical_issues": 0,
+    "ready_for_production": true
+  },
+  "validation_results": [
+    {
+      "category": "Scripts",
+      "test_name": "Executable: run_inventory_sync.sh",
+      "status": "pass",
+      "message": "Основной скрипт синхронизации имеет права на выполнение",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263206",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Content: run_inventory_sync.sh",
+      "status": "pass",
+      "message": "Основной скрипт синхронизации содержит данные (9199 байт)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263239",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Executable: run_weekly_inventory_resync.sh",
+      "status": "pass",
+      "message": "Скрипт еженедельной пересинхронизации имеет права на выполнение",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263277",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Content: run_weekly_inventory_resync.sh",
+      "status": "pass",
+      "message": "Скрипт еженедельной пересинхронизации содержит данные (13886 байт)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263293",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Executable: check_inventory_health.sh",
+      "status": "pass",
+      "message": "Скрипт проверки здоровья системы имеет права на выполнение",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263367",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Content: check_inventory_health.sh",
+      "status": "pass",
+      "message": "Скрипт проверки здоровья системы содержит данные (17452 байт)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263400",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Executable: check_data_freshness.sh",
+      "status": "pass",
+      "message": "Скрипт проверки актуальности данных имеет права на выполнение",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263430",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Content: check_data_freshness.sh",
+      "status": "pass",
+      "message": "Скрипт проверки актуальности данных содержит данные (13503 байт)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263442",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Executable: monitor_log_size.sh",
+      "status": "pass",
+      "message": "Скрипт мониторинга размера логов имеет права на выполнение",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263463",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Content: monitor_log_size.sh",
+      "status": "pass",
+      "message": "Скрипт мониторинга размера логов содержит данные (12938 байт)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263472",
+      "is_critical": false
+    },
+    {
+      "category": "Scripts",
+      "test_name": "Content: inventory_crontab.txt",
+      "status": "pass",
+      "message": "Конфигурация cron задач содержит данные (6129 байт)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263486",
+      "is_critical": false
+    },
+    {
+      "category": "Cron",
+      "test_name": "Syntax Validation",
+      "status": "pass",
+      "message": "Синтаксис crontab корректен (7 записей)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263951",
+      "is_critical": false
+    },
+    {
+      "category": "Cron",
+      "test_name": "Required Tasks",
+      "status": "pass",
+      "message": "Все обязательные задачи присутствуют в crontab",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.263975",
+      "is_critical": false
+    },
+    {
+      "category": "Cron",
+      "test_name": "Sync Frequency",
+      "status": "pass",
+      "message": "Частота синхронизации оптимальна (1 задач)",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.264012",
+      "is_critical": false
+    },
+    {
+      "category": "Directories",
+      "test_name": "logs Directory",
+      "status": "pass",
+      "message": "Директория logs существует и доступна для записи",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.264120",
+      "is_critical": false
+    },
+    {
+      "category": "Directories",
+      "test_name": "locks Directory",
+      "status": "pass",
+      "message": "Директория locks существует и доступна для записи",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.264176",
+      "is_critical": false
+    },
+    {
+      "category": "Directories",
+      "test_name": "pids Directory",
+      "status": "pass",
+      "message": "Директория pids существует и доступна для записи",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.264227",
+      "is_critical": false
+    },
+    {
+      "category": "Dependencies",
+      "test_name": "Python Version",
+      "status": "pass",
+      "message": "Python версия подходящая: 3.12.6",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.264243",
+      "is_critical": false
+    },
+    {
+      "category": "Dependencies",
+      "test_name": "Module: mysql.connector",
+      "status": "pass",
+      "message": "Подключение к MySQL - модуль доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.621285",
+      "is_critical": false
+    },
+    {
+      "category": "Dependencies",
+      "test_name": "Module: requests",
+      "status": "pass",
+      "message": "HTTP запросы к API - модуль доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.688987",
+      "is_critical": false
+    },
+    {
+      "category": "Dependencies",
+      "test_name": "Module: json",
+      "status": "pass",
+      "message": "Обработка JSON данных - модуль доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.689022",
+      "is_critical": false
+    },
+    {
+      "category": "Dependencies",
+      "test_name": "Module: datetime",
+      "status": "pass",
+      "message": "Работа с датами и временем - модуль доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.689029",
+      "is_critical": false
+    },
+    {
+      "category": "Dependencies",
+      "test_name": "Module: logging",
+      "status": "pass",
+      "message": "Система логирования - модуль доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.689035",
+      "is_critical": false
+    },
+    {
+      "category": "Testing",
+      "test_name": "Test Script: test_automation_system.py",
+      "status": "pass",
+      "message": "Тестовый скрипт доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.689113",
+      "is_critical": false
+    },
+    {
+      "category": "Testing",
+      "test_name": "Test Script: test_cron_execution.py",
+      "status": "pass",
+      "message": "Тестовый скрипт доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.689147",
+      "is_critical": false
+    },
+    {
+      "category": "Testing",
+      "test_name": "Test Script: test_failure_recovery.py",
+      "status": "pass",
+      "message": "Тестовый скрипт доступен",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.689173",
+      "is_critical": false
+    },
+    {
+      "category": "Testing",
+      "test_name": "Test Coverage",
+      "status": "pass",
+      "message": "Хорошее покрытие тестами: 100%",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.689426",
+      "is_critical": false
+    },
+    {
+      "category": "System",
+      "test_name": "Command: bash",
+      "status": "pass",
+      "message": "Команда bash доступна: /bin/bash",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.703966",
+      "is_critical": false
+    },
+    {
+      "category": "System",
+      "test_name": "Command: python3",
+      "status": "pass",
+      "message": "Команда python3 доступна: /Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.710768",
+      "is_critical": false
+    },
+    {
+      "category": "System",
+      "test_name": "Command: crontab",
+      "status": "pass",
+      "message": "Команда crontab доступна: /usr/bin/crontab",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.717765",
+      "is_critical": false
+    },
+    {
+      "category": "System",
+      "test_name": "Disk Space",
+      "status": "warning",
+      "message": "Мало свободного места: 11.4%",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.717939",
+      "is_critical": false
+    }
+  ],
+  "critical_issues": [],
+  "warnings": [
+    {
+      "category": "System",
+      "test_name": "Disk Space",
+      "status": "warning",
+      "message": "Мало свободного места: 11.4%",
+      "details": {},
+      "timestamp": "2025-10-06T16:56:45.717939",
+      "is_critical": false
+    }
+  ]
+}

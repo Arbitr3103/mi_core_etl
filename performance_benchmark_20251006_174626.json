@@ -1,0 +1,439 @@
+{
+  "benchmark_summary": {
+    "start_time": "2025-10-06T17:45:55.032414",
+    "end_time": "2025-10-06T17:46:26.594883",
+    "total_duration_minutes": 0.52604115,
+    "system_info": {
+      "cpu_count": 8,
+      "memory_gb": 8.0,
+      "platform": "darwin"
+    }
+  },
+  "benchmark_results": {
+    "data_processing": [
+      {
+        "operation_name": "data_processing",
+        "dataset_size": 1000,
+        "iterations": 5,
+        "total_time_seconds": 0.2627448740095133,
+        "avg_time_seconds": 0.05254897480190266,
+        "min_time_seconds": 0.045292541006347165,
+        "max_time_seconds": 0.06035200000042096,
+        "median_time_seconds": 0.053793500002939254,
+        "throughput_per_second": 19029.86697209158,
+        "operations_per_second": 19.02986697209158,
+        "peak_memory_mb": 0.5065746307373047,
+        "avg_cpu_percent": 33.86,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "data_processing",
+        "dataset_size": 5000,
+        "iterations": 5,
+        "total_time_seconds": 1.2353440409933683,
+        "avg_time_seconds": 0.24706880819867366,
+        "min_time_seconds": 0.23922004199994262,
+        "max_time_seconds": 0.2582014999934472,
+        "median_time_seconds": 0.2466880419960944,
+        "throughput_per_second": 20237.277365985374,
+        "operations_per_second": 4.047455473197075,
+        "peak_memory_mb": 2.323544502258301,
+        "avg_cpu_percent": 34.77333333333333,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "data_processing",
+        "dataset_size": 10000,
+        "iterations": 5,
+        "total_time_seconds": 2.4475331679859664,
+        "avg_time_seconds": 0.48950663359719326,
+        "min_time_seconds": 0.4827612919907551,
+        "max_time_seconds": 0.5016191249887925,
+        "median_time_seconds": 0.4893854590045521,
+        "throughput_per_second": 20428.732347330824,
+        "operations_per_second": 2.0428732347330825,
+        "peak_memory_mb": 4.543796539306641,
+        "avg_cpu_percent": 34.514,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "data_processing",
+        "dataset_size": 25000,
+        "iterations": 5,
+        "total_time_seconds": 6.271106250002049,
+        "avg_time_seconds": 1.2542212500004097,
+        "min_time_seconds": 1.2118077499908395,
+        "max_time_seconds": 1.3111185000016121,
+        "median_time_seconds": 1.2395154999976512,
+        "throughput_per_second": 19932.687314930943,
+        "operations_per_second": 0.7973074925972378,
+        "peak_memory_mb": 11.282866477966309,
+        "avg_cpu_percent": 23.740454545454543,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      }
+    ],
+    "cache_performance": [
+      {
+        "operation_name": "cache_operations",
+        "dataset_size": 100,
+        "iterations": 10,
+        "total_time_seconds": 0.09951479198934976,
+        "avg_time_seconds": 0.009951479198934975,
+        "min_time_seconds": 0.0074623330001486465,
+        "max_time_seconds": 0.011788000003434718,
+        "median_time_seconds": 0.010756729498098139,
+        "throughput_per_second": 20097.51475151597,
+        "operations_per_second": 100.48757375757985,
+        "peak_memory_mb": 0.0233917236328125,
+        "avg_cpu_percent": 25.6,
+        "cache_hit_rate": 0.8200000000000001,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "cache_operations",
+        "dataset_size": 500,
+        "iterations": 10,
+        "total_time_seconds": 0.46339729001920205,
+        "avg_time_seconds": 0.0463397290019202,
+        "min_time_seconds": 0.034658541000681,
+        "max_time_seconds": 0.10499970799719449,
+        "median_time_seconds": 0.037563854006293695,
+        "throughput_per_second": 21579.75502961104,
+        "operations_per_second": 21.57975502961104,
+        "peak_memory_mb": 0.08865642547607422,
+        "avg_cpu_percent": 91.1,
+        "cache_hit_rate": 0.8200000000000001,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "cache_operations",
+        "dataset_size": 1000,
+        "iterations": 10,
+        "total_time_seconds": 0.5791009590029716,
+        "avg_time_seconds": 0.057910095900297165,
+        "min_time_seconds": 0.045026749998214655,
+        "max_time_seconds": 0.1364600000088103,
+        "median_time_seconds": 0.048165062493353616,
+        "throughput_per_second": 34536.292314959486,
+        "operations_per_second": 17.268146157479745,
+        "peak_memory_mb": 0.17739391326904297,
+        "avg_cpu_percent": 42.2,
+        "cache_hit_rate": 0.8200000000000001,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "cache_operations",
+        "dataset_size": 5000,
+        "iterations": 10,
+        "total_time_seconds": 2.21842987499258,
+        "avg_time_seconds": 0.22184298749925802,
+        "min_time_seconds": 0.20940675000019837,
+        "max_time_seconds": 0.24539479200029746,
+        "median_time_seconds": 0.21786900000006426,
+        "throughput_per_second": 45076.92631047644,
+        "operations_per_second": 4.507692631047644,
+        "peak_memory_mb": 0.9708843231201172,
+        "avg_cpu_percent": 0.0,
+        "cache_hit_rate": 0.8200000000000001,
+        "error_rate": 0.0
+      }
+    ],
+    "batch_sizes": [
+      {
+        "operation_name": "batch_processing",
+        "dataset_size": 100,
+        "iterations": 3,
+        "total_time_seconds": 0.8768272919987794,
+        "avg_time_seconds": 0.29227576399959315,
+        "min_time_seconds": 0.2867865419975715,
+        "max_time_seconds": 0.2995162080042064,
+        "median_time_seconds": 0.2905245419970015,
+        "throughput_per_second": 34214.26348581513,
+        "operations_per_second": 3.421426348581513,
+        "peak_memory_mb": 4.551871299743652,
+        "avg_cpu_percent": 47.233333333333334,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "batch_processing",
+        "dataset_size": 500,
+        "iterations": 3,
+        "total_time_seconds": 0.923625957002514,
+        "avg_time_seconds": 0.30787531900083803,
+        "min_time_seconds": 0.29597979100071825,
+        "max_time_seconds": 0.32047125000099186,
+        "median_time_seconds": 0.30717491600080393,
+        "throughput_per_second": 32480.680921268588,
+        "operations_per_second": 3.2480680921268585,
+        "peak_memory_mb": 4.551505088806152,
+        "avg_cpu_percent": 22.48888888888889,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "batch_processing",
+        "dataset_size": 1000,
+        "iterations": 3,
+        "total_time_seconds": 0.9749250419990858,
+        "avg_time_seconds": 0.32497501399969525,
+        "min_time_seconds": 0.30415329200332053,
+        "max_time_seconds": 0.34450700000161305,
+        "median_time_seconds": 0.3262647499941522,
+        "throughput_per_second": 30771.596489597745,
+        "operations_per_second": 3.0771596489597743,
+        "peak_memory_mb": 4.554460525512695,
+        "avg_cpu_percent": 26.516666666666666,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "batch_processing",
+        "dataset_size": 2000,
+        "iterations": 3,
+        "total_time_seconds": 0.8920900839875685,
+        "avg_time_seconds": 0.2973633613291895,
+        "min_time_seconds": 0.2929676250059856,
+        "max_time_seconds": 0.30440204199112486,
+        "median_time_seconds": 0.29472041699045803,
+        "throughput_per_second": 33628.89077962003,
+        "operations_per_second": 3.362889077962003,
+        "peak_memory_mb": 4.551344871520996,
+        "avg_cpu_percent": 31.433333333333334,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "batch_processing",
+        "dataset_size": 5000,
+        "iterations": 3,
+        "total_time_seconds": 0.8823939579888247,
+        "avg_time_seconds": 0.29413131932960823,
+        "min_time_seconds": 0.2892451660009101,
+        "max_time_seconds": 0.2982213749928633,
+        "median_time_seconds": 0.2949274169950513,
+        "throughput_per_second": 33998.41955896523,
+        "operations_per_second": 3.3998419558965227,
+        "peak_memory_mb": 4.55148983001709,
+        "avg_cpu_percent": 24.855555555555554,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      }
+    ],
+    "parallel_workers": [
+      {
+        "operation_name": "parallel_workers",
+        "dataset_size": 1,
+        "iterations": 3,
+        "total_time_seconds": 0.7996497080021072,
+        "avg_time_seconds": 0.26654990266736905,
+        "min_time_seconds": 0.2622084999893559,
+        "max_time_seconds": 0.27333275000273716,
+        "median_time_seconds": 0.26410845801001415,
+        "throughput_per_second": 37516.42713026658,
+        "operations_per_second": 3.7516427130266576,
+        "peak_memory_mb": 4.537622451782227,
+        "avg_cpu_percent": 13.255555555555558,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "parallel_workers",
+        "dataset_size": 2,
+        "iterations": 3,
+        "total_time_seconds": 0.8563600830093492,
+        "avg_time_seconds": 0.2854533610031164,
+        "min_time_seconds": 0.2835669160122052,
+        "max_time_seconds": 0.28796212500310503,
+        "median_time_seconds": 0.28483104199403897,
+        "throughput_per_second": 35031.992493830985,
+        "operations_per_second": 3.503199249383098,
+        "peak_memory_mb": 4.55579948425293,
+        "avg_cpu_percent": 34.96666666666667,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "parallel_workers",
+        "dataset_size": 4,
+        "iterations": 3,
+        "total_time_seconds": 0.8717700830165995,
+        "avg_time_seconds": 0.2905900276721998,
+        "min_time_seconds": 0.28525029101001564,
+        "max_time_seconds": 0.2951207500009332,
+        "median_time_seconds": 0.2913990420056507,
+        "throughput_per_second": 34412.74320425236,
+        "operations_per_second": 3.441274320425236,
+        "peak_memory_mb": 4.564375877380371,
+        "avg_cpu_percent": 42.05555555555556,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "parallel_workers",
+        "dataset_size": 8,
+        "iterations": 3,
+        "total_time_seconds": 1.0327606240171008,
+        "avg_time_seconds": 0.3442535413390336,
+        "min_time_seconds": 0.33068345799983945,
+        "max_time_seconds": 0.3584343750117114,
+        "median_time_seconds": 0.34364279100554995,
+        "throughput_per_second": 29048.35767586667,
+        "operations_per_second": 2.904835767586667,
+        "peak_memory_mb": 4.579730033874512,
+        "avg_cpu_percent": 32.93333333333333,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      }
+    ],
+    "memory_efficiency": [
+      {
+        "operation_name": "memory_efficiency",
+        "dataset_size": 1000,
+        "iterations": 1,
+        "total_time_seconds": 0.07108816699474119,
+        "avg_time_seconds": 0.07108816699474119,
+        "min_time_seconds": 0.07108816699474119,
+        "max_time_seconds": 0.07108816699474119,
+        "median_time_seconds": 0.07108816699474119,
+        "throughput_per_second": 14067.038753073713,
+        "operations_per_second": 14.067038753073714,
+        "peak_memory_mb": 1.2243547439575195,
+        "avg_cpu_percent": 67.6,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "memory_efficiency",
+        "dataset_size": 5000,
+        "iterations": 1,
+        "total_time_seconds": 0.2477902910031844,
+        "avg_time_seconds": 0.2477902910031844,
+        "min_time_seconds": 0.2477902910031844,
+        "max_time_seconds": 0.2477902910031844,
+        "median_time_seconds": 0.2477902910031844,
+        "throughput_per_second": 20178.353154021454,
+        "operations_per_second": 4.035670630804291,
+        "peak_memory_mb": 5.90444278717041,
+        "avg_cpu_percent": 38.233333333333334,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "memory_efficiency",
+        "dataset_size": 10000,
+        "iterations": 1,
+        "total_time_seconds": 0.6865886249870528,
+        "avg_time_seconds": 0.6865886249870528,
+        "min_time_seconds": 0.6865886249870528,
+        "max_time_seconds": 0.6865886249870528,
+        "median_time_seconds": 0.6865886249870528,
+        "throughput_per_second": 14564.762124028159,
+        "operations_per_second": 1.4564762124028159,
+        "peak_memory_mb": 11.777342796325684,
+        "avg_cpu_percent": 22.71666666666667,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      },
+      {
+        "operation_name": "memory_efficiency",
+        "dataset_size": 25000,
+        "iterations": 1,
+        "total_time_seconds": 1.4781902499962598,
+        "avg_time_seconds": 1.4781902499962598,
+        "min_time_seconds": 1.4781902499962598,
+        "max_time_seconds": 1.4781902499962598,
+        "median_time_seconds": 1.4781902499962598,
+        "throughput_per_second": 16912.572654340845,
+        "operations_per_second": 0.6765029061736337,
+        "peak_memory_mb": 29.177303314208984,
+        "avg_cpu_percent": 51.892307692307696,
+        "cache_hit_rate": 0.0,
+        "error_rate": 0.0
+      }
+    ]
+  },
+  "performance_analysis": {
+    "data_processing": {
+      "best_throughput": 20428.732347330824,
+      "worst_throughput": 19029.86697209158,
+      "avg_throughput": 19907.14100008468,
+      "throughput_variance": 383769.9626685433,
+      "memory_efficiency": {
+        "min_memory_mb": 0.5065746307373047,
+        "max_memory_mb": 11.282866477966309,
+        "avg_memory_mb": 4.664195537567139
+      },
+      "scalability_factor": 0.36923573257414033
+    },
+    "cache_performance": {
+      "best_throughput": 45076.92631047644,
+      "worst_throughput": 20097.51475151597,
+      "avg_throughput": 30322.622101640733,
+      "throughput_variance": 138811684.7714111,
+      "memory_efficiency": {
+        "min_memory_mb": 0.0233917236328125,
+        "max_memory_mb": 0.9708843231201172,
+        "avg_memory_mb": 0.3150815963745117
+      },
+      "scalability_factor": 0.42533086971715983
+    },
+    "batch_sizes": {
+      "best_throughput": 34214.26348581513,
+      "worst_throughput": 30771.596489597745,
+      "avg_throughput": 33018.77024705334,
+      "throughput_variance": 2025123.4853086595,
+      "memory_efficiency": {
+        "min_memory_mb": 4.551344871520996,
+        "max_memory_mb": 4.554460525512695,
+        "avg_memory_mb": 4.552134323120117
+      },
+      "scalability_factor": 0.40359497657305876
+    },
+    "parallel_workers": {
+      "best_throughput": 37516.42713026658,
+      "worst_throughput": 29048.35767586667,
+      "avg_throughput": 34002.38012605415,
+      "throughput_variance": 12706454.756201077,
+      "memory_efficiency": {
+        "min_memory_mb": 4.537622451782227,
+        "max_memory_mb": 4.579730033874512,
+        "avg_memory_mb": 4.55938196182251
+      },
+      "scalability_factor": 0.46003617432212823
+    },
+    "memory_efficiency": {
+      "best_throughput": 20178.353154021454,
+      "worst_throughput": 14067.038753073713,
+      "avg_throughput": 16430.681671366045,
+      "throughput_variance": 7781908.021237373,
+      "memory_efficiency": {
+        "min_memory_mb": 1.2243547439575195,
+        "max_memory_mb": 29.177303314208984,
+        "avg_memory_mb": 12.02086091041565
+      },
+      "scalability_factor": 0.37075609746613264
+    }
+  },
+  "optimal_configurations": {
+    "batch_size": {
+      "size": 100,
+      "throughput": 34214.26348581513,
+      "memory_mb": 4.551871299743652
+    },
+    "worker_count": {
+      "count": 1,
+      "throughput": 37516.42713026658,
+      "cpu_percent": 13.255555555555558
+    },
+    "cache_size": {
+      "size": 5000,
+      "hit_rate": 0.8200000000000001,
+      "throughput": 45076.92631047644
+    }
+  }
+}

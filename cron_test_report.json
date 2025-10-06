@@ -1,0 +1,100 @@
+{
+  "summary": {
+    "total_tests": 8,
+    "passed_tests": 8,
+    "failed_tests": 0,
+    "success_rate": 100.0,
+    "test_time": "2025-10-06T16:54:55.713907"
+  },
+  "test_results": [
+    {
+      "test_name": "Script Existence and Permissions",
+      "success": true,
+      "message": "Все необходимые скрипты найдены и исполняемы",
+      "timestamp": "2025-10-06T16:54:51.638274",
+      "details": {}
+    },
+    {
+      "test_name": "Inventory Sync Script Execution",
+      "success": true,
+      "message": "Скрипт корректно обрабатывает неверные параметры",
+      "timestamp": "2025-10-06T16:54:53.312068",
+      "details": {
+        "return_code": 1,
+        "stderr_contains_error": false
+      }
+    },
+    {
+      "test_name": "Lock File Mechanism",
+      "success": true,
+      "message": "Механизм блокировки работает корректно",
+      "timestamp": "2025-10-06T16:54:53.312637",
+      "details": {
+        "lock_file_created": true,
+        "pid_stored_correctly": true,
+        "process_check_works": true
+      }
+    },
+    {
+      "test_name": "Stale Lock Cleanup",
+      "success": true,
+      "message": "Устаревшие lock файлы корректно очищаются",
+      "timestamp": "2025-10-06T16:54:53.313029",
+      "details": {
+        "fake_pid": 999999,
+        "process_existed": false,
+        "file_removed": true
+      }
+    },
+    {
+      "test_name": "Log Directory Creation",
+      "success": true,
+      "message": "Все необходимые директории созданы успешно",
+      "timestamp": "2025-10-06T16:54:53.313468",
+      "details": {
+        "created_directories": [
+          "logs",
+          "locks",
+          "pids"
+        ],
+        "test_location": "/var/folders/29/m9vbg8yx3p37949gcp69vgzh0000gn/T/cron_test_7j1intje/script_test"
+      }
+    },
+    {
+      "test_name": "Health Check Execution",
+      "success": true,
+      "message": "Скрипт проверки здоровья выполняется",
+      "timestamp": "2025-10-06T16:54:55.710517",
+      "details": {
+        "return_code": 1,
+        "stdout_length": 694,
+        "stderr_length": 385
+      }
+    },
+    {
+      "test_name": "Crontab Syntax Validation",
+      "success": true,
+      "message": "Синтаксис crontab корректен (7 валидных записей)",
+      "timestamp": "2025-10-06T16:54:55.711090",
+      "details": {
+        "valid_entries": 7,
+        "file_path": "/Users/vladimirbragin/CascadeProjects/mi_core_etl/inventory_crontab.txt"
+      }
+    },
+    {
+      "test_name": "Log Rotation Functionality",
+      "success": true,
+      "message": "Ротация логов работает корректно (удалено 2 файлов)",
+      "timestamp": "2025-10-06T16:54:55.713525",
+      "details": {
+        "files_before": 5,
+        "files_after": 3,
+        "files_removed": 2,
+        "removed_files": [
+          "test_log_3.log",
+          "test_log_4.log"
+        ]
+      }
+    }
+  ]
+}

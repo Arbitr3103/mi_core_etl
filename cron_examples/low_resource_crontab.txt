@@ -1,0 +1,24 @@
+# Low Resource Inventory Sync Cron Configuration
+# Для систем с ограниченными ресурсами
+
+# Переменные окружения
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+PYTHONPATH=/path/to/project
+MAILTO=admin@yourcompany.com
+
+# Синхронизация 2 раза в день: утром и вечером
+0 8 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=all --batch-size=500 >> /var/log/inventory_sync/morning_sync.log 2>&1
+0 20 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=all --batch-size=500 >> /var/log/inventory_sync/evening_sync.log 2>&1
+
+# Раздельная синхронизация маркетплейсов для снижения нагрузки
+0 9 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=ozon --batch-size=300 >> /var/log/inventory_sync/ozon_sync.log 2>&1
+0 21 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=wb --batch-size=300 >> /var/log/inventory_sync/wb_sync.log 2>&1
+
+# Еженедельная полная синхронизация в выходные
+0 3 * * 6 cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --full-resync --batch-size=200 >> /var/log/inventory_sync/weekly_sync.log 2>&1
+
+# Мониторинг 2 раза в день
+0 12,0 * * * cd /path/to/project && /usr/bin/python3 sync_monitor.py --health-check >> /var/log/inventory_sync/health.log 2>&1
+
+# Еженедельный отчет
+0 10 * * 1 cd /path/to/project && /usr/bin/python3 sync_monitor.py --weekly-report >> /var/log/inventory_sync/reports.log 2>&1

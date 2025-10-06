@@ -1,695 +1,863 @@
 #!/usr/bin/env python3
 """
-Система алертов и уведомлений для пополнения склада.
-Генерирует и отправляет уведомления о критических остатках и других важных событиях.
+Система уведомлений и алертов для мониторинга синхронизации остатков.
+
+Класс AlertManager для отправки email уведомлений при критических ошибках,
+уведомлений о длительном отсутствии синхронизации и еженедельных отчетов
+о состоянии системы.
+
+Автор: ETL System
+Дата: 06 января 2025
 """
 
-import sys
 import os
 import logging
 import smtplib
 import json
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from datetime import datetime, timedelta, date
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+try:
+    from email.mime.text import MimeText
+    from email.mime.multipart import MimeMultipart
+    from email.mime.base import MimeBase
+    from email import encoders
+except ImportError:
+    # Fallback для случаев когда email модули недоступны
+    MimeText = None
+    MimeMultipart = None
+    MimeBase = None
+    encoders = None
+import requests
 
-# Добавляем путь к модулю importers
-sys.path.append(os.path.join(os.path.dirname(__file__), 'importers'))
-
-from replenishment_db_connector import connect_to_replenishment_db as connect_to_db
-from replenishment_recommender import ReplenishmentRecommendation, PriorityLevel
-
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-
-class AlertType(Enum):
-    """Типы алертов."""
-    STOCKOUT_CRITICAL = "STOCKOUT_CRITICAL"
-    STOCKOUT_WARNING = "STOCKOUT_WARNING"
-    SLOW_MOVING = "SLOW_MOVING"
-    OVERSTOCKED = "OVERSTOCKED"
-    NO_SALES = "NO_SALES"
+# Импортируем конфигурацию
+try:
+    import config
+except ImportError:
+    # Если config не найден, используем значения по умолчанию
+    class Config:
+        EMAIL_ENABLED = False
+        SMTP_SERVER = "smtp.gmail.com"
+        SMTP_PORT = 587
+        EMAIL_USER = ""
+        EMAIL_PASSWORD = ""
+        NOTIFICATION_RECIPIENTS = []
+        TELEGRAM_ENABLED = False
+        TELEGRAM_BOT_TOKEN = ""
+        TELEGRAM_CHAT_ID = ""
+    
+    config = Config()
 
 
 class AlertLevel(Enum):
     """Уровни алертов."""
-    CRITICAL = "CRITICAL"
-    HIGH = "HIGH"
-    MEDIUM = "MEDIUM"
-    LOW = "LOW"
-    INFO = "INFO"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+class NotificationType(Enum):
+    """Типы уведомлений."""
+    SYNC_FAILURE = "sync_failure"
+    STALE_DATA = "stale_data"
+    ANOMALY_DETECTED = "anomaly_detected"
+    SYSTEM_HEALTH = "system_health"
+    WEEKLY_REPORT = "weekly_report"
+    API_ERROR = "api_error"
 
 
 @dataclass
 class Alert:
-    """Алерт о состоянии запасов."""
-    product_id: int
-    sku: str
-    product_name: str
-    alert_type: AlertType
-    alert_level: AlertLevel
+    """Модель алерта."""
+    level: AlertLevel
+    type: NotificationType
+    title: str
     message: str
-    current_stock: int
-    days_until_stockout: Optional[int]
-    recommended_action: str
-    created_at: datetime
+    source: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    timestamp: Optional[datetime] = None
+    
+    def __post_init__(self):
+        if self.timestamp is None:
+            self.timestamp = datetime.now()
+
+
+@dataclass
+class NotificationConfig:
+    """Конфигурация уведомлений."""
+    email_enabled: bool = False
+    telegram_enabled: bool = False
+    smtp_server: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    email_user: str = ""
+    email_password: str = ""
+    recipients: List[str] = None
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    
+    def __post_init__(self):
+        if self.recipients is None:
+            self.recipients = []
 
 
 class AlertManager:
-    """Класс для управления алертами и уведомлениями."""
+    """
+    Класс для управления уведомлениями и алертами системы синхронизации.
     
-    def __init__(self, connection=None):
+    Обеспечивает:
+    - Отправку email уведомлений при критических ошибках
+    - Уведомления о длительном отсутствии синхронизации
+    - Еженедельные отчеты о состоянии системы
+    - Интеграцию с Telegram для мгновенных уведомлений
+    """
+    
+    def __init__(self, db_cursor=None, db_connection=None, logger_name: str = "AlertManager"):
         """
         Инициализация менеджера алертов.
         
         Args:
-            connection: Подключение к базе данных (опционально)
+            db_cursor: Курсор базы данных (опционально)
+            db_connection: Соединение с базой данных (опционально)
+            logger_name: Имя логгера
         """
-        self.connection = connection or connect_to_db()
-        self.settings = self._load_notification_settings()
+        self.cursor = db_cursor
+        self.connection = db_connection
+        self.logger = logging.getLogger(logger_name)
         
-    def _load_notification_settings(self) -> Dict[str, any]:
-        """Загружает настройки уведомлений."""
+        # Загружаем конфигурацию из config.py или переменных окружения
+        self.config = self._load_notification_config()
+        
+        # История отправленных уведомлений (для предотвращения спама)
+        self.sent_alerts = {}
+        
+        # Настройки частоты уведомлений
+        self.alert_cooldowns = {
+            NotificationType.SYNC_FAILURE: timedelta(hours=1),
+            NotificationType.STALE_DATA: timedelta(hours=6),
+            NotificationType.ANOMALY_DETECTED: timedelta(hours=2),
+            NotificationType.API_ERROR: timedelta(minutes=30),
+            NotificationType.SYSTEM_HEALTH: timedelta(hours=12),
+        }
+    
+    def _load_notification_config(self) -> NotificationConfig:
+        """Загрузка конфигурации уведомлений."""
         try:
-            cursor = self.connection.cursor(dictionary=True)
-            cursor.execute("""
-                SELECT setting_key, setting_value, setting_type 
-                FROM replenishment_settings 
-                WHERE category = 'NOTIFICATIONS' AND is_active = TRUE
-            """)
+            return NotificationConfig(
+                email_enabled=getattr(config, 'EMAIL_ENABLED', False),
+                telegram_enabled=getattr(config, 'TELEGRAM_ENABLED', False),
+                smtp_server=getattr(config, 'SMTP_SERVER', 'smtp.gmail.com'),
+                smtp_port=getattr(config, 'SMTP_PORT', 587),
+                email_user=getattr(config, 'EMAIL_USER', ''),
+                email_password=getattr(config, 'EMAIL_PASSWORD', ''),
+                recipients=getattr(config, 'NOTIFICATION_RECIPIENTS', []),
+                telegram_bot_token=getattr(config, 'TELEGRAM_BOT_TOKEN', ''),
+                telegram_chat_id=getattr(config, 'TELEGRAM_CHAT_ID', '')
+            )
+        except Exception as e:
+            self.logger.warning(f"⚠️ Ошибка загрузки конфигурации уведомлений: {e}")
+            return NotificationConfig()
+    
+    def send_alert(self, alert: Alert) -> bool:
+        """
+        Отправка алерта через доступные каналы.
+        
+        Args:
+            alert: Объект алерта для отправки
             
-            settings = {}
-            for row in cursor.fetchall():
-                key = row['setting_key']
-                value = row['setting_value']
-                setting_type = row['setting_type']
+        Returns:
+            bool: True если алерт был отправлен успешно
+        """
+        # Проверяем cooldown для предотвращения спама
+        if not self._should_send_alert(alert):
+            self.logger.debug(f"🔇 Алерт {alert.type.value} пропущен из-за cooldown")
+            return False
+        
+        success = False
+        
+        try:
+            # Отправляем через email
+            if self.config.email_enabled and self.config.recipients:
+                email_success = self._send_email_alert(alert)
+                success = success or email_success
+            
+            # Отправляем через Telegram
+            if self.config.telegram_enabled and self.config.telegram_bot_token:
+                telegram_success = self._send_telegram_alert(alert)
+                success = success or telegram_success
+            
+            # Логируем в базу данных
+            if self.cursor and self.connection:
+                self._log_alert_to_db(alert, success)
+            
+            # Обновляем историю отправленных алертов
+            if success:
+                self._update_sent_alerts(alert)
+                self.logger.info(f"📧 Алерт {alert.type.value} отправлен успешно")
+            else:
+                self.logger.warning(f"⚠️ Не удалось отправить алерт {alert.type.value}")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка отправки алерта: {e}")
+            return False
+    
+    def send_sync_failure_alert(self, source: str, error_message: str, 
+                              failure_count: int = 1) -> bool:
+        """
+        Отправка уведомления о сбое синхронизации.
+        
+        Args:
+            source: Источник данных (Ozon, Wildberries)
+            error_message: Сообщение об ошибке
+            failure_count: Количество последовательных сбоев
+            
+        Returns:
+            bool: True если уведомление отправлено
+        """
+        level = AlertLevel.CRITICAL if failure_count > 3 else AlertLevel.ERROR
+        
+        alert = Alert(
+            level=level,
+            type=NotificationType.SYNC_FAILURE,
+            title=f"Сбой синхронизации {source}",
+            message=f"Синхронизация с {source} завершилась ошибкой.\n\n"
+                   f"Количество последовательных сбоев: {failure_count}\n"
+                   f"Ошибка: {error_message}\n\n"
+                   f"Требуется проверка настроек API и состояния системы.",
+            source=source,
+            details={
+                'error_message': error_message,
+                'failure_count': failure_count,
+                'timestamp': datetime.now().isoformat()
+            }
+        )
+        
+        return self.send_alert(alert)
+    
+    def send_stale_data_alert(self, source: str, hours_since_update: float) -> bool:
+        """
+        Отправка уведомления об устаревших данных.
+        
+        Args:
+            source: Источник данных
+            hours_since_update: Количество часов с последнего обновления
+            
+        Returns:
+            bool: True если уведомление отправлено
+        """
+        level = AlertLevel.CRITICAL if hours_since_update > 24 else AlertLevel.WARNING
+        
+        alert = Alert(
+            level=level,
+            type=NotificationType.STALE_DATA,
+            title=f"Устаревшие данные {source}",
+            message=f"Данные от {source} не обновлялись {hours_since_update:.1f} часов.\n\n"
+                   f"Последнее обновление: {datetime.now() - timedelta(hours=hours_since_update)}\n\n"
+                   f"Рекомендуется проверить работу планировщика синхронизации.",
+            source=source,
+            details={
+                'hours_since_update': hours_since_update,
+                'last_update': (datetime.now() - timedelta(hours=hours_since_update)).isoformat()
+            }
+        )
+        
+        return self.send_alert(alert)
+    
+    def send_anomaly_alert(self, anomaly_type: str, source: str, 
+                          description: str, affected_records: int,
+                          severity: str = "medium") -> bool:
+        """
+        Отправка уведомления об обнаруженной аномалии.
+        
+        Args:
+            anomaly_type: Тип аномалии
+            source: Источник данных
+            description: Описание аномалии
+            affected_records: Количество затронутых записей
+            severity: Уровень серьезности (low, medium, high, critical)
+            
+        Returns:
+            bool: True если уведомление отправлено
+        """
+        # Определяем уровень алерта по серьезности
+        level_mapping = {
+            'low': AlertLevel.INFO,
+            'medium': AlertLevel.WARNING,
+            'high': AlertLevel.ERROR,
+            'critical': AlertLevel.CRITICAL
+        }
+        level = level_mapping.get(severity, AlertLevel.WARNING)
+        
+        alert = Alert(
+            level=level,
+            type=NotificationType.ANOMALY_DETECTED,
+            title=f"Аномалия в данных {source}",
+            message=f"Обнаружена аномалия в данных от {source}.\n\n"
+                   f"Тип аномалии: {anomaly_type}\n"
+                   f"Описание: {description}\n"
+                   f"Затронуто записей: {affected_records}\n"
+                   f"Уровень серьезности: {severity}\n\n"
+                   f"Рекомендуется проверить качество данных и настройки импорта.",
+            source=source,
+            details={
+                'anomaly_type': anomaly_type,
+                'affected_records': affected_records,
+                'severity': severity,
+                'description': description
+            }
+        )
+        
+        return self.send_alert(alert)
+    
+    def send_api_error_alert(self, source: str, endpoint: str, 
+                           status_code: int, error_message: str) -> bool:
+        """
+        Отправка уведомления об ошибке API.
+        
+        Args:
+            source: Источник данных
+            endpoint: API endpoint
+            status_code: HTTP статус код
+            error_message: Сообщение об ошибке
+            
+        Returns:
+            bool: True если уведомление отправлено
+        """
+        level = AlertLevel.CRITICAL if status_code in [401, 403] else AlertLevel.ERROR
+        
+        alert = Alert(
+            level=level,
+            type=NotificationType.API_ERROR,
+            title=f"Ошибка API {source}",
+            message=f"Ошибка при обращении к API {source}.\n\n"
+                   f"Endpoint: {endpoint}\n"
+                   f"HTTP статус: {status_code}\n"
+                   f"Ошибка: {error_message}\n\n"
+                   f"Возможные причины:\n"
+                   f"- Неверные API ключи (401, 403)\n"
+                   f"- Превышение лимитов (429)\n"
+                   f"- Технические проблемы на стороне {source} (5xx)",
+            source=source,
+            details={
+                'endpoint': endpoint,
+                'status_code': status_code,
+                'error_message': error_message
+            }
+        )
+        
+        return self.send_alert(alert)
+    
+    def send_weekly_report(self, report_data: Dict[str, Any]) -> bool:
+        """
+        Отправка еженедельного отчета о состоянии системы.
+        
+        Args:
+            report_data: Данные отчета
+            
+        Returns:
+            bool: True если отчет отправлен
+        """
+        # Формируем сводку отчета
+        summary = self._format_weekly_summary(report_data)
+        
+        alert = Alert(
+            level=AlertLevel.INFO,
+            type=NotificationType.WEEKLY_REPORT,
+            title="Еженедельный отчет о синхронизации",
+            message=f"Еженедельный отчет о состоянии системы синхронизации остатков.\n\n{summary}",
+            details=report_data
+        )
+        
+        return self.send_alert(alert)
+    
+    def send_system_health_alert(self, overall_status: str, 
+                               sources_status: Dict[str, str],
+                               anomalies_count: int) -> bool:
+        """
+        Отправка уведомления о состоянии системы.
+        
+        Args:
+            overall_status: Общий статус системы
+            sources_status: Статус по источникам
+            anomalies_count: Количество обнаруженных аномалий
+            
+        Returns:
+            bool: True если уведомление отправлено
+        """
+        # Определяем уровень алерта по статусу
+        level_mapping = {
+            'healthy': AlertLevel.INFO,
+            'warning': AlertLevel.WARNING,
+            'critical': AlertLevel.CRITICAL,
+            'unknown': AlertLevel.ERROR
+        }
+        level = level_mapping.get(overall_status, AlertLevel.WARNING)
+        
+        # Формируем сообщение
+        status_text = "\n".join([f"- {source}: {status}" for source, status in sources_status.items()])
+        
+        alert = Alert(
+            level=level,
+            type=NotificationType.SYSTEM_HEALTH,
+            title=f"Состояние системы: {overall_status}",
+            message=f"Текущее состояние системы синхронизации: {overall_status}\n\n"
+                   f"Статус по источникам:\n{status_text}\n\n"
+                   f"Обнаружено аномалий: {anomalies_count}\n\n"
+                   f"Время проверки: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            details={
+                'overall_status': overall_status,
+                'sources_status': sources_status,
+                'anomalies_count': anomalies_count
+            }
+        )
+        
+        return self.send_alert(alert)
+    
+    def _should_send_alert(self, alert: Alert) -> bool:
+        """Проверка необходимости отправки алерта (cooldown)."""
+        alert_key = f"{alert.type.value}_{alert.source or 'global'}"
+        
+        if alert_key in self.sent_alerts:
+            last_sent = self.sent_alerts[alert_key]
+            cooldown = self.alert_cooldowns.get(alert.type, timedelta(hours=1))
+            
+            if datetime.now() - last_sent < cooldown:
+                return False
+        
+        return True
+    
+    def _update_sent_alerts(self, alert: Alert):
+        """Обновление истории отправленных алертов."""
+        alert_key = f"{alert.type.value}_{alert.source or 'global'}"
+        self.sent_alerts[alert_key] = datetime.now()
+    
+    def _send_email_alert(self, alert: Alert) -> bool:
+        """Отправка алерта по email."""
+        try:
+            # Проверяем доступность email модулей
+            if not all([MimeText, MimeMultipart, MimeBase, encoders]):
+                self.logger.warning("⚠️ Email модули недоступны, пропускаем отправку")
+                return False
+            
+            # Создаем сообщение
+            msg = MimeMultipart()
+            msg['From'] = self.config.email_user
+            msg['To'] = ', '.join(self.config.recipients)
+            msg['Subject'] = f"[{alert.level.value.upper()}] {alert.title}"
+            
+            # Формируем тело сообщения
+            body = self._format_email_body(alert)
+            msg.attach(MimeText(body, 'plain', 'utf-8'))
+            
+            # Добавляем детали как JSON вложение для детальных отчетов
+            if alert.type == NotificationType.WEEKLY_REPORT and alert.details:
+                json_attachment = MimeBase('application', 'json')
+                json_attachment.set_payload(json.dumps(alert.details, indent=2, default=str))
+                encoders.encode_base64(json_attachment)
+                json_attachment.add_header(
+                    'Content-Disposition',
+                    f'attachment; filename="weekly_report_{date.today()}.json"'
+                )
+                msg.attach(json_attachment)
+            
+            # Отправляем email
+            server = smtplib.SMTP(self.config.smtp_server, self.config.smtp_port)
+            server.starttls()
+            server.login(self.config.email_user, self.config.email_password)
+            
+            text = msg.as_string()
+            server.sendmail(self.config.email_user, self.config.recipients, text)
+            server.quit()
+            
+            self.logger.info(f"📧 Email алерт отправлен: {alert.title}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка отправки email: {e}")
+            return False
+    
+    def _send_telegram_alert(self, alert: Alert) -> bool:
+        """Отправка алерта в Telegram."""
+        try:
+            # Формируем сообщение для Telegram
+            message = self._format_telegram_message(alert)
+            
+            # Отправляем через Telegram Bot API
+            url = f"https://api.telegram.org/bot{self.config.telegram_bot_token}/sendMessage"
+            
+            payload = {
+                'chat_id': self.config.telegram_chat_id,
+                'text': message,
+                'parse_mode': 'Markdown'
+            }
+            
+            response = requests.post(url, json=payload, timeout=10)
+            response.raise_for_status()
+            
+            self.logger.info(f"📱 Telegram алерт отправлен: {alert.title}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка отправки Telegram: {e}")
+            return False
+    
+    def _format_email_body(self, alert: Alert) -> str:
+        """Форматирование тела email сообщения."""
+        body = f"""
+АЛЕРТ СИСТЕМЫ СИНХРОНИЗАЦИИ
+{'=' * 50}
+
+Уровень: {alert.level.value.upper()}
+Тип: {alert.type.value}
+Время: {alert.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
+Источник: {alert.source or 'Система'}
+
+ОПИСАНИЕ:
+{alert.message}
+"""
+        
+        if alert.details:
+            body += f"\n\nДЕТАЛИ:\n"
+            for key, value in alert.details.items():
+                body += f"{key}: {value}\n"
+        
+        body += f"""
+{'=' * 50}
+Это автоматическое уведомление системы мониторинга.
+Для получения дополнительной информации обратитесь к логам системы.
+"""
+        
+        return body
+    
+    def _format_telegram_message(self, alert: Alert) -> str:
+        """Форматирование сообщения для Telegram."""
+        # Эмодзи для разных уровней
+        emoji_map = {
+            AlertLevel.INFO: "ℹ️",
+            AlertLevel.WARNING: "⚠️",
+            AlertLevel.ERROR: "❌",
+            AlertLevel.CRITICAL: "🚨"
+        }
+        
+        emoji = emoji_map.get(alert.level, "📢")
+        
+        message = f"{emoji} *{alert.title}*\n\n"
+        message += f"*Уровень:* {alert.level.value.upper()}\n"
+        message += f"*Время:* {alert.timestamp.strftime('%H:%M:%S')}\n"
+        
+        if alert.source:
+            message += f"*Источник:* {alert.source}\n"
+        
+        message += f"\n{alert.message}"
+        
+        # Ограничиваем длину сообщения для Telegram (4096 символов)
+        if len(message) > 4000:
+            message = message[:3950] + "\n\n... (сообщение обрезано)"
+        
+        return message
+    
+    def _format_weekly_summary(self, report_data: Dict[str, Any]) -> str:
+        """Форматирование еженедельной сводки."""
+        try:
+            summary = "ЕЖЕНЕДЕЛЬНАЯ СВОДКА\n"
+            summary += "=" * 30 + "\n\n"
+            
+            # Общая статистика
+            if 'health_status' in report_data:
+                health = report_data['health_status']
+                summary += f"Общее состояние: {health.get('overall_status', 'unknown')}\n"
                 
-                if setting_type == 'BOOLEAN':
-                    settings[key] = value.lower() in ('true', '1', 'yes')
-                elif setting_type == 'JSON':
-                    settings[key] = json.loads(value)
-                else:
-                    settings[key] = value
+                if 'sources' in health:
+                    summary += "\nСтатус источников:\n"
+                    for source, data in health['sources'].items():
+                        status = data.get('health_status', 'unknown')
+                        summary += f"- {source}: {status}\n"
+            
+            # Статистика синхронизации
+            if 'sync_statistics' in report_data:
+                sync_stats = report_data['sync_statistics']
+                summary += f"\nСтатистика синхронизации:\n"
+                for source, stats in sync_stats.items():
+                    success_count = stats.get('success', {}).get('count', 0)
+                    failed_count = stats.get('failed', {}).get('count', 0)
+                    total = success_count + failed_count
+                    success_rate = (success_count / total * 100) if total > 0 else 0
+                    summary += f"- {source}: {success_rate:.1f}% успешных ({success_count}/{total})\n"
+            
+            # Аномалии
+            if 'anomalies' in report_data:
+                anomalies = report_data['anomalies']
+                if anomalies:
+                    summary += f"\nОбнаружено аномалий: {len(anomalies)}\n"
+                    # Группируем по типам
+                    anomaly_types = {}
+                    for anomaly in anomalies:
+                        atype = anomaly.get('type', 'unknown')
+                        anomaly_types[atype] = anomaly_types.get(atype, 0) + 1
                     
-            cursor.close()
-            return settings
-            
-        except Exception as e:
-            logger.error(f"Ошибка загрузки настроек уведомлений: {e}")
-            return {
-                'enable_email_alerts': False,
-                'alert_email_recipients': []
-            }
-    
-    def generate_alerts_from_recommendations(self, recommendations: List[ReplenishmentRecommendation]) -> List[Alert]:
-        """
-        Генерировать алерты на основе рекомендаций.
-        
-        Args:
-            recommendations: Список рекомендаций по пополнению
-            
-        Returns:
-            Список сгенерированных алертов
-        """
-        logger.info("🚨 Генерация алертов из рекомендаций")
-        
-        alerts = []
-        
-        for rec in recommendations:
-            try:
-                # Алерты о критических остатках
-                if rec.priority_level == PriorityLevel.CRITICAL:
-                    alert = Alert(
-                        product_id=rec.product_id,
-                        sku=rec.sku,
-                        product_name=rec.product_name,
-                        alert_type=AlertType.STOCKOUT_CRITICAL,
-                        alert_level=AlertLevel.CRITICAL,
-                        message=f"КРИТИЧЕСКИЙ ОСТАТОК! Товар {rec.sku} закончится через {rec.days_until_stockout or 'неизвестно'} дней. Текущий остаток: {rec.available_stock} шт.",
-                        current_stock=rec.current_stock,
-                        days_until_stockout=rec.days_until_stockout,
-                        recommended_action=f"СРОЧНО заказать {rec.recommended_order_quantity} шт.",
-                        created_at=datetime.now()
-                    )
-                    alerts.append(alert)
-                
-                elif rec.priority_level == PriorityLevel.HIGH:
-                    alert = Alert(
-                        product_id=rec.product_id,
-                        sku=rec.sku,
-                        product_name=rec.product_name,
-                        alert_type=AlertType.STOCKOUT_WARNING,
-                        alert_level=AlertLevel.HIGH,
-                        message=f"Низкий остаток товара {rec.sku}. Остаток: {rec.available_stock} шт., закончится через {rec.days_until_stockout or 'неизвестно'} дней.",
-                        current_stock=rec.current_stock,
-                        days_until_stockout=rec.days_until_stockout,
-                        recommended_action=f"Рекомендуется заказать {rec.recommended_order_quantity} шт.",
-                        created_at=datetime.now()
-                    )
-                    alerts.append(alert)
-                
-                # Алерты о медленно движущихся товарах
-                if rec.days_since_last_sale > 30 and rec.current_stock > 0:
-                    alert = Alert(
-                        product_id=rec.product_id,
-                        sku=rec.sku,
-                        product_name=rec.product_name,
-                        alert_type=AlertType.SLOW_MOVING,
-                        alert_level=AlertLevel.MEDIUM,
-                        message=f"Медленно движущийся товар {rec.sku}. Нет продаж {rec.days_since_last_sale} дней, остаток: {rec.current_stock} шт.",
-                        current_stock=rec.current_stock,
-                        days_until_stockout=None,
-                        recommended_action="Рассмотреть снижение цены или маркетинговые акции",
-                        created_at=datetime.now()
-                    )
-                    alerts.append(alert)
-                
-                # Алерты об избыточных запасах
-                if rec.inventory_turnover_days and rec.inventory_turnover_days > 90:
-                    alert = Alert(
-                        product_id=rec.product_id,
-                        sku=rec.sku,
-                        product_name=rec.product_name,
-                        alert_type=AlertType.OVERSTOCKED,
-                        alert_level=AlertLevel.LOW,
-                        message=f"Избыточный запас товара {rec.sku}. Оборачиваемость: {rec.inventory_turnover_days} дней.",
-                        current_stock=rec.current_stock,
-                        days_until_stockout=None,
-                        recommended_action="Рассмотреть снижение закупок или распродажу",
-                        created_at=datetime.now()
-                    )
-                    alerts.append(alert)
-                
-            except Exception as e:
-                logger.error(f"Ошибка генерации алерта для товара {rec.sku}: {e}")
-                continue
-        
-        logger.info(f"✅ Сгенерировано {len(alerts)} алертов")
-        return alerts
-    
-    def save_alerts_to_db(self, alerts: List[Alert]) -> bool:
-        """
-        Сохранить алерты в базу данных.
-        
-        Args:
-            alerts: Список алертов для сохранения
-            
-        Returns:
-            True если сохранение прошло успешно
-        """
-        if not alerts:
-            logger.info("Нет алертов для сохранения")
-            return True
-        
-        try:
-            cursor = self.connection.cursor()
-            
-            insert_sql = """
-                INSERT INTO replenishment_alerts (
-                    product_id, sku, product_name, alert_type, alert_level,
-                    message, current_stock, days_until_stockout, recommended_action
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            
-            batch_data = []
-            for alert in alerts:
-                batch_data.append((
-                    alert.product_id,
-                    alert.sku,
-                    alert.product_name,
-                    alert.alert_type.value,
-                    alert.alert_level.value,
-                    alert.message,
-                    alert.current_stock,
-                    alert.days_until_stockout,
-                    alert.recommended_action
-                ))
-            
-            cursor.executemany(insert_sql, batch_data)
-            self.connection.commit()
-            cursor.close()
-            
-            logger.info(f"✅ Сохранено {len(alerts)} алертов в базу данных")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка сохранения алертов: {e}")
-            self.connection.rollback()
-            return False
-    
-    def send_email_alerts(self, alerts: List[Alert]) -> bool:
-        """
-        Отправить email уведомления.
-        
-        Args:
-            alerts: Список алертов для отправки
-            
-        Returns:
-            True если отправка прошла успешно
-        """
-        if not self.settings.get('enable_email_alerts', False):
-            logger.info("Email уведомления отключены")
-            return True
-        
-        recipients = self.settings.get('alert_email_recipients', [])
-        if not recipients:
-            logger.warning("Нет получателей для email уведомлений")
-            return True
-        
-        # Фильтруем только критические и высокоприоритетные алерты
-        critical_alerts = [a for a in alerts if a.alert_level in [AlertLevel.CRITICAL, AlertLevel.HIGH]]
-        
-        if not critical_alerts:
-            logger.info("Нет критических алертов для отправки")
-            return True
-        
-        try:
-            # Формируем email
-            subject = f"🚨 Критические остатки на складе - {len(critical_alerts)} товаров"
-            
-            html_body = self._create_email_template(critical_alerts)
-            
-            # Отправляем email (заглушка - нужно настроить SMTP)
-            logger.info(f"📧 Отправка email уведомления {len(recipients)} получателям")
-            logger.info(f"   Тема: {subject}")
-            logger.info(f"   Критических алертов: {len(critical_alerts)}")
-            
-            # TODO: Реализовать реальную отправку email
-            # self._send_smtp_email(recipients, subject, html_body)
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка отправки email уведомлений: {e}")
-            return False
-    
-    def _create_email_template(self, alerts: List[Alert]) -> str:
-        """Создать HTML шаблон для email уведомления."""
-        html = f"""
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; }}
-                .critical {{ color: #dc3545; font-weight: bold; }}
-                .high {{ color: #fd7e14; font-weight: bold; }}
-                .medium {{ color: #ffc107; }}
-                table {{ border-collapse: collapse; width: 100%; }}
-                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                th {{ background-color: #f2f2f2; }}
-            </style>
-        </head>
-        <body>
-            <h2>🚨 Уведомление о критических остатках</h2>
-            <p>Дата анализа: {datetime.now().strftime('%d.%m.%Y %H:%M')}</p>
-            
-            <h3>Критические товары требующие пополнения:</h3>
-            <table>
-                <tr>
-                    <th>SKU</th>
-                    <th>Товар</th>
-                    <th>Остаток</th>
-                    <th>Дней до исчерпания</th>
-                    <th>Рекомендуемое действие</th>
-                </tr>
-        """
-        
-        for alert in alerts:
-            level_class = alert.alert_level.value.lower()
-            html += f"""
-                <tr>
-                    <td>{alert.sku}</td>
-                    <td>{alert.product_name[:50]}</td>
-                    <td class="{level_class}">{alert.current_stock} шт.</td>
-                    <td class="{level_class}">{alert.days_until_stockout or 'Н/Д'}</td>
-                    <td>{alert.recommended_action}</td>
-                </tr>
-            """
-        
-        html += """
-            </table>
-            
-            <p><strong>Рекомендуется немедленно принять меры по пополнению критических товаров!</strong></p>
-            
-            <hr>
-            <small>Это автоматическое уведомление от системы управления запасами.</small>
-        </body>
-        </html>
-        """
-        
-        return html
-    
-    def create_dashboard_alerts(self, alerts: List[Alert]) -> Dict[str, any]:
-        """
-        Создать алерты для отображения в дашборде.
-        
-        Args:
-            alerts: Список алертов
-            
-        Returns:
-            Структурированные данные для дашборда
-        """
-        try:
-            # Группируем алерты по уровням
-            alerts_by_level = {}
-            for alert in alerts:
-                level = alert.alert_level.value
-                if level not in alerts_by_level:
-                    alerts_by_level[level] = []
-                alerts_by_level[level].append({
-                    'sku': alert.sku,
-                    'product_name': alert.product_name,
-                    'message': alert.message,
-                    'current_stock': alert.current_stock,
-                    'days_until_stockout': alert.days_until_stockout,
-                    'recommended_action': alert.recommended_action,
-                    'created_at': alert.created_at.strftime('%Y-%m-%d %H:%M')
-                })
-            
-            # Создаем сводку
-            dashboard_data = {
-                'total_alerts': len(alerts),
-                'critical_count': len([a for a in alerts if a.alert_level == AlertLevel.CRITICAL]),
-                'high_count': len([a for a in alerts if a.alert_level == AlertLevel.HIGH]),
-                'medium_count': len([a for a in alerts if a.alert_level == AlertLevel.MEDIUM]),
-                'alerts_by_level': alerts_by_level,
-                'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            
-            return dashboard_data
-            
-        except Exception as e:
-            logger.error(f"Ошибка создания алертов для дашборда: {e}")
-            return {}
-    
-    def detect_critical_stock_levels(self) -> List[Alert]:
-        """
-        Обнаружить товары с критическими остатками.
-        
-        Returns:
-            Список алертов о критических остатках
-        """
-        try:
-            cursor = self.connection.cursor(dictionary=True)
-            
-            # Получаем товары с критическими остатками из последнего анализа
-            cursor.execute("""
-                SELECT 
-                    product_id, sku, product_name, current_stock, available_stock,
-                    days_until_stockout, recommended_order_quantity, priority_level,
-                    daily_sales_rate_7d
-                FROM replenishment_recommendations
-                WHERE analysis_date = (
-                    SELECT MAX(analysis_date) FROM replenishment_recommendations
-                )
-                AND priority_level IN ('CRITICAL', 'HIGH')
-                ORDER BY urgency_score DESC
-            """)
-            
-            results = cursor.fetchall()
-            cursor.close()
-            
-            alerts = []
-            
-            for row in results:
-                if row['priority_level'] == 'CRITICAL':
-                    alert_type = AlertType.STOCKOUT_CRITICAL
-                    alert_level = AlertLevel.CRITICAL
-                    message = f"🚨 КРИТИЧЕСКИЙ ОСТАТОК! Товар {row['sku']} закончится через {row['days_until_stockout'] or 'неизвестно'} дней"
+                    for atype, count in anomaly_types.items():
+                        summary += f"- {atype}: {count}\n"
                 else:
-                    alert_type = AlertType.STOCKOUT_WARNING
-                    alert_level = AlertLevel.HIGH
-                    message = f"⚠️ Низкий остаток товара {row['sku']}. Остаток: {row['available_stock']} шт."
-                
-                alert = Alert(
-                    product_id=row['product_id'],
-                    sku=row['sku'],
-                    product_name=row['product_name'],
-                    alert_type=alert_type,
-                    alert_level=alert_level,
-                    message=message,
-                    current_stock=row['current_stock'],
-                    days_until_stockout=row['days_until_stockout'],
-                    recommended_action=f"Заказать {row['recommended_order_quantity']} шт.",
-                    created_at=datetime.now()
-                )
-                alerts.append(alert)
+                    summary += "\nАномалий не обнаружено ✅\n"
             
-            logger.info(f"Обнаружено {len(alerts)} алертов о критических остатках")
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Ошибка обнаружения критических остатков: {e}")
-            return []
-    
-    def detect_slow_moving_inventory(self, days_threshold: int = 30) -> List[Alert]:
-        """
-        Обнаружить медленно движущиеся товары.
-        
-        Args:
-            days_threshold: Порог в днях без продаж
-            
-        Returns:
-            Список алертов о медленно движущихся товарах
-        """
-        try:
-            cursor = self.connection.cursor(dictionary=True)
-            
-            cursor.execute("""
-                SELECT 
-                    rr.product_id, rr.sku, rr.product_name, rr.current_stock,
-                    rr.last_sale_date, rr.daily_sales_rate_30d
-                FROM replenishment_recommendations rr
-                WHERE rr.analysis_date = (
-                    SELECT MAX(analysis_date) FROM replenishment_recommendations
-                )
-                AND (
-                    rr.last_sale_date < DATE_SUB(CURDATE(), INTERVAL %s DAY)
-                    OR rr.last_sale_date IS NULL
-                )
-                AND rr.current_stock > 0
-                ORDER BY rr.last_sale_date ASC
-            """, (days_threshold,))
-            
-            results = cursor.fetchall()
-            cursor.close()
-            
-            alerts = []
-            
-            for row in results:
-                days_since_sale = 999
-                if row['last_sale_date']:
-                    days_since_sale = (datetime.now().date() - row['last_sale_date']).days
-                
-                alert = Alert(
-                    product_id=row['product_id'],
-                    sku=row['sku'],
-                    product_name=row['product_name'],
-                    alert_type=AlertType.SLOW_MOVING,
-                    alert_level=AlertLevel.MEDIUM,
-                    message=f"🐌 Медленно движущийся товар {row['sku']}. Нет продаж {days_since_sale} дней.",
-                    current_stock=row['current_stock'],
-                    days_until_stockout=None,
-                    recommended_action="Рассмотреть маркетинговые акции или снижение цены",
-                    created_at=datetime.now()
-                )
-                alerts.append(alert)
-            
-            logger.info(f"Обнаружено {len(alerts)} медленно движущихся товаров")
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Ошибка обнаружения медленно движущихся товаров: {e}")
-            return []
-    
-    def process_all_alerts(self) -> Dict[str, any]:
-        """
-        Обработать все типы алертов.
-        
-        Returns:
-            Сводка по обработанным алертам
-        """
-        logger.info("🔄 Обработка всех типов алертов")
-        
-        try:
-            # Генерируем разные типы алертов
-            critical_alerts = self.detect_critical_stock_levels()
-            slow_moving_alerts = self.detect_slow_moving_inventory()
-            
-            # Объединяем все алерты
-            all_alerts = critical_alerts + slow_moving_alerts
-            
-            # Сохраняем в базу данных
-            save_success = self.save_alerts_to_db(all_alerts)
-            
-            # Отправляем email уведомления
-            email_success = self.send_email_alerts(all_alerts)
-            
-            # Создаем данные для дашборда
-            dashboard_data = self.create_dashboard_alerts(all_alerts)
-            
-            # Формируем сводку
-            summary = {
-                'total_alerts': len(all_alerts),
-                'critical_alerts': len([a for a in all_alerts if a.alert_level == AlertLevel.CRITICAL]),
-                'high_alerts': len([a for a in all_alerts if a.alert_level == AlertLevel.HIGH]),
-                'medium_alerts': len([a for a in all_alerts if a.alert_level == AlertLevel.MEDIUM]),
-                'save_success': save_success,
-                'email_success': email_success,
-                'dashboard_data': dashboard_data,
-                'processed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            
-            logger.info(f"✅ Обработано алертов: {summary['total_alerts']}")
-            logger.info(f"   - Критических: {summary['critical_alerts']}")
-            logger.info(f"   - Высокоприоритетных: {summary['high_alerts']}")
-            logger.info(f"   - Средних: {summary['medium_alerts']}")
+            summary += f"\nОтчет сгенерирован: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             
             return summary
             
         except Exception as e:
-            logger.error(f"Ошибка обработки алертов: {e}")
-            return {}
+            self.logger.error(f"❌ Ошибка форматирования сводки: {e}")
+            return "Ошибка генерации сводки отчета"
     
-    def get_active_alerts(self, limit: int = 50) -> List[Dict]:
-        """
-        Получить активные алерты из базы данных.
-        
-        Args:
-            limit: Максимальное количество алертов
-            
-        Returns:
-            Список активных алертов
-        """
+    def _log_alert_to_db(self, alert: Alert, success: bool):
+        """Логирование алерта в базу данных."""
         try:
-            cursor = self.connection.cursor(dictionary=True)
+            # Определяем тип БД для совместимости
+            is_sqlite = hasattr(self.cursor, 'lastrowid') and 'sqlite' in str(type(self.cursor)).lower()
             
-            cursor.execute("""
-                SELECT 
-                    id, product_id, sku, product_name, alert_type, alert_level,
-                    message, current_stock, days_until_stockout, recommended_action,
-                    status, created_at
-                FROM replenishment_alerts
-                WHERE status = 'NEW'
-                    AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                ORDER BY 
-                    CASE alert_level
-                        WHEN 'CRITICAL' THEN 4
-                        WHEN 'HIGH' THEN 3
-                        WHEN 'MEDIUM' THEN 2
-                        ELSE 1
-                    END DESC,
-                    created_at DESC
-                LIMIT %s
-            """, (limit,))
+            # Создаем таблицу для алертов если не существует
+            if is_sqlite:
+                create_table_query = """
+                    CREATE TABLE IF NOT EXISTS alert_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        alert_level TEXT NOT NULL,
+                        alert_type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        message TEXT,
+                        source TEXT,
+                        details TEXT,
+                        sent_successfully INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """
+            else:
+                create_table_query = """
+                    CREATE TABLE IF NOT EXISTS alert_logs (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        alert_level VARCHAR(50) NOT NULL,
+                        alert_type VARCHAR(100) NOT NULL,
+                        title VARCHAR(255) NOT NULL,
+                        message TEXT,
+                        source VARCHAR(100),
+                        details JSON,
+                        sent_successfully BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_alert_type_time (alert_type, created_at),
+                        INDEX idx_source_level (source, alert_level)
+                    )
+                """
             
-            results = cursor.fetchall()
-            cursor.close()
+            self.cursor.execute(create_table_query)
             
-            logger.info(f"Получено {len(results)} активных алертов")
-            return results
+            # Вставляем запись об алерте
+            if is_sqlite:
+                insert_query = """
+                    INSERT INTO alert_logs 
+                    (alert_level, alert_type, title, message, source, details, sent_successfully)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """
+                details_json = json.dumps(alert.details) if alert.details else None
+            else:
+                insert_query = """
+                    INSERT INTO alert_logs 
+                    (alert_level, alert_type, title, message, source, details, sent_successfully)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                details_json = alert.details
+            
+            values = (
+                alert.level.value,
+                alert.type.value,
+                alert.title,
+                alert.message,
+                alert.source,
+                details_json,
+                1 if success else 0
+            )
+            
+            self.cursor.execute(insert_query, values)
+            self.connection.commit()
+            
+            self.logger.debug(f"📝 Алерт записан в БД: {alert.title}")
             
         except Exception as e:
-            logger.error(f"Ошибка получения активных алертов: {e}")
+            self.logger.error(f"❌ Ошибка записи алерта в БД: {e}")
+            try:
+                self.connection.rollback()
+            except:
+                pass
+    
+    def get_recent_alerts(self, hours: int = 24, alert_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Получение последних алертов из базы данных.
+        
+        Args:
+            hours: Количество часов для выборки
+            alert_type: Фильтр по типу алерта (опционально)
+            
+        Returns:
+            List[Dict]: Список алертов
+        """
+        try:
+            if not self.cursor:
+                return []
+            
+            # Определяем тип БД для совместимости
+            is_sqlite = hasattr(self.cursor, 'lastrowid') and 'sqlite' in str(type(self.cursor)).lower()
+            
+            if is_sqlite:
+                query = """
+                    SELECT alert_level, alert_type, title, message, source, 
+                           details, sent_successfully, created_at
+                    FROM alert_logs 
+                    WHERE created_at >= datetime('now', '-{} hours')
+                """.format(hours)
+            else:
+                query = """
+                    SELECT alert_level, alert_type, title, message, source, 
+                           details, sent_successfully, created_at
+                    FROM alert_logs 
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL %s HOUR)
+                """
+            
+            params = [] if is_sqlite else [hours]
+            
+            if alert_type:
+                if is_sqlite:
+                    query += " AND alert_type = ?"
+                else:
+                    query += " AND alert_type = %s"
+                params.append(alert_type)
+            
+            query += " ORDER BY created_at DESC LIMIT 100"
+            
+            self.cursor.execute(query, params)
+            results = self.cursor.fetchall()
+            
+            return results if results else []
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка получения алертов: {e}")
             return []
     
-    def acknowledge_alert(self, alert_id: int, acknowledged_by: str) -> bool:
+    def test_notification_channels(self) -> Dict[str, bool]:
         """
-        Подтвердить обработку алерта.
+        Тестирование каналов уведомлений.
         
-        Args:
-            alert_id: ID алерта
-            acknowledged_by: Кто подтвердил
-            
         Returns:
-            True если подтверждение прошло успешно
+            Dict[str, bool]: Результаты тестирования каналов
         """
-        try:
-            cursor = self.connection.cursor()
-            
-            cursor.execute("""
-                UPDATE replenishment_alerts 
-                SET status = 'ACKNOWLEDGED',
-                    acknowledged_by = %s,
-                    acknowledged_at = NOW()
-                WHERE id = %s
-            """, (acknowledged_by, alert_id))
-            
-            self.connection.commit()
-            cursor.close()
-            
-            logger.info(f"✅ Алерт {alert_id} подтвержден пользователем {acknowledged_by}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка подтверждения алерта {alert_id}: {e}")
-            return False
-    
-    def close(self):
-        """Закрыть все соединения."""
-        if self.connection:
-            self.connection.close()
+        results = {}
+        
+        # Тестовый алерт
+        test_alert = Alert(
+            level=AlertLevel.INFO,
+            type=NotificationType.SYSTEM_HEALTH,
+            title="Тест системы уведомлений",
+            message="Это тестовое сообщение для проверки работы системы уведомлений.",
+            details={'test': True}
+        )
+        
+        # Тестируем email
+        if self.config.email_enabled and self.config.recipients:
+            try:
+                results['email'] = self._send_email_alert(test_alert)
+            except Exception as e:
+                self.logger.error(f"❌ Ошибка тестирования email: {e}")
+                results['email'] = False
+        else:
+            results['email'] = False
+            self.logger.info("📧 Email уведомления отключены или не настроены")
+        
+        # Тестируем Telegram
+        if self.config.telegram_enabled and self.config.telegram_bot_token:
+            try:
+                results['telegram'] = self._send_telegram_alert(test_alert)
+            except Exception as e:
+                self.logger.error(f"❌ Ошибка тестирования Telegram: {e}")
+                results['telegram'] = False
+        else:
+            results['telegram'] = False
+            self.logger.info("📱 Telegram уведомления отключены или не настроены")
+        
+        return results
 
 
-def main():
-    """Основная функция для тестирования системы алертов."""
-    logger.info("🚨 Запуск системы алертов пополнения склада")
+# Пример использования
+if __name__ == "__main__":
+    # Демонстрация использования AlertManager
+    import mysql.connector
     
-    alert_manager = None
+    # Настройка логирования
+    logging.basicConfig(level=logging.INFO)
+    
     try:
-        # Создаем менеджер алертов
-        alert_manager = AlertManager()
+        # Подключение к БД (опционально)
+        connection = None
+        cursor = None
         
-        # Обрабатываем все алерты
-        summary = alert_manager.process_all_alerts()
+        try:
+            connection = mysql.connector.connect(
+                host='localhost',
+                database='test_db',
+                user='test_user',
+                password='test_password'
+            )
+            cursor = connection.cursor(dictionary=True)
+        except:
+            print("⚠️ Подключение к БД недоступно, работаем без логирования в БД")
         
-        if summary:
-            print(f"\n📊 СВОДКА ПО АЛЕРТАМ:")
-            print("=" * 50)
-            print(f"Всего алертов: {summary['total_alerts']}")
-            print(f"Критических: {summary['critical_alerts']}")
-            print(f"Высокоприоритетных: {summary['high_alerts']}")
-            print(f"Средних: {summary['medium_alerts']}")
-            print(f"Сохранение в БД: {'✅' if summary['save_success'] else '❌'}")
-            print(f"Отправка email: {'✅' if summary['email_success'] else '❌'}")
+        # Создание менеджера алертов
+        alert_manager = AlertManager(cursor, connection)
         
-        # Получаем активные алерты
-        active_alerts = alert_manager.get_active_alerts(limit=10)
+        # Тестирование каналов уведомлений
+        print("🧪 Тестирование каналов уведомлений...")
+        test_results = alert_manager.test_notification_channels()
         
-        if active_alerts:
-            print(f"\n🔔 АКТИВНЫЕ АЛЕРТЫ ({len(active_alerts)}):")
-            print("=" * 80)
-            
-            for i, alert in enumerate(active_alerts, 1):
-                level_emoji = {
-                    'CRITICAL': '🚨',
-                    'HIGH': '⚠️',
-                    'MEDIUM': '📋',
-                    'LOW': 'ℹ️',
-                    'INFO': '💡'
-                }.get(alert['alert_level'], '📋')
-                
-                print(f"\n{i}. {level_emoji} {alert['alert_level']} - {alert['sku']}")
-                print(f"   {alert['message']}")
-                print(f"   Действие: {alert['recommended_action']}")
-                print(f"   Создан: {alert['created_at']}")
+        for channel, success in test_results.items():
+            status = "✅ Работает" if success else "❌ Не работает"
+            print(f"{channel}: {status}")
         
-        print("\n✅ Обработка алертов завершена!")
+        # Примеры отправки различных типов алертов
+        print("\n📧 Примеры алертов:")
+        
+        # Алерт о сбое синхронизации
+        alert_manager.send_sync_failure_alert(
+            source="Ozon",
+            error_message="API ключ недействителен",
+            failure_count=3
+        )
+        
+        # Алерт об устаревших данных
+        alert_manager.send_stale_data_alert(
+            source="Wildberries",
+            hours_since_update=8.5
+        )
+        
+        # Алерт об аномалии
+        alert_manager.send_anomaly_alert(
+            anomaly_type="zero_stock_spike",
+            source="Ozon",
+            description="Более 50% товаров имеют нулевые остатки",
+            affected_records=150,
+            severity="high"
+        )
+        
+        # Алерт о состоянии системы
+        alert_manager.send_system_health_alert(
+            overall_status="warning",
+            sources_status={"Ozon": "healthy", "Wildberries": "warning"},
+            anomalies_count=2
+        )
+        
+        print("✅ Демонстрация завершена")
         
     except Exception as e:
-        logger.error(f"Ошибка в main(): {e}")
-        
+        print(f"❌ Ошибка демонстрации: {e}")
     finally:
-        if alert_manager:
-            alert_manager.close()
-
-
-if __name__ == "__main__":
-    main()
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()

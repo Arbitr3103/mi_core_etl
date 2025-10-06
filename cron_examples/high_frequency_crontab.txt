@@ -1,0 +1,22 @@
+# High Frequency Inventory Sync Cron Configuration
+# Для высоконагруженных систем с частыми изменениями остатков
+
+# Переменные окружения
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+PYTHONPATH=/path/to/project
+MAILTO=admin@yourcompany.com
+
+# Синхронизация каждые 2 часа
+0 */2 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=all --quick >> /var/log/inventory_sync/frequent_sync.log 2>&1
+
+# Быстрая проверка критических товаров каждый час
+0 * * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --critical-only >> /var/log/inventory_sync/critical_sync.log 2>&1
+
+# Полная синхронизация 4 раза в день
+0 6,12,18,0 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=all --full >> /var/log/inventory_sync/full_sync.log 2>&1
+
+# Мониторинг каждые 30 минут
+*/30 * * * * cd /path/to/project && /usr/bin/python3 sync_monitor.py --quick-check >> /var/log/inventory_sync/monitor.log 2>&1
+
+# Еженедельная глубокая пересинхронизация
+0 1 * * 0 cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --deep-resync >> /var/log/inventory_sync/deep_resync.log 2>&1

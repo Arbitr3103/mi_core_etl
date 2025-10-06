@@ -1,0 +1,37 @@
+# Inventory Sync Cron Configuration
+# Добавьте эти строки в crontab с помощью: crontab -e
+
+# Переменные окружения для cron
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+PYTHONPATH=/path/to/project
+MAILTO=admin@yourcompany.com
+
+# Основная синхронизация остатков каждые 6 часов
+# Запускается в 00:00, 06:00, 12:00, 18:00
+0 */6 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=all >> /var/log/inventory_sync/cron.log 2>&1
+
+# Альтернативный вариант: раздельная синхронизация маркетплейсов
+# Ozon каждые 4 часа начиная с 00:00
+#0 */4 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=ozon >> /var/log/inventory_sync/ozon_cron.log 2>&1
+
+# Wildberries каждые 4 часа начиная с 02:00 (смещение для избежания конфликтов)
+#0 2,6,10,14,18,22 * * * cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --source=wb >> /var/log/inventory_sync/wb_cron.log 2>&1
+
+# Еженедельная полная пересинхронизация
+# Каждое воскресенье в 02:00
+0 2 * * 0 cd /path/to/project && /usr/bin/python3 inventory_sync_service.py --full-resync >> /var/log/inventory_sync/weekly_resync.log 2>&1
+
+# Мониторинг здоровья системы каждый час
+0 * * * * cd /path/to/project && /usr/bin/python3 sync_monitor.py --health-check >> /var/log/inventory_sync/health.log 2>&1
+
+# Еженедельный отчет каждый понедельник в 09:00
+0 9 * * 1 cd /path/to/project && /usr/bin/python3 sync_monitor.py --weekly-report >> /var/log/inventory_sync/reports.log 2>&1
+
+# Ежедневная очистка старых логов в 01:00
+0 1 * * * find /var/log/inventory_sync -name "*.log" -mtime +30 -delete
+
+# Проверка размера логов каждые 6 часов
+0 */6 * * * /usr/local/bin/check_log_size.sh
+
+# Резервное копирование данных каждый день в 03:00
+0 3 * * * /usr/local/bin/backup_inventory_data.sh >> /var/log/inventory_sync/backup.log 2>&1
