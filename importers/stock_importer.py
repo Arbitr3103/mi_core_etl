@@ -77,8 +77,8 @@ class StockImporter:
         }
         
         inventory_data = []
-        last_id = ""
-        limit = 100  # Уменьшаем лимит согласно рекомендациям
+        cursor = ""
+        limit = 100
         
         try:
             while True:
@@ -89,16 +89,21 @@ class StockImporter:
                     "limit": limit
                 }
                 
+                # Добавляем cursor для пагинации, если он есть
+                if cursor:
+                    payload["cursor"] = cursor
+                
                 response = requests.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 
                 data = response.json()
                 
-                if not data.get('result', {}).get('items'):
+                # Исправляем структуру ответа - убираем 'result'
+                if not data.get('items'):
                     break
                 
-                items = data['result']['items']
-                logger.info(f"Получено {len(items)} товаров с Ozon (last_id: {last_id})")
+                items = data['items']
+                logger.info(f"Получено {len(items)} товаров с Ozon (cursor: {cursor[:20]}...)")
                 
                 for item in items:
                     # Получаем информацию о товаре из БД
@@ -110,18 +115,24 @@ class StockImporter:
                     
                     # Обрабатываем остатки по складам
                     for stock in item.get('stocks', []):
+                        # Формируем название склада из warehouse_ids или используем тип склада
+                        warehouse_name = f"Ozon-{stock.get('type', 'FBO').upper()}"
+                        if stock.get('warehouse_ids'):
+                            warehouse_name += f"-{stock['warehouse_ids'][0]}"
+                        
                         inventory_record = {
                             'product_id': product_id,
-                            'warehouse_name': stock.get('warehouse_name', 'Unknown'),
-                            'stock_type': stock.get('type', 'FBO'),  # FBO или FBS
+                            'warehouse_name': warehouse_name,
+                            'stock_type': stock.get('type', 'fbo').upper(),  # FBO или FBS
                             'quantity_present': stock.get('present', 0),
                             'quantity_reserved': stock.get('reserved', 0),
                             'source': 'Ozon'
                         }
                         inventory_data.append(inventory_record)
                 
-                # Если получили меньше лимита, значит это последняя страница
-                if len(items) < limit:
+                # Проверяем есть ли еще страницы
+                cursor = data.get('cursor', '')
+                if not cursor or len(items) < limit:
                     break
                 
                 time.sleep(0.1)  # Небольшая задержка между запросами
@@ -171,7 +182,7 @@ class StockImporter:
 
     def _get_wb_warehouses(self) -> List[Dict[str, Any]]:
         """Получение списка складов Wildberries."""
-        url = "https://suppliers-api.wildberries.ru/api/v1/warehouses"
+        url = "https://statistics-api.wildberries.ru/api/v1/supplier/warehouses"
         headers = {
             "Authorization": config.WB_API_TOKEN
         }
@@ -198,20 +209,25 @@ class StockImporter:
         Returns:
             List[Dict]: Список остатков для данного склада
         """
-        url = f"https://suppliers-api.wildberries.ru/api/v3/stocks/{warehouse_id}"
+        url = f"https://statistics-api.wildberries.ru/api/v1/supplier/stocks"
         headers = {
             "Authorization": config.WB_API_TOKEN
+        }
+        
+        # Параметры для получения остатков
+        params = {
+            "dateFrom": datetime.now().strftime("%Y-%m-%d")
         }
         
         stocks_data = []
         
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, params=params)
             response.raise_for_status()
             
             data = response.json()
             
-            for item in data.get('stocks', []):
+            for item in data:
                 # Получаем информацию о товаре из БД
                 product_id = self._get_product_id_by_wb_sku(item.get('nmId', ''))
                 
@@ -219,12 +235,16 @@ class StockImporter:
                     logger.warning(f"Товар с nmId {item.get('nmId')} не найден в БД")
                     continue
                 
+                # Проверяем, относится ли товар к нужному складу
+                if warehouse_id and item.get('warehouseId') != warehouse_id:
+                    continue
+                
                 stock_record = {
                     'product_id': product_id,
                     'warehouse_name': warehouse_name,
                     'stock_type': 'FBS',  # WB в основном использует FBS
                     'quantity_present': item.get('quantity', 0),
-                    'quantity_reserved': item.get('quantityFull', 0) - item.get('quantity', 0),
+                    'quantity_reserved': item.get('inWayToClient', 0),  # Товары в пути к клиенту
                     'source': 'Wildberries'
                 }
                 stocks_data.append(stock_record)
@@ -295,7 +315,7 @@ class StockImporter:
         
         try:
             # Сначала удаляем все старые записи для данного источника
-            delete_query = "DELETE FROM inventory WHERE source = %s"
+            delete_query = "DELETE FROM inventory_data WHERE source = %s"
             self.cursor.execute(delete_query, (source,))
             deleted_count = self.cursor.rowcount
             logger.info(f"Удалено {deleted_count} старых записей для {source}")
@@ -303,14 +323,14 @@ class StockImporter:
             # Вставляем новые данные
             if inventory_data:
                 insert_query = """
-                INSERT INTO inventory 
-                (product_id, warehouse_name, stock_type, quantity_present, quantity_reserved, source)
+                INSERT INTO inventory_data 
+                (product_id, warehouse_name, stock_type, quantity_present, quantity_reserved, source, last_sync_at)
                 VALUES (%(product_id)s, %(warehouse_name)s, %(stock_type)s, 
-                       %(quantity_present)s, %(quantity_reserved)s, %(source)s)
+                       %(quantity_present)s, %(quantity_reserved)s, %(source)s, NOW())
                 ON DUPLICATE KEY UPDATE
                     quantity_present = VALUES(quantity_present),
                     quantity_reserved = VALUES(quantity_reserved),
-                    updated_at = CURRENT_TIMESTAMP
+                    last_sync_at = NOW()
                 """
                 
                 self.cursor.executemany(insert_query, inventory_data)
@@ -374,7 +394,7 @@ class StockImporter:
                     COUNT(DISTINCT product_id) as unique_products,
                     SUM(quantity_present) as total_present,
                     SUM(quantity_reserved) as total_reserved
-                FROM inventory 
+                FROM inventory_data 
                 GROUP BY source
             """)
             
