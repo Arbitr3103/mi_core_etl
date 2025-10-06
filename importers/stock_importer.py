@@ -77,14 +77,18 @@ class StockImporter:
         }
         
         inventory_data = []
-        offset = 0
-        limit = 1000
+        last_id = ""
+        limit = 100  # Уменьшаем лимит согласно рекомендациям
         
         try:
             while True:
                 payload = {
-                    "filter": {},
-                    "last_id": "",
+                    "filter": {
+                        "offer_id": [],
+                        "product_id": [],
+                        "visibility": "ALL"
+                    },
+                    "last_id": last_id,
                     "limit": limit
                 }
                 
@@ -97,7 +101,10 @@ class StockImporter:
                     break
                 
                 items = data['result']['items']
-                logger.info(f"Получено {len(items)} товаров с Ozon (offset: {offset})")
+                logger.info(f"Получено {len(items)} товаров с Ozon (last_id: {last_id})")
+                
+                # Обновляем last_id для следующего запроса
+                last_id = data.get('result', {}).get('last_id', '')
                 
                 for item in items:
                     # Получаем информацию о товаре из БД
@@ -119,11 +126,10 @@ class StockImporter:
                         }
                         inventory_data.append(inventory_record)
                 
-                # Если получили меньше лимита, значит это последняя страница
-                if len(items) < limit:
+                # Если нет last_id или получили меньше лимита, значит это последняя страница
+                if not last_id or len(items) < limit:
                     break
                 
-                offset += limit
                 time.sleep(0.1)  # Небольшая задержка между запросами
                 
         except requests.exceptions.RequestException as e:
