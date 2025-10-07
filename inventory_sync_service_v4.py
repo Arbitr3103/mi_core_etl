@@ -504,7 +504,7 @@ class InventorySyncServiceV4:
         
         # Добавляем cursor для пагинации
         if cursor:
-            payload["last_id"] = cursor
+            payload["cursor"] = cursor
             
         # Добавляем фильтр по offer_id если указан
         if offer_ids:
@@ -522,20 +522,20 @@ class InventorySyncServiceV4:
             self.log_endpoint_usage(url, True, request_time)
             
             # Проверяем структуру ответа
-            if "result" not in data:
+            if "items" not in data:
                 raise ValueError("Неожиданная структура ответа API")
             
-            result = data["result"]
-            items = result.get("items", [])
-            last_id = result.get("last_id", "")
-            has_next = result.get("has_next", False)
+            items = data.get("items", [])
+            cursor = data.get("cursor", "")
+            total = data.get("total", 0)
+            has_next = bool(cursor)  # Если есть cursor, значит есть еще данные
             
             if self.sync_logger:
                 self.sync_logger.log_info(f"Получено {len(items)} товаров, has_next={has_next}")
             
             return {
                 "items": items,
-                "last_id": last_id,
+                "last_id": cursor,  # Используем cursor как last_id для совместимости
                 "has_next": has_next,
                 "total_items": len(items)
             }
@@ -562,7 +562,7 @@ class InventorySyncServiceV4:
         Returns:
             Список складов Ozon
         """
-        url = f"{config.OZON_API_BASE_URL}/v1/warehouse/fbo/list"
+        url = f"{config.OZON_API_BASE_URL}/v1/warehouse/list"
         headers = {
             "Client-Id": config.OZON_CLIENT_ID,
             "Api-Key": config.OZON_API_KEY,
