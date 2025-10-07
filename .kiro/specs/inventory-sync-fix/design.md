@@ -82,28 +82,52 @@ class InventorySyncService:
         self.connection = connect_to_replenishment_db()
         self.logger = logging.getLogger(__name__)
 
+    # Основные методы синхронизации
     def sync_ozon_inventory(self) -> SyncResult
     def sync_wb_inventory(self) -> SyncResult
+
+    # Новые методы для работы с обновленными API
+    def get_ozon_stocks_v4(self, cursor: str = None) -> Dict
+    def get_ozon_warehouses(self) -> List[Dict]
+    def get_ozon_analytics_stocks(self) -> Dict
+
+    # Методы обработки данных
     def validate_inventory_data(self, data: List[Dict]) -> ValidationResult
     def update_inventory_table(self, data: List[Dict]) -> UpdateResult
+    def process_warehouse_mapping(self, stocks: List[Dict], warehouses: List[Dict]) -> List[Dict]
+
+    # Служебные методы
     def log_sync_result(self, result: SyncResult) -> None
     def get_last_sync_time(self, source: str) -> datetime
     def check_data_freshness(self) -> FreshnessReport
+    def handle_api_pagination(self, endpoint_func, cursor: str = None) -> List[Dict]
 ```
 
 #### API интерфейсы
 
-**Ozon Inventory API**
+**Ozon Inventory API (обновленные endpoints)**
 
-- Endpoint: `/v1/report/products/create` (отчеты)
-- Поля остатков: FBO, FBS, realFBS quantities
-- Частота обновления: каждые 6 часов
+- **Основной endpoint**: `POST /v4/product/info/stocks` - получение остатков товаров
+  - Параметры: clientId, apiKey, filter (offer_id, visibility), lastID (cursor)
+  - Возвращает: остатки с возможностью фильтрации и пагинации
+  - Поля остатков: present, reserved, fbo, fbs, realFbs quantities
+- **Дополнительный endpoint**: `POST /v2/analytics/stock_on_warehouses` - аналитика по складам
+  - Возвращает: детальную информацию об остатках по складам
+- **Справочник складов**: `POST /v1/warehouse/fbo/list` - список складов FBO
+  - Возвращает: список складов, сортировочных центров и пунктов доставки
+  - Частота обновления: каждые 6 часов
 
 **Wildberries Inventory API**
 
 - Endpoint: `/api/v1/supplier/stocks`
 - Поля остатков: quantity, inWayToClient, inWayFromClient
 - Частота обновления: каждые 6 часов
+
+**Примечания по API**:
+
+- Старый метод `/v1/product/import/stocks` устарел и удален из документации
+- Вместо него используется `/v2/products/stock` для обновления остатков
+- Новые endpoints предоставляют более детальную информацию о складах
 
 ### 3. Monitoring and Alerting
 
