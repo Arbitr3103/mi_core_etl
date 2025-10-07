@@ -1079,11 +1079,11 @@ class InventorySyncServiceV4:
                         self.sync_logger.log_warning("Товар без offer_id пропущен")
                     continue
                 
-                # Получаем product_id из БД
-                product_id = self.get_product_id_by_ozon_sku(offer_id)
+                # Используем product_id из API ответа
+                product_id = item.get("product_id", 0)
                 if not product_id:
                     if self.sync_logger:
-                        self.sync_logger.log_warning(f"Товар с offer_id {offer_id} не найден в БД")
+                        self.sync_logger.log_warning(f"Товар {offer_id} без product_id пропущен")
                     continue
                 
                 # Обрабатываем остатки по складам
@@ -1106,33 +1106,21 @@ class InventorySyncServiceV4:
                 for stock in stocks:
                     warehouse_id = stock.get("warehouse_id", 0)
                     warehouse_name = self.get_warehouse_name(warehouse_id)
+                    stock_type = stock.get("type", "fbo")
+                    present = stock.get("present", 0)
+                    reserved = stock.get("reserved", 0)
                     
-                    # Обрабатываем разные типы остатков
-                    stock_types_data = {
-                        StockType.FBO.value: stock.get("fbo", {}),
-                        StockType.FBS.value: stock.get("fbs", {}),
-                        StockType.REAL_FBS.value: stock.get("realFbs", {})
-                    }
-                    
-                    for stock_type, stock_data in stock_types_data.items():
-                        if not stock_data:
-                            continue
-                            
-                        present = stock_data.get("present", 0)
-                        reserved = stock_data.get("reserved", 0)
-                        
-                        # Создаем запись только если есть остатки или резерв
-                        if present > 0 or reserved > 0:
-                            stock_record = OzonStockRecord(
-                                offer_id=offer_id,
-                                product_id=product_id,
-                                warehouse_id=warehouse_id,
-                                warehouse_name=warehouse_name,
-                                stock_type=stock_type,
-                                present=present,
-                                reserved=reserved
-                            )
-                            stock_records.append(stock_record)
+                    # Создаем запись для всех товаров (даже с нулевыми остатками)
+                    stock_record = OzonStockRecord(
+                        offer_id=offer_id,
+                        product_id=product_id,
+                        warehouse_id=warehouse_id,
+                        warehouse_name=warehouse_name,
+                        stock_type=stock_type,
+                        present=present,
+                        reserved=reserved
+                    )
+                    stock_records.append(stock_record)
                 
             except Exception as e:
                 error_msg = f"Ошибка обработки товара {item.get('offer_id', 'unknown')}: {e}"
