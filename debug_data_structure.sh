@@ -9,10 +9,21 @@ echo "1️⃣ Проверяем что сохраняется в БД:"
 echo "-----------------------------------"
 python3 -c "
 import sys
+import os
+import mysql.connector
+from dotenv import load_dotenv
 sys.path.append('.')
 try:
-    from ozon_importer import connect_to_db
-    conn = connect_to_db()
+    load_dotenv()
+    conn = mysql.connector.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        user=os.getenv('DB_USER', 'ingest_user'),
+        password=os.getenv('DB_PASSWORD'),
+        database=os.getenv('DB_NAME', 'mi_core_db'),
+        charset='utf8mb4',
+        collation='utf8mb4_unicode_ci',
+        autocommit=True
+    )
     cursor = conn.cursor(dictionary=True)
     
     print('📊 Структура таблицы inventory:')
@@ -102,10 +113,21 @@ echo "4️⃣ Проверяем соответствие offer_id и sku_ozon:"
 echo "-----------------------------------------------"
 python3 -c "
 import sys
+import os
+import mysql.connector
+from dotenv import load_dotenv
 sys.path.append('.')
 try:
-    from ozon_importer import connect_to_db
-    conn = connect_to_db()
+    load_dotenv()
+    conn = mysql.connector.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        user=os.getenv('DB_USER', 'ingest_user'),
+        password=os.getenv('DB_PASSWORD'),
+        database=os.getenv('DB_NAME', 'mi_core_db'),
+        charset='utf8mb4',
+        collation='utf8mb4_unicode_ci',
+        autocommit=True
+    )
     cursor = conn.cursor(dictionary=True)
     
     print('🔍 Проверяем соответствие offer_id из API и sku_ozon в БД:')
