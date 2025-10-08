@@ -44,7 +44,7 @@ def connect_to_db():
     try:
         connection = mysql.connector.connect(
             host=os.getenv('DB_HOST', 'localhost'),
-            user=os.getenv('DB_USER', 'ingest_user'),
+            user=os.getenv('DB_USER', 'v_admin'),
             password=os.getenv('DB_PASSWORD'),
             database=os.getenv('DB_NAME', 'mi_core_db'),
             charset='utf8mb4',
