@@ -3,16 +3,44 @@
  * API endpoint для исправления товаров без названий
  */
 
+// Настройка обработки ошибок
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
 header("Content-Type: application/json; charset=utf-8");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+// Обработка OPTIONS запроса
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-require_once __DIR__ . "/../config.php";
+// Пытаемся подключить конфигурацию
+$config_loaded = false;
+$config_paths = [
+    __DIR__ . "/../config.php",
+    __DIR__ . "/../../config.php",
+    dirname(__DIR__) . "/config.php"
+];
+
+foreach ($config_paths as $config_path) {
+    if (file_exists($config_path)) {
+        require_once $config_path;
+        $config_loaded = true;
+        break;
+    }
+}
+
+if (!$config_loaded) {
+    // Fallback конфигурация
+    define('DB_HOST', 'localhost');
+    define('DB_USER', 'root');
+    define('DB_PASSWORD', '');
+    define('DB_NAME', 'mi_core');
+}
 
 try {
     $pdo = new PDO(
