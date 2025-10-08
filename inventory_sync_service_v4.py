@@ -27,13 +27,34 @@ from enum import Enum
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 try:
-    from importers.ozon_importer import connect_to_db
     import config
     from inventory_data_validator import InventoryDataValidator, ValidationResult
     from sync_logger import SyncLogger, SyncType, SyncStatus as LogSyncStatus, ProcessingStats
+    import mysql.connector
+    from dotenv import load_dotenv
 except ImportError as e:
     print(f"❌ Ошибка импорта: {e}")
     sys.exit(1)
+
+# Загружаем переменные окружения
+load_dotenv()
+
+def connect_to_db():
+    """Подключение к базе данных MySQL."""
+    try:
+        connection = mysql.connector.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            user=os.getenv('DB_USER', 'ingest_user'),
+            password=os.getenv('DB_PASSWORD'),
+            database=os.getenv('DB_NAME', 'mi_core_db'),
+            charset='utf8mb4',
+            collation='utf8mb4_unicode_ci',
+            autocommit=True
+        )
+        return connection
+    except mysql.connector.Error as e:
+        print(f"❌ Ошибка подключения к БД: {e}")
+        raise
 
 # Настройка логирования
 logging.basicConfig(
