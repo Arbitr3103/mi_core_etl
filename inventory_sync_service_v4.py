@@ -595,14 +595,13 @@ class InventorySyncServiceV4:
             # Логируем использование endpoint
             self.log_endpoint_usage(url, True, request_time)
             
-            # Проверяем структуру ответа v4 API
-            if "result" not in data:
-                raise ValueError("Неожиданная структура ответа v4 API - отсутствует поле 'result'")
+            # Проверяем структуру ответа v4 API (данные в корне, без result)
+            if "items" not in data:
+                raise ValueError("Неожиданная структура ответа v4 API - отсутствует поле 'items'")
             
-            result = data["result"]
-            items = result.get("items", [])
-            cursor = result.get("cursor", "")
-            total = result.get("total", 0)
+            items = data.get("items", [])
+            cursor = data.get("cursor", "")
+            total = data.get("total", 0)
             has_next = bool(cursor)  # Если есть cursor, значит есть еще данные
             
             # Обрабатываем каждый товар для извлечения правильной структуры данных
@@ -625,29 +624,16 @@ class InventorySyncServiceV4:
                     for stock in stocks:
                         # Извлекаем SKU из поля stocks[].sku (новая структура v4)
                         sku = stock.get("sku", "")
-                        warehouse_id = stock.get("warehouse_id", 0)
+                        
+                        # В реальном API warehouse_id нет, есть warehouse_ids[] (обычно пустой)
+                        warehouse_ids = stock.get("warehouse_ids", [])
+                        warehouse_id = warehouse_ids[0] if warehouse_ids else 0
+                        
                         stock_type = stock.get("type", "fbo")  # fbo, fbs, realFbs
                         
-                        # Извлекаем количества для всех типов складов
+                        # Извлекаем количества
                         present = stock.get("present", 0)
                         reserved = stock.get("reserved", 0)
-                        
-                        # Поддержка специфичных полей для разных типов складов
-                        if stock_type == "fbo":
-                            fbo_present = stock.get("fbo_present", present)
-                            fbo_reserved = stock.get("fbo_reserved", reserved)
-                            present = fbo_present
-                            reserved = fbo_reserved
-                        elif stock_type == "fbs":
-                            fbs_present = stock.get("fbs_present", present)
-                            fbs_reserved = stock.get("fbs_reserved", reserved)
-                            present = fbs_present
-                            reserved = fbs_reserved
-                        elif stock_type == "realFbs":
-                            real_fbs_present = stock.get("realFbs_present", present)
-                            real_fbs_reserved = stock.get("realFbs_reserved", reserved)
-                            present = real_fbs_present
-                            reserved = real_fbs_reserved
                         
                         processed_stock = {
                             "sku": sku,
@@ -957,8 +943,8 @@ class InventorySyncServiceV4:
                 raise ValueError("Неожиданная структура ответа Analytics API")
             
             result = data["result"]
-            analytics_data = result.get("data", [])
-            total_count = result.get("totals", {}).get("count", 0)
+            analytics_data = result.get("rows", [])  # Данные в rows[], а не data[]
+            total_count = len(analytics_data)  # Нет totals.count в реальном API
             analytics_stocks = []
             
             # Обновляем кэш складов для корректного маппинга
@@ -966,63 +952,30 @@ class InventorySyncServiceV4:
             
             for item in analytics_data:
                 try:
-                    dimensions = item.get("dimensions", [])
-                    metrics = item.get("metrics", [])
+                    # В реальном API данные сразу в полях, без dimensions/metrics
+                    sku = item.get("sku", "")
+                    warehouse_name = item.get("warehouse_name", "")
                     
-                    # Извлекаем данные из dimensions согласно структуре API
-                    offer_id = ""
-                    warehouse_name = ""
+                    # Ищем warehouse_id по названию в кэше
                     warehouse_id = 0
+                    for wh_id, warehouse in self.warehouse_cache.items():
+                        if warehouse.warehouse_name == warehouse_name:
+                            warehouse_id = wh_id
+                            break
                     
-                    for dimension in dimensions:
-                        dimension_id = dimension.get("id", "")
-                        dimension_value = dimension.get("value", "")
-                        
-                        if dimension_id == "sku":
-                            offer_id = dimension_value
-                        elif dimension_id == "warehouse":
-                            warehouse_name = dimension_value
-                            # Ищем warehouse_id по названию в кэше
-                            for wh_id, warehouse in self.warehouse_cache.items():
-                                if warehouse.warehouse_name == warehouse_name:
-                                    warehouse_id = wh_id
-                                    break
-                            # Если не найден в кэше, пытаемся извлечь ID из названия
-                            if warehouse_id == 0 and warehouse_name:
-                                try:
-                                    # Пытаемся найти ID в названии склада
-                                    import re
-                                    match = re.search(r'(\d+)', warehouse_name)
-                                    if match:
-                                        warehouse_id = int(match.group(1))
-                                except:
-                                    pass
+                    # Если не найден в кэше, генерируем ID на основе названия
+                    if warehouse_id == 0 and warehouse_name:
+                        warehouse_id = hash(warehouse_name) % 1000000  # Простой хэш для ID
                     
-                    # Извлекаем метрики согласно структуре API
-                    free_to_sell_amount = 0
-                    promised_amount = 0
-                    reserved_amount = 0
+                    # Извлекаем метрики напрямую из полей
+                    free_to_sell_amount = int(item.get("free_to_sell_amount", 0))
+                    promised_amount = int(item.get("promised_amount", 0))
+                    reserved_amount = int(item.get("reserved_amount", 0))
                     
-                    for metric in metrics:
-                        metric_id = metric.get("id", "")
-                        metric_value = metric.get("value", 0)
-                        
-                        try:
-                            metric_value = int(float(metric_value or 0))
-                        except (ValueError, TypeError):
-                            metric_value = 0
-                        
-                        if metric_id == "free_to_sell_amount":
-                            free_to_sell_amount = metric_value
-                        elif metric_id == "promised_amount":
-                            promised_amount = metric_value
-                        elif metric_id == "reserved_amount":
-                            reserved_amount = metric_value
-                    
-                    # Создаем запись только если есть offer_id и хотя бы одна метрика > 0
-                    if offer_id and (free_to_sell_amount > 0 or promised_amount > 0 or reserved_amount > 0):
+                    # Создаем запись только если есть sku и хотя бы одна метрика > 0
+                    if sku and (free_to_sell_amount > 0 or promised_amount > 0 or reserved_amount > 0):
                         analytics_stock = OzonAnalyticsStock(
-                            offer_id=offer_id,
+                            offer_id=str(sku),  # Используем sku как offer_id
                             warehouse_id=warehouse_id,
                             warehouse_name=warehouse_name or f"Warehouse_{warehouse_id}",
                             free_to_sell_amount=free_to_sell_amount,
@@ -2038,7 +1991,10 @@ class InventorySyncServiceV4:
                 for stock in stocks:
                     # Извлекаем SKU из поля stocks[].sku (новая структура v4)
                     sku = stock.get("sku", "")
-                    warehouse_id = stock.get("warehouse_id", 0)
+                    
+                    # В реальном API warehouse_id нет, есть warehouse_ids[] (обычно пустой)
+                    warehouse_ids = stock.get("warehouse_ids", [])
+                    warehouse_id = warehouse_ids[0] if warehouse_ids else 0
                     warehouse_name = self.get_warehouse_name(warehouse_id)
                     
                     # Поддержка всех типов складов: fbo, fbs, realFbs
@@ -2050,7 +2006,6 @@ class InventorySyncServiceV4:
                     reserved = stock.get("reserved", 0)
                     
                     # Создаем запись для всех товаров (даже с нулевыми остатками)
-                    # Добавляем SKU в качестве дополнительной информации
                     stock_record = OzonStockRecord(
                         offer_id=offer_id,
                         product_id=product_id,
@@ -2058,11 +2013,9 @@ class InventorySyncServiceV4:
                         warehouse_name=warehouse_name,
                         stock_type=stock_type,
                         present=present,
-                        reserved=reserved
+                        reserved=reserved,
+                        sku=str(sku)  # SKU как строка
                     )
-                    
-                    # Добавляем SKU как дополнительное поле (если нужно для валидации)
-                    stock_record.sku = sku
                     
                     stock_records.append(stock_record)
                 
