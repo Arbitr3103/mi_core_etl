@@ -1453,7 +1453,7 @@ class InventorySyncServiceV4:
 
     def validate_inventory_data(self, records: List[InventoryRecord], source: str) -> ValidationResult:
         """Валидация данных об остатках."""
-        return self.validator.validate_inventory_data(records, source)
+        return self.validator.validate_data(records, source)
 
     def filter_valid_records(self, records: List[InventoryRecord], 
                            validation_result: ValidationResult) -> List[InventoryRecord]:
