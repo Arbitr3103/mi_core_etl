@@ -1,0 +1,36 @@
+[mysqld]
+# Replication settings
+server-id = 1
+log-bin = mysql-bin
+binlog-format = ROW
+binlog-do-db = mdm_production
+
+# Performance settings
+innodb_buffer_pool_size = 2G
+innodb_log_file_size = 256M
+innodb_flush_log_at_trx_commit = 1
+innodb_file_per_table = 1
+
+# Connection settings
+max_connections = 200
+max_connect_errors = 1000000
+
+# Query cache
+query_cache_type = 1
+query_cache_size = 128M
+
+# Slow query log
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+
+# General log
+general_log = 1
+general_log_file = /var/log/mysql/general.log
+
+# Character set
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+# Time zone
+default-time-zone = '+00:00'

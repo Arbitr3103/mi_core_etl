@@ -1,0 +1,138 @@
+version: "3.8"
+
+services:
+  mdm-app:
+    image: mdm-system:${VERSION:-latest}
+    container_name: mdm-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mdm-db-master
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=mdm-redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mdm-db-master
+      - mdm-redis
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    networks:
+      - mdm-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  mdm-db-master:
+    image: mysql:8.0
+    container_name: mdm-db-master
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mdm-db-data:/var/lib/mysql
+      - ./config/mysql/master.cnf:/etc/mysql/conf.d/master.cnf
+      - ./backups:/backups
+    networks:
+      - mdm-network
+    command: --server-id=1 --log-bin=mysql-bin --binlog-format=ROW
+
+  mdm-db-slave:
+    image: mysql:8.0
+    container_name: mdm-db-slave
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mdm-db-slave-data:/var/lib/mysql
+      - ./config/mysql/slave.cnf:/etc/mysql/conf.d/slave.cnf
+    networks:
+      - mdm-network
+    depends_on:
+      - mdm-db-master
+    command: --server-id=2 --relay-log=mysql-relay-bin
+
+  mdm-redis:
+    image: redis:7-alpine
+    container_name: mdm-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - mdm-redis-data:/data
+      - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - mdm-network
+    command: redis-server /usr/local/etc/redis/redis.conf
+
+  mdm-nginx:
+    image: nginx:alpine
+    container_name: mdm-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - mdm-app
+    networks:
+      - mdm-network
+
+  mdm-monitoring:
+    image: prom/prometheus:latest
+    container_name: mdm-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - mdm-network
+
+  mdm-grafana:
+    image: grafana/grafana:latest
+    container_name: mdm-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - mdm-network
+
+volumes:
+  mdm-db-data:
+  mdm-db-slave-data:
+  mdm-redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  mdm-network:
+    driver: bridge

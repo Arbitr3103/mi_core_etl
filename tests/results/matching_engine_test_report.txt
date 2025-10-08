@@ -1,0 +1,34 @@
+MDM Matching Engine Test Report
+Generated: 2025-10-08 17:25:51
+==================================================
+
+Class: Tests\Unit\Services\MatchingEngineTest
+Status: passed
+Tests: 15
+Time: 0.224s
+Memory: 0KB
+
+Class: Tests\Unit\Services\MatchingScoreServiceTest
+Status: passed
+Tests: 12
+Time: 0.275s
+Memory: 0KB
+
+Class: Tests\Unit\Services\DataEnrichmentServiceTest
+Status: passed
+Tests: 10
+Time: 0.366s
+Memory: 0KB
+
+Class: Tests\Unit\Services\ProductMatchingOrchestratorTest
+Status: passed
+Tests: 8
+Time: 0.319s
+Memory: 0KB
+
+Class: Tests\Performance\MatchingEnginePerformanceTest
+Status: passed
+Tests: 8
+Time: 0.384s
+Memory: 0KB
+

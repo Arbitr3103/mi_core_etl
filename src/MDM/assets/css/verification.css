@@ -1,0 +1,419 @@
+/* MDM Verification Interface Styles */
+
+/* Verification Item Styles */
+.verification-item {
+  border-bottom: 1px solid #dee2e6;
+  padding: 1rem;
+  transition: background-color 0.2s ease;
+}
+
+.verification-item:hover {
+  background-color: #f8f9fa;
+}
+
+.verification-item:last-child {
+  border-bottom: none;
+}
+
+.verification-item.selected {
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196f3;
+}
+
+/* Product Info Styles */
+.product-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.product-checkbox {
+  margin-top: 0.25rem;
+}
+
+.product-details {
+  flex: 1;
+}
+
+.product-name {
+  font-weight: 600;
+  color: #212529;
+  margin-bottom: 0.25rem;
+}
+
+.product-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+
+.meta-icon {
+  width: 16px;
+  text-align: center;
+}
+
+/* Confidence Score Styles */
+.confidence-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.confidence-bar {
+  flex: 1;
+  height: 6px;
+  background-color: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.confidence-fill.high {
+  background-color: #28a745;
+}
+
+.confidence-fill.medium {
+  background-color: #ffc107;
+}
+
+.confidence-fill.low {
+  background-color: #dc3545;
+}
+
+.confidence-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  min-width: 40px;
+}
+
+/* Action Buttons */
+.verification-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.action-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.1);
+}
+
+.action-btn.approve {
+  background-color: #28a745;
+  color: white;
+}
+
+.action-btn.approve:hover {
+  background-color: #218838;
+}
+
+.action-btn.reject {
+  background-color: #dc3545;
+  color: white;
+}
+
+.action-btn.reject:hover {
+  background-color: #c82333;
+}
+
+.action-btn.compare {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.action-btn.compare:hover {
+  background-color: #138496;
+}
+
+/* Match Status Indicators */
+.match-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.match-status.suggested {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.match-status.no-match {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.match-status.high-confidence {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+}
+
+/* Comparison Modal Styles */
+.comparison-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.comparison-side {
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+
+.comparison-side.source {
+  background-color: #fff3cd;
+  border-color: #ffc107;
+}
+
+.comparison-side.master {
+  background-color: #d1ecf1;
+  border-color: #17a2b8;
+}
+
+.comparison-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.comparison-field {
+  margin-bottom: 1rem;
+}
+
+.field-label {
+  font-weight: 500;
+  color: #495057;
+  margin-bottom: 0.25rem;
+}
+
+.field-value {
+  padding: 0.5rem;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.field-value.empty {
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Similar Products List */
+.similar-products {
+  margin-top: 1.5rem;
+}
+
+.similar-product {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.similar-product:hover {
+  background-color: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+.similar-product.selected {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.similar-product-info {
+  flex: 1;
+}
+
+.similar-product-name {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.similar-product-meta {
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+
+.similar-product-score {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #28a745;
+}
+
+/* Loading States */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.verification-item.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Pagination Styles */
+.pagination-sm .page-link {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .comparison-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .product-info {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .verification-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .product-meta {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .verification-item {
+    padding: 0.75rem;
+  }
+
+  .comparison-side {
+    padding: 1rem;
+  }
+
+  .action-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Animation Classes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status-badge.pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.approved {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-badge.rejected {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* Utility Classes */
+.text-truncate-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.border-start-success {
+  border-left: 4px solid #28a745 !important;
+}
+
+.border-start-warning {
+  border-left: 4px solid #ffc107 !important;
+}
+
+.border-start-danger {
+  border-left: 4px solid #dc3545 !important;
+}

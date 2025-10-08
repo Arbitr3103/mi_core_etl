@@ -1,0 +1,50 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # MDM Application
+  - job_name: "mdm-app"
+    static_configs:
+      - targets: ["mdm-app:8080"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # MySQL Master
+  - job_name: "mysql-master"
+    static_configs:
+      - targets: ["mdm-db-master:9104"]
+
+  # MySQL Slave
+  - job_name: "mysql-slave"
+    static_configs:
+      - targets: ["mdm-db-slave:9104"]
+
+  # Redis
+  - job_name: "redis"
+    static_configs:
+      - targets: ["mdm-redis:9121"]
+
+  # Nginx
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["mdm-nginx:9113"]
+
+  # Node Exporter (system metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]

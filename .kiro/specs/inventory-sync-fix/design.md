@@ -91,10 +91,16 @@ class InventorySyncService:
     def get_ozon_warehouses(self) -> List[Dict]
     def get_ozon_analytics_stocks(self) -> Dict
 
+    # Методы для получения названий товаров
+    def get_product_names_for_skus(self, skus: List[str]) -> Dict[str, str]
+    def fetch_product_info_by_sku(self, sku: str) -> Optional[Dict]
+    def update_product_names_cache(self, products: List[Dict]) -> None
+
     # Методы обработки данных
     def validate_inventory_data(self, data: List[Dict]) -> ValidationResult
     def update_inventory_table(self, data: List[Dict]) -> UpdateResult
     def process_warehouse_mapping(self, stocks: List[Dict], warehouses: List[Dict]) -> List[Dict]
+    def enrich_analytics_data_with_names(self, analytics_data: List[Dict]) -> List[Dict]
 
     # Служебные методы
     def log_sync_result(self, result: SyncResult) -> None
@@ -129,6 +135,12 @@ class InventorySyncService:
 - Вместо него используется `/v2/products/stock` для обновления остатков
 - Новые endpoints предоставляют более детальную информацию о складах
 
+**Проблема с названиями товаров**:
+
+- Аналитический API `/v2/analytics/stock_on_warehouses` возвращает только SKU без product_id и названий
+- Основной API `/v4/product/info/stocks` возвращает product_id и может быть дополнен названиями
+- Необходимо создать маппинг между SKU из аналитики и названиями из основного API
+
 ### 3. Monitoring and Alerting
 
 #### Класс SyncMonitor
@@ -147,6 +159,54 @@ class SyncMonitor:
 - Количество товаров с остатками по источникам
 - Процент успешных синхронизаций за последние 24 часа
 - Среднее время выполнения синхронизации
+
+### 4. Product Name Resolution Service
+
+#### Проблема
+
+Аналитический API Ozon возвращает только SKU (числовые коды) без названий товаров, что приводит к отображению нечитаемых кодов в дашборде вместо понятных названий.
+
+#### Решение
+
+Создать сервис для получения названий товаров по SKU через дополнительные API запросы:
+
+```python
+class ProductNameResolver:
+    def __init__(self, ozon_api_client):
+        self.api_client = ozon_api_client
+        self.cache = {}  # Кэш для избежания повторных запросов
+
+    def resolve_names_for_analytics_data(self, analytics_records: List[Dict]) -> List[Dict]:
+        """Обогащает аналитические данные названиями товаров"""
+
+    def get_product_name_by_sku(self, sku: str) -> Optional[str]:
+        """Получает название товара по SKU через API"""
+
+    def batch_resolve_names(self, skus: List[str]) -> Dict[str, str]:
+        """Пакетное получение названий для списка SKU"""
+
+    def update_product_names_table(self, sku_name_mapping: Dict[str, str]) -> None:
+        """Обновляет таблицу product_names новыми данными"""
+```
+
+#### API для получения названий товаров
+
+**Endpoint**: `POST /v2/product/info`
+
+- Параметры: `product_id` или `offer_id` (SKU)
+- Возвращает: детальную информацию о товаре включая название
+- Ограничения: до 1000 товаров за запрос
+
+**Альтернативный endpoint**: `POST /v3/products/info/attributes`
+
+- Более детальная информация о товарах
+- Включает атрибуты, категории, названия
+
+#### Стратегия кэширования
+
+1. **Локальный кэш в памяти** - для текущей сессии синхронизации
+2. **База данных product_names** - долгосрочное хранение
+3. **Обновление кэша** - при каждой синхронизации проверять новые SKU
 
 ## Data Models
 
