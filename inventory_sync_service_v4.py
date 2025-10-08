@@ -46,7 +46,7 @@ def connect_to_db():
             host=os.getenv('DB_HOST', 'localhost'),
             user=os.getenv('DB_USER', 'v_admin'),
             password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME', 'mi_core_db'),
+            database=os.getenv('DB_NAME', 'mi_core'),
             charset='utf8mb4',
             collation='utf8mb4_unicode_ci',
             autocommit=True
