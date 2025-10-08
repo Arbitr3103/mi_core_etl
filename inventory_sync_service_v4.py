@@ -653,8 +653,11 @@ class InventorySyncServiceV4:
         if not force_update and self.warehouse_cache_updated:
             time_diff = datetime.now() - self.warehouse_cache_updated
             if time_diff.total_seconds() < 24 * 3600:  # 24 часа
-                if self.sync_logger:
-                    self.sync_logger.log_info("Кэш складов актуален, обновление не требуется")
+                # Логируем только один раз, используя флаг
+                if not hasattr(self, '_cache_log_shown'):
+                    if self.sync_logger:
+                        self.sync_logger.log_info("Кэш складов актуален, обновление не требуется")
+                    self._cache_log_shown = True
                 return
         
         try:
@@ -1474,7 +1477,9 @@ class InventorySyncServiceV4:
 
     def validate_inventory_data(self, records: List[InventoryRecord], source: str) -> ValidationResult:
         """Валидация данных об остатках."""
-        return self.validator.validate_data(records, source)
+        # Конвертируем InventoryRecord в словари для валидатора
+        record_dicts = [record.__dict__ for record in records]
+        return self.validator.validate_inventory_records(record_dicts, source)
 
     def filter_valid_records(self, records: List[InventoryRecord], 
                            validation_result: ValidationResult) -> List[InventoryRecord]:
