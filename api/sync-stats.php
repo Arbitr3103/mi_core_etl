@@ -62,19 +62,19 @@ try {
     ];
     
     // Подсчитываем общее количество товаров
-    $totalProducts = $pdo->query("SELECT COUNT(*) FROM product_master")->fetchColumn();
+    $totalProducts = $pdo->query("SELECT COUNT(*) FROM dim_products")->fetchColumn();
     $stats["processed_records"] = $totalProducts;
     
     // Подсчитываем товары, добавленные за последние 24 часа
     $recentProducts = $pdo->query("
-        SELECT COUNT(*) FROM product_master 
+        SELECT COUNT(*) FROM dim_products 
         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
     ")->fetchColumn();
     $stats["inserted_records"] = $recentProducts;
     
     // Подсчитываем товары с проблемами (без названий)
     $problemProducts = $pdo->query("
-        SELECT COUNT(*) FROM product_master 
+        SELECT COUNT(*) FROM dim_products 
         WHERE (product_name IS NULL OR product_name = '' OR product_name LIKE 'Товар артикул%')
         AND (name IS NULL OR name = '' OR name LIKE 'Товар артикул%')
     ")->fetchColumn();

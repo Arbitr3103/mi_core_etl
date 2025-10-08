@@ -53,7 +53,7 @@ try {
     // Находим товары без названий
     $problemProducts = $pdo->query("
         SELECT id, sku_ozon as sku, product_name, name, brand, category 
-        FROM product_master 
+        FROM dim_products 
         WHERE (product_name IS NULL OR product_name = '' OR product_name LIKE 'Товар артикул%')
         AND (name IS NULL OR name = '' OR name LIKE 'Товар артикул%')
         LIMIT 50
@@ -78,7 +78,7 @@ try {
             $newName .= "артикул " . $product["sku"];
             
             // Обновляем товар
-            $stmt = $pdo->prepare("UPDATE product_master SET product_name = ?, name = ? WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE dim_products SET product_name = ?, name = ? WHERE id = ?");
             if ($stmt->execute([$newName, $newName, $product["id"]])) {
                 $fixed++;
             }

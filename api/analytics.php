@@ -63,24 +63,24 @@ try {
     ];
     
     // Общее количество товаров
-    $analytics["total_products"] = $pdo->query("SELECT COUNT(*) FROM product_master")->fetchColumn();
+    $analytics["total_products"] = $pdo->query("SELECT COUNT(*) FROM dim_products")->fetchColumn();
     
     // Товары с названиями
     $analytics["products_with_names"] = $pdo->query("
-        SELECT COUNT(*) FROM product_master 
+        SELECT COUNT(*) FROM dim_products 
         WHERE (product_name IS NOT NULL AND product_name != '' AND product_name NOT LIKE 'Товар артикул%')
         OR (name IS NOT NULL AND name != '' AND name NOT LIKE 'Товар артикул%')
     ")->fetchColumn();
     
     // Товары с брендами
     $analytics["products_with_brands"] = $pdo->query("
-        SELECT COUNT(*) FROM product_master 
+        SELECT COUNT(*) FROM dim_products 
         WHERE brand IS NOT NULL AND brand != ''
     ")->fetchColumn();
     
     // Товары с категориями
     $analytics["products_with_categories"] = $pdo->query("
-        SELECT COUNT(*) FROM product_master 
+        SELECT COUNT(*) FROM dim_products 
         WHERE category IS NOT NULL AND category != ''
     ")->fetchColumn();
     
@@ -100,7 +100,7 @@ try {
     // Топ бренды
     $topBrands = $pdo->query("
         SELECT brand, COUNT(*) as count 
-        FROM product_master 
+        FROM dim_products 
         WHERE brand IS NOT NULL AND brand != ''
         GROUP BY brand 
         ORDER BY count DESC 
@@ -111,7 +111,7 @@ try {
     // Топ категории
     $topCategories = $pdo->query("
         SELECT category, COUNT(*) as count 
-        FROM product_master 
+        FROM dim_products 
         WHERE category IS NOT NULL AND category != ''
         GROUP BY category 
         ORDER BY count DESC 
