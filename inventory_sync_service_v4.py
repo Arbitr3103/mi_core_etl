@@ -1484,7 +1484,14 @@ class InventorySyncServiceV4:
     def filter_valid_records(self, records: List[InventoryRecord], 
                            validation_result: ValidationResult) -> List[InventoryRecord]:
         """Фильтрация валидных записей."""
-        return self.validator.filter_valid_records(records, validation_result)
+        if validation_result.is_valid:
+            return records
+        else:
+            # Если есть критические ошибки, возвращаем пустой список
+            # В противном случае возвращаем все записи (предупреждения не блокируют)
+            if any("ERROR" in issue for issue in validation_result.issues):
+                return []
+            return records
 
     def update_inventory_data(self, records: List[InventoryRecord], source: str) -> Tuple[int, int, int]:
         """
