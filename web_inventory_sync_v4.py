@@ -67,7 +67,7 @@ def test_api():
     
     try:
         # Тест API без БД
-        result = service.get_ozon_stocks_v4_old(limit=5)
+        result = service.get_ozon_stocks_v4(limit=5)
         
         output = {
             "success": True,

@@ -210,15 +210,25 @@ class InventoryDataValidator:
         
         try:
             product_id_int = int(product_id)
-            if product_id_int <= 0:
+            # Для аналитических данных разрешаем product_id = 0 (неизвестно из API)
+            if product_id_int < 0:
                 self._add_issue(
                     ValidationSeverity.ERROR,
                     "product_id",
-                    "Product ID должен быть положительным числом",
+                    "Product ID не может быть отрицательным",
                     product_id,
                     record_id
                 )
                 return False
+            elif product_id_int == 0:
+                # Предупреждение для нулевого ID (аналитические данные)
+                self._add_issue(
+                    ValidationSeverity.WARNING,
+                    "product_id",
+                    "Product ID равен 0 (возможно, аналитические данные)",
+                    product_id,
+                    record_id
+                )
         except (ValueError, TypeError):
             self._add_issue(
                 ValidationSeverity.ERROR,
@@ -270,16 +280,18 @@ class InventoryDataValidator:
         if source == 'Ozon':
             # Ozon SKU могут быть:
             # 1. Числовыми (product_id из v4 API) - например: "123456789"
-            # 2. Буквенно-цифровыми с дефисами/подчеркиваниями - например: "ABC-123_DEF"
-            # 3. Смешанными форматами - например: "123-ABC", "SKU_456"
+            # 2. Буквенно-цифровыми с различными символами - например: "ABC-123_DEF"
+            # 3. Названиями товаров с пробелами и знаками препинания - например: "Микс 0,500"
+            # 4. Смешанными форматами - например: "123-ABC", "SKU_456"
             
-            # Проверяем базовые символы (буквы, цифры, дефисы, подчеркивания, точки)
+            # Разрешаем широкий набор символов для Ozon SKU
             import re
-            if not re.match(r'^[a-zA-Z0-9\-_.]+$', sku):
+            # Проверяем только на наличие управляющих символов и экстремально специальных символов
+            if re.search(r'[\x00-\x1f\x7f-\x9f]', sku):
                 self._add_issue(
                     ValidationSeverity.WARNING,
                     "sku",
-                    f"Ozon SKU содержит специальные символы: {sku}",
+                    f"Ozon SKU содержит управляющие символы: {sku}",
                     sku,
                     record_id
                 )
@@ -330,7 +342,7 @@ class InventoryDataValidator:
             )
             return False
         
-        valid_sources = ['Ozon', 'Wildberries']
+        valid_sources = ['Ozon', 'Wildberries', 'Ozon_Analytics']
         if source not in valid_sources:
             self._add_issue(
                 ValidationSeverity.ERROR,
@@ -443,10 +455,12 @@ class InventoryDataValidator:
         """Валидация типа склада."""
         if source == 'Ozon':
             valid_types = ['FBO', 'FBS', 'realFBS']
+        elif source == 'Ozon_Analytics':
+            valid_types = ['analytics']  # Специальный тип для аналитических данных
         elif source == 'Wildberries':
             valid_types = ['FBS', 'FBO']  # WB в основном FBS
         else:
-            valid_types = ['FBO', 'FBS', 'realFBS']
+            valid_types = ['FBO', 'FBS', 'realFBS', 'analytics']
         
         if stock_type not in valid_types:
             self._add_issue(

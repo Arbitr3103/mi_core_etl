@@ -2078,6 +2078,47 @@ class InventorySyncServiceV4:
         
         return inventory_records
 
+    def convert_analytics_to_inventory_records(self, analytics_stocks: List[OzonAnalyticsStock]) -> List[InventoryRecord]:
+        """
+        Конвертация аналитических данных в записи InventoryRecord для сохранения детализации по складам.
+        
+        Args:
+            analytics_stocks: Список аналитических данных об остатках
+            
+        Returns:
+            Список записей в формате InventoryRecord с детализацией по складам
+        """
+        inventory_records = []
+        
+        for analytics_stock in analytics_stocks:
+            try:
+                # Создаем запись для каждого склада из аналитических данных
+                inventory_record = InventoryRecord(
+                    product_id=0,  # Неизвестно из аналитического API, будет обновлено при маппинге
+                    sku=analytics_stock.offer_id,
+                    source="Ozon_Analytics",  # Отдельный источник для аналитических данных
+                    warehouse_name=analytics_stock.warehouse_name,
+                    stock_type="analytics",  # Специальный тип для аналитических данных
+                    current_stock=analytics_stock.promised_amount + analytics_stock.free_to_sell_amount,
+                    reserved_stock=analytics_stock.reserved_amount,
+                    available_stock=analytics_stock.free_to_sell_amount,
+                    quantity_present=analytics_stock.promised_amount + analytics_stock.free_to_sell_amount,
+                    quantity_reserved=analytics_stock.reserved_amount,
+                    snapshot_date=datetime.now().date()
+                )
+                
+                inventory_records.append(inventory_record)
+                
+            except Exception as e:
+                if self.sync_logger:
+                    self.sync_logger.log_error(f"Ошибка конвертации аналитических данных для SKU {analytics_stock.offer_id}: {e}")
+                continue
+        
+        if self.sync_logger:
+            self.sync_logger.log_info(f"Конвертировано {len(inventory_records)} аналитических записей из {len(analytics_stocks)} складских данных")
+        
+        return inventory_records
+
     def sync_ozon_inventory_v4(self, offer_ids: List[str] = None, 
                               visibility: str = "ALL") -> SyncResult:
         """
@@ -2132,7 +2173,7 @@ class InventorySyncServiceV4:
                     self.sync_logger.log_info(f"Обрабатываем страницу {page}, cursor: {cursor}")
                 
                 # Получаем данные с API
-                api_response = self.get_ozon_stocks_v4_old(
+                api_response = self.get_ozon_stocks_v4(
                     cursor=cursor,
                     visibility=visibility,
                     limit=1000
@@ -2185,9 +2226,32 @@ class InventorySyncServiceV4:
                 if self.sync_logger:
                     self.sync_logger.log_info("Получаем аналитические данные для валидации")
                 
-                analytics_stocks = self.get_ozon_analytics_stocks()
+                # Получаем аналитические данные за сегодня
+                today = datetime.now().strftime('%Y-%m-%d')
+                analytics_result = self.get_ozon_analytics_stocks(
+                    date_from=today,
+                    date_to=today,
+                    limit=1000,
+                    offset=0
+                )
+                analytics_stocks = analytics_result.get("analytics_stocks", [])
                 
                 if analytics_stocks:
+                    # Конвертируем аналитические данные в записи для БД
+                    analytics_inventory_records = self.convert_analytics_to_inventory_records(analytics_stocks)
+                    
+                    if analytics_inventory_records:
+                        if self.sync_logger:
+                            self.sync_logger.log_info(f"Сохраняем {len(analytics_inventory_records)} записей аналитических данных по складам")
+                        
+                        # Сохраняем аналитические данные как отдельные записи
+                        analytics_updated, analytics_inserted, analytics_failed = self.update_inventory_data(
+                            analytics_inventory_records, 'Ozon_Analytics'
+                        )
+                        
+                        if self.sync_logger:
+                            self.sync_logger.log_info(f"Аналитические данные: обновлено {analytics_updated}, вставлено {analytics_inserted}, ошибок {analytics_failed}")
+                    
                     # Сравниваем данные между API
                     comparisons = self.compare_stock_data(all_stock_records, analytics_stocks)
                     
