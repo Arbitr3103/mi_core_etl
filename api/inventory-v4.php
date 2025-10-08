@@ -143,7 +143,7 @@ class InventoryV4API {
     
     private function getStats() {
         try {
-            // Статистика остатков из v4 API
+            // Статистика остатков из v4 API (включая аналитические данные)
             $stmt = $this->pdo->prepare("
                 SELECT 
                     COUNT(*) as total_products,
@@ -153,28 +153,45 @@ class InventoryV4API {
                     AVG(current_stock) as avg_stock,
                     MAX(last_sync_at) as last_update
                 FROM inventory_data 
-                WHERE source = 'Ozon'
+                WHERE source IN ('Ozon', 'Ozon_Analytics')
             ");
             $stmt->execute();
             $stats = $stmt->fetch();
             
-            // Статистика по типам складов
+            // Статистика по типам складов (включая аналитические)
             $stmt = $this->pdo->prepare("
                 SELECT 
-                    stock_type,
+                    CASE 
+                        WHEN source = 'Ozon_Analytics' THEN CONCAT(warehouse_name, ' (', stock_type, ')')
+                        ELSE CONCAT(warehouse_name, ' (', stock_type, ')')
+                    END as stock_type,
                     COUNT(*) as count,
-                    SUM(current_stock) as total_stock
+                    SUM(current_stock) as total_stock,
+                    source
                 FROM inventory_data 
-                WHERE source = 'Ozon'
-                GROUP BY stock_type
+                WHERE source IN ('Ozon', 'Ozon_Analytics')
+                GROUP BY source, warehouse_name, stock_type
+                ORDER BY total_stock DESC
+                LIMIT 10
             ");
             $stmt->execute();
             $stockTypes = $stmt->fetchAll();
             
+            // Статистика по складам
+            $stmt = $this->pdo->prepare("
+                SELECT 
+                    COUNT(DISTINCT warehouse_name) as total_warehouses,
+                    COUNT(DISTINCT CASE WHEN source = 'Ozon_Analytics' THEN warehouse_name END) as analytics_warehouses
+                FROM inventory_data 
+                WHERE source IN ('Ozon', 'Ozon_Analytics')
+            ");
+            $stmt->execute();
+            $warehouseStats = $stmt->fetch();
+            
             $this->sendSuccess([
-                'overview' => $stats,
+                'overview' => array_merge($stats, $warehouseStats),
                 'stock_types' => $stockTypes,
-                'api_version' => 'v4'
+                'api_version' => 'v4 + Analytics'
             ]);
             
         } catch (Exception $e) {

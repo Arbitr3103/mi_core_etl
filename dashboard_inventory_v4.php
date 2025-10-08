@@ -507,12 +507,22 @@
                         <div class="stats-grid">
                             <div class="stat-item">
                                 <div class="stat-value">${overview.total_products || 0}</div>
-                                <div class="stat-label">Всего товаров</div>
+                                <div class="stat-label">Всего записей</div>
                             </div>
                             <div class="stat-item">
                                 <div class="stat-value">${overview.products_in_stock || 0}</div>
                                 <div class="stat-label">В наличии</div>
                             </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${overview.total_warehouses || 0}</div>
+                                <div class="stat-label">Складов</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${overview.analytics_warehouses || 0}</div>
+                                <div class="stat-label">Детализация</div>
+                            </div>
+                        </div>
+                        <div class="stats-grid">
                             <div class="stat-item">
                                 <div class="stat-value">${overview.total_stock || 0}</div>
                                 <div class="stat-label">Общий остаток</div>
@@ -521,9 +531,17 @@
                                 <div class="stat-value">${overview.total_reserved || 0}</div>
                                 <div class="stat-label">Зарезервировано</div>
                             </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${data.api_version || 'v4'}</div>
+                                <div class="stat-label">API версия</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${Math.round(overview.avg_stock || 0)}</div>
+                                <div class="stat-label">Средний остаток</div>
+                            </div>
                         </div>
                         ${stockTypesHtml ? `
-                            <h4 style="margin: 20px 0 10px 0;">По типам складов:</h4>
+                            <h4 style="margin: 20px 0 10px 0;">Топ складов по остаткам:</h4>
                             <div class="stats-grid">${stockTypesHtml}</div>
                         ` : ''}
                         <p style="margin-top: 15px; font-size: 0.9rem; color: #718096;">
