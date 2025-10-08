@@ -117,11 +117,13 @@ class OzonStockRecord:
     stock_type: str
     present: int
     reserved: int
+    sku: str = ""  # SKU из поля stocks[].sku в v4 API
     
     def __post_init__(self):
         """Валидация и нормализация данных после создания."""
         self.present = max(0, int(self.present or 0))
         self.reserved = max(0, int(self.reserved or 0))
+        self.sku = str(self.sku or "")
 
 
 @dataclass
@@ -494,10 +496,61 @@ class InventorySyncServiceV4:
                 f"ENDPOINT_USAGE: {endpoint} - {status} - {response_time:.2f}s"
             )
 
+    def get_ozon_stocks_v3(self, cursor=None, limit=1000, visibility="VISIBLE"):
+        """Получение остатков товаров через Ozon v3 API с детализацией по складам."""
+        url = "https://api-seller.ozon.ru/v3/product/info/stocks"
+        
+        headers = {
+            "Client-Id": config.OZON_CLIENT_ID,
+            "Api-Key": config.OZON_API_KEY,
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "filter": {
+                "visibility": visibility
+            },
+            "limit": limit
+        }
+        
+        if cursor:
+            payload["last_id"] = cursor
+            
+        if self.sync_logger:
+            self.sync_logger.log_info(f"ℹ️ Запрос к Ozon v3 API: cursor={cursor}, limit={limit}, visibility={visibility}")
+        
+        request_start = time.time()
+        response_data = self.make_api_request_with_retry(url, headers, payload)
+        request_time = time.time() - request_start
+        
+        # Логируем использование endpoint
+        self.log_endpoint_usage(url, True, request_time)
+        
+        if not response_data or "result" not in response_data:
+            raise Exception("Некорректный ответ от Ozon v3 API")
+        
+        result = response_data["result"]
+        items = result.get("items", [])
+        
+        if self.sync_logger:
+            self.sync_logger.log_info(f"ℹ️ Получено {len(items)} товаров, has_next={result.get('has_next', False)}")
+        
+        return {
+            "items": items,
+            "total_items": len(items),
+            "has_next": result.get("has_next", False),
+            "last_id": result.get("last_id")
+        }
+
     def get_ozon_stocks_v4(self, cursor: str = None, offer_ids: List[str] = None, 
                           visibility: str = "ALL", limit: int = 1000) -> Dict[str, Any]:
         """
         Получение остатков товаров через Ozon v4 API.
+        
+        Обновленная версия с правильной обработкой структуры данных v4 API:
+        - Корректная обработка product_id, offer_id, stocks[]
+        - Извлечение SKU из поля stocks[].sku
+        - Поддержка всех типов складов: fbo, fbs, realFbs
         
         Args:
             cursor: Курсор для пагинации (lastId из предыдущего ответа)
@@ -515,7 +568,7 @@ class InventorySyncServiceV4:
             "Content-Type": "application/json"
         }
         
-        # Формируем payload для запроса
+        # Формируем payload для запроса согласно v4 API документации
         payload = {
             "limit": min(limit, 1000),  # Максимум 1000 согласно документации
             "filter": {
@@ -542,23 +595,91 @@ class InventorySyncServiceV4:
             # Логируем использование endpoint
             self.log_endpoint_usage(url, True, request_time)
             
-            # Проверяем структуру ответа
-            if "items" not in data:
-                raise ValueError("Неожиданная структура ответа API")
+            # Проверяем структуру ответа v4 API
+            if "result" not in data:
+                raise ValueError("Неожиданная структура ответа v4 API - отсутствует поле 'result'")
             
-            items = data.get("items", [])
-            cursor = data.get("cursor", "")
-            total = data.get("total", 0)
+            result = data["result"]
+            items = result.get("items", [])
+            cursor = result.get("cursor", "")
+            total = result.get("total", 0)
             has_next = bool(cursor)  # Если есть cursor, значит есть еще данные
             
+            # Обрабатываем каждый товар для извлечения правильной структуры данных
+            processed_items = []
+            for item in items:
+                try:
+                    # Извлекаем основные поля согласно v4 API
+                    product_id = item.get("product_id", 0)
+                    offer_id = item.get("offer_id", "")
+                    
+                    if not product_id or not offer_id:
+                        if self.sync_logger:
+                            self.sync_logger.log_warning(f"Товар пропущен: product_id={product_id}, offer_id={offer_id}")
+                        continue
+                    
+                    # Обрабатываем массив stocks[] согласно v4 API
+                    stocks = item.get("stocks", [])
+                    processed_stocks = []
+                    
+                    for stock in stocks:
+                        # Извлекаем SKU из поля stocks[].sku (новая структура v4)
+                        sku = stock.get("sku", "")
+                        warehouse_id = stock.get("warehouse_id", 0)
+                        stock_type = stock.get("type", "fbo")  # fbo, fbs, realFbs
+                        
+                        # Извлекаем количества для всех типов складов
+                        present = stock.get("present", 0)
+                        reserved = stock.get("reserved", 0)
+                        
+                        # Поддержка специфичных полей для разных типов складов
+                        if stock_type == "fbo":
+                            fbo_present = stock.get("fbo_present", present)
+                            fbo_reserved = stock.get("fbo_reserved", reserved)
+                            present = fbo_present
+                            reserved = fbo_reserved
+                        elif stock_type == "fbs":
+                            fbs_present = stock.get("fbs_present", present)
+                            fbs_reserved = stock.get("fbs_reserved", reserved)
+                            present = fbs_present
+                            reserved = fbs_reserved
+                        elif stock_type == "realFbs":
+                            real_fbs_present = stock.get("realFbs_present", present)
+                            real_fbs_reserved = stock.get("realFbs_reserved", reserved)
+                            present = real_fbs_present
+                            reserved = real_fbs_reserved
+                        
+                        processed_stock = {
+                            "sku": sku,
+                            "warehouse_id": warehouse_id,
+                            "type": stock_type,
+                            "present": max(0, int(present or 0)),
+                            "reserved": max(0, int(reserved or 0))
+                        }
+                        processed_stocks.append(processed_stock)
+                    
+                    processed_item = {
+                        "product_id": product_id,
+                        "offer_id": offer_id,
+                        "stocks": processed_stocks
+                    }
+                    processed_items.append(processed_item)
+                    
+                except Exception as e:
+                    if self.sync_logger:
+                        self.sync_logger.log_warning(f"Ошибка обработки товара {item.get('offer_id', 'unknown')}: {e}")
+                    continue
+            
             if self.sync_logger:
-                self.sync_logger.log_info(f"Получено {len(items)} товаров, has_next={has_next}")
+                self.sync_logger.log_info(f"Обработано {len(processed_items)} товаров из {len(items)}, has_next={has_next}")
             
             return {
-                "items": items,
+                "items": processed_items,
                 "last_id": cursor,  # Используем cursor как last_id для совместимости
                 "has_next": has_next,
-                "total_items": len(items)
+                "total_items": len(processed_items),
+                "cursor": cursor,
+                "total": total
             }
             
         except OzonAPIError as e:
@@ -771,16 +892,25 @@ class InventorySyncServiceV4:
                 self.sync_logger.log_error(error_msg)
             raise
 
-    def get_ozon_analytics_stocks(self, date_from: str = None, date_to: str = None) -> List[OzonAnalyticsStock]:
+    def get_ozon_analytics_stocks(self, date_from: str = None, date_to: str = None, 
+                                 limit: int = 1000, offset: int = 0) -> Dict[str, Any]:
         """
         Получение аналитических данных об остатках через Ozon Analytics API.
+        
+        Обновленная версия с улучшенной обработкой структуры данных:
+        - Корректная обработка sku, warehouse_name, promised_amount, free_to_sell_amount, reserved_amount
+        - Поддержка пагинации через limit/offset
+        - Создание маппинга между основными остатками и аналитическими данными
+        - Сохранение детализации по конкретным складам в БД
         
         Args:
             date_from: Дата начала периода (YYYY-MM-DD)
             date_to: Дата окончания периода (YYYY-MM-DD)
+            limit: Количество записей в одном запросе (максимум 1000)
+            offset: Смещение для пагинации
             
         Returns:
-            Список аналитических данных об остатках
+            Dict с результатами API запроса и списком аналитических данных
         """
         url = f"{config.OZON_API_BASE_URL}/v2/analytics/stock_on_warehouses"
         headers = {
@@ -798,29 +928,22 @@ class InventorySyncServiceV4:
         payload = {
             "date_from": date_from,
             "date_to": date_to,
+            "limit": min(limit, 1000),  # Максимум 1000 согласно документации
+            "offset": offset,
             "metrics": [
                 "free_to_sell_amount",
                 "promised_amount", 
                 "reserved_amount"
             ],
-            "dimension": [
+            "dimensions": [
                 "sku",
                 "warehouse"
-            ],
-            "filters": [],
-            "sort": [
-                {
-                    "key": "free_to_sell_amount",
-                    "order": "DESC"
-                }
-            ],
-            "limit": 1000,
-            "offset": 0
+            ]
         }
         
         try:
             if self.sync_logger:
-                self.sync_logger.log_info(f"Запрос аналитических данных Ozon за период {date_from} - {date_to}")
+                self.sync_logger.log_info(f"Запрос аналитических данных Ozon за период {date_from} - {date_to}, offset={offset}")
             
             request_start = time.time()
             data = self.make_api_request_with_retry(url, headers, payload)
@@ -835,30 +958,47 @@ class InventorySyncServiceV4:
             
             result = data["result"]
             analytics_data = result.get("data", [])
+            total_count = result.get("totals", {}).get("count", 0)
             analytics_stocks = []
+            
+            # Обновляем кэш складов для корректного маппинга
+            self.update_warehouse_cache()
             
             for item in analytics_data:
                 try:
                     dimensions = item.get("dimensions", [])
                     metrics = item.get("metrics", [])
                     
-                    # Извлекаем данные из dimensions
+                    # Извлекаем данные из dimensions согласно структуре API
                     offer_id = ""
                     warehouse_name = ""
                     warehouse_id = 0
                     
                     for dimension in dimensions:
-                        if dimension.get("id") == "sku":
-                            offer_id = dimension.get("value", "")
-                        elif dimension.get("id") == "warehouse":
-                            warehouse_name = dimension.get("value", "")
-                            # Пытаемся найти warehouse_id по названию
+                        dimension_id = dimension.get("id", "")
+                        dimension_value = dimension.get("value", "")
+                        
+                        if dimension_id == "sku":
+                            offer_id = dimension_value
+                        elif dimension_id == "warehouse":
+                            warehouse_name = dimension_value
+                            # Ищем warehouse_id по названию в кэше
                             for wh_id, warehouse in self.warehouse_cache.items():
                                 if warehouse.warehouse_name == warehouse_name:
                                     warehouse_id = wh_id
                                     break
+                            # Если не найден в кэше, пытаемся извлечь ID из названия
+                            if warehouse_id == 0 and warehouse_name:
+                                try:
+                                    # Пытаемся найти ID в названии склада
+                                    import re
+                                    match = re.search(r'(\d+)', warehouse_name)
+                                    if match:
+                                        warehouse_id = int(match.group(1))
+                                except:
+                                    pass
                     
-                    # Извлекаем метрики
+                    # Извлекаем метрики согласно структуре API
                     free_to_sell_amount = 0
                     promised_amount = 0
                     reserved_amount = 0
@@ -867,18 +1007,24 @@ class InventorySyncServiceV4:
                         metric_id = metric.get("id", "")
                         metric_value = metric.get("value", 0)
                         
+                        try:
+                            metric_value = int(float(metric_value or 0))
+                        except (ValueError, TypeError):
+                            metric_value = 0
+                        
                         if metric_id == "free_to_sell_amount":
-                            free_to_sell_amount = int(metric_value)
+                            free_to_sell_amount = metric_value
                         elif metric_id == "promised_amount":
-                            promised_amount = int(metric_value)
+                            promised_amount = metric_value
                         elif metric_id == "reserved_amount":
-                            reserved_amount = int(metric_value)
+                            reserved_amount = metric_value
                     
-                    if offer_id:  # Создаем запись только если есть offer_id
+                    # Создаем запись только если есть offer_id и хотя бы одна метрика > 0
+                    if offer_id and (free_to_sell_amount > 0 or promised_amount > 0 or reserved_amount > 0):
                         analytics_stock = OzonAnalyticsStock(
                             offer_id=offer_id,
                             warehouse_id=warehouse_id,
-                            warehouse_name=warehouse_name,
+                            warehouse_name=warehouse_name or f"Warehouse_{warehouse_id}",
                             free_to_sell_amount=free_to_sell_amount,
                             promised_amount=promised_amount,
                             reserved_amount=reserved_amount
@@ -890,10 +1036,17 @@ class InventorySyncServiceV4:
                         self.sync_logger.log_warning(f"Ошибка обработки аналитических данных: {e}")
                     continue
             
-            if self.sync_logger:
-                self.sync_logger.log_info(f"Получено {len(analytics_stocks)} записей аналитических данных")
+            has_next = len(analytics_data) >= limit and (offset + len(analytics_data)) < total_count
             
-            return analytics_stocks
+            if self.sync_logger:
+                self.sync_logger.log_info(f"Получено {len(analytics_stocks)} записей аналитических данных, has_next={has_next}")
+            
+            return {
+                "analytics_stocks": analytics_stocks,
+                "total_count": total_count,
+                "has_next": has_next,
+                "next_offset": offset + len(analytics_data) if has_next else None
+            }
             
         except OzonAPIError as e:
             # Логируем использование endpoint с ошибкой
@@ -906,6 +1059,756 @@ class InventorySyncServiceV4:
             # Логируем использование endpoint с ошибкой
             self.log_endpoint_usage(url, False, 0, type(e).__name__)
             error_msg = f"Ошибка обработки ответа Analytics API: {e}"
+            if self.sync_logger:
+                self.sync_logger.log_error(error_msg)
+            raise
+
+    def get_all_ozon_analytics_stocks(self, date_from: str = None, date_to: str = None) -> List[OzonAnalyticsStock]:
+        """
+        Получение всех аналитических данных об остатках с пагинацией.
+        
+        Args:
+            date_from: Дата начала периода (YYYY-MM-DD)
+            date_to: Дата окончания периода (YYYY-MM-DD)
+            
+        Returns:
+            Полный список аналитических данных об остатках
+        """
+        all_analytics_stocks = []
+        offset = 0
+        limit = 1000
+        
+        try:
+            if self.sync_logger:
+                self.sync_logger.log_info("Начинаем получение всех аналитических данных с пагинацией")
+            
+            while True:
+                result = self.get_ozon_analytics_stocks(date_from, date_to, limit, offset)
+                analytics_stocks = result["analytics_stocks"]
+                has_next = result["has_next"]
+                
+                all_analytics_stocks.extend(analytics_stocks)
+                
+                if not has_next:
+                    break
+                
+                offset = result["next_offset"]
+                
+                # Небольшая задержка между запросами для соблюдения rate limits
+                time.sleep(0.5)
+            
+            if self.sync_logger:
+                self.sync_logger.log_info(f"Получено всего {len(all_analytics_stocks)} записей аналитических данных")
+            
+            return all_analytics_stocks
+            
+        except Exception as e:
+            error_msg = f"Ошибка получения всех аналитических данных: {e}"
+            if self.sync_logger:
+                self.sync_logger.log_error(error_msg)
+            raise
+
+    def create_stock_mapping(self, main_stocks: List[OzonStockRecord], 
+                           analytics_stocks: List[OzonAnalyticsStock]) -> Dict[str, Dict]:
+        """
+        Создание маппинга между основными остатками и аналитическими данными по складам.
+        
+        Args:
+            main_stocks: Данные из основного API v4
+            analytics_stocks: Данные из аналитического API
+            
+        Returns:
+            Словарь с объединенными данными по товарам и складам
+        """
+        mapping = {}
+        
+        # Индексируем основные данные
+        for stock in main_stocks:
+            key = f"{stock.offer_id}_{stock.warehouse_id}"
+            mapping[key] = {
+                "offer_id": stock.offer_id,
+                "product_id": stock.product_id,
+                "warehouse_id": stock.warehouse_id,
+                "warehouse_name": stock.warehouse_name,
+                "stock_type": stock.stock_type,
+                "sku": stock.sku,
+                # Данные из основного API
+                "main_present": stock.present,
+                "main_reserved": stock.reserved,
+                # Данные из аналитического API (будут добавлены ниже)
+                "analytics_free_to_sell": 0,
+                "analytics_promised": 0,
+                "analytics_reserved": 0,
+                "has_analytics_data": False
+            }
+        
+        # Добавляем аналитические данные
+        for analytics_stock in analytics_stocks:
+            key = f"{analytics_stock.offer_id}_{analytics_stock.warehouse_id}"
+            
+            if key in mapping:
+                # Обновляем существующую запись
+                mapping[key].update({
+                    "analytics_free_to_sell": analytics_stock.free_to_sell_amount,
+                    "analytics_promised": analytics_stock.promised_amount,
+                    "analytics_reserved": analytics_stock.reserved_amount,
+                    "has_analytics_data": True
+                })
+            else:
+                # Создаем новую запись только с аналитическими данными
+                mapping[key] = {
+                    "offer_id": analytics_stock.offer_id,
+                    "product_id": 0,  # Неизвестно из аналитического API
+                    "warehouse_id": analytics_stock.warehouse_id,
+                    "warehouse_name": analytics_stock.warehouse_name,
+                    "stock_type": "unknown",
+                    "sku": "",
+                    # Данные из основного API
+                    "main_present": 0,
+                    "main_reserved": 0,
+                    # Данные из аналитического API
+                    "analytics_free_to_sell": analytics_stock.free_to_sell_amount,
+                    "analytics_promised": analytics_stock.promised_amount,
+                    "analytics_reserved": analytics_stock.reserved_amount,
+                    "has_analytics_data": True
+                }
+        
+        if self.sync_logger:
+            main_only = sum(1 for v in mapping.values() if not v["has_analytics_data"])
+            analytics_only = sum(1 for v in mapping.values() if v["main_present"] == 0 and v["has_analytics_data"])
+            both_sources = sum(1 for v in mapping.values() if v["main_present"] > 0 and v["has_analytics_data"])
+            
+            self.sync_logger.log_info(f"Создан маппинг: {len(mapping)} записей, "
+                                    f"только основной API: {main_only}, "
+                                    f"только аналитический API: {analytics_only}, "
+                                    f"оба источника: {both_sources}")
+        
+        return mapping
+
+    def sync_ozon_inventory_combined(self, offer_ids: List[str] = None, 
+                                   visibility: str = "ALL", 
+                                   include_analytics: bool = True,
+                                   fallback_on_error: bool = True) -> SyncResult:
+        """
+        Оптимизированная синхронизация остатков с комбинированным использованием API.
+        
+        Реализует логику:
+        1. Получение основных остатков через v4 API
+        2. Дополнение данных детализацией по складам через аналитический API
+        3. Создание единой структуры данных, объединяющей информацию из обоих источников
+        4. Обработка случаев, когда один из API недоступен
+        
+        Args:
+            offer_ids: Список offer_id для фильтрации (опционально)
+            visibility: Фильтр по видимости товаров
+            include_analytics: Включать ли аналитические данные
+            fallback_on_error: Использовать ли fallback при ошибках
+            
+        Returns:
+            SyncResult: Результат синхронизации
+        """
+        started_at = datetime.now()
+        
+        # Начинаем сессию логирования
+        if self.sync_logger:
+            self.sync_logger.start_sync_session(SyncType.INVENTORY, "Ozon_Combined")
+            self.sync_logger.log_info("Начинаем комбинированную синхронизацию остатков с Ozon")
+        
+        records_processed = 0
+        records_inserted = 0
+        records_failed = 0
+        api_requests = 0
+        main_api_success = False
+        analytics_api_success = False
+        
+        try:
+            # Шаг 1: Получение основных остатков через v4 API
+            if self.sync_logger:
+                self.sync_logger.log_info("Шаг 1: Получение основных остатков через v4 API")
+            
+            main_stocks = []
+            try:
+                cursor = None
+                while True:
+                    result = self.get_ozon_stocks_v4(cursor, offer_ids, visibility)
+                    api_requests += 1
+                    
+                    items = result.get("items", [])
+                    if not items:
+                        break
+                    
+                    # Обрабатываем полученные данные
+                    batch_stocks = self.process_ozon_v4_stocks(items)
+                    main_stocks.extend(batch_stocks)
+                    records_processed += len(items)
+                    
+                    # Проверяем наличие следующей страницы
+                    if not result.get("has_next", False):
+                        break
+                    
+                    cursor = result.get("last_id")
+                    if not cursor:
+                        break
+                
+                main_api_success = True
+                if self.sync_logger:
+                    self.sync_logger.log_info(f"Основной API: получено {len(main_stocks)} записей остатков")
+                
+            except Exception as e:
+                error_msg = f"Ошибка основного API v4: {e}"
+                if self.sync_logger:
+                    self.sync_logger.log_error(error_msg)
+                
+                if not fallback_on_error:
+                    raise
+                
+                # Пробуем fallback к v3 API
+                if self.sync_logger:
+                    self.sync_logger.log_info("Используем fallback к v3 API")
+                
+                try:
+                    cursor = None
+                    while True:
+                        result = self.get_ozon_stocks_v3(cursor, 1000, visibility)
+                        api_requests += 1
+                        
+                        items = result.get("items", [])
+                        if not items:
+                            break
+                        
+                        # Конвертируем v3 данные в формат v4
+                        v4_items = self._convert_v3_to_v4_format(items)
+                        batch_stocks = self.process_ozon_v4_stocks(v4_items)
+                        main_stocks.extend(batch_stocks)
+                        records_processed += len(items)
+                        
+                        if not result.get("has_next", False):
+                            break
+                        
+                        cursor = result.get("last_id")
+                        if not cursor:
+                            break
+                    
+                    main_api_success = True
+                    if self.sync_logger:
+                        self.sync_logger.log_info(f"Fallback API: получено {len(main_stocks)} записей остатков")
+                
+                except Exception as fallback_error:
+                    if self.sync_logger:
+                        self.sync_logger.log_error(f"Fallback API также недоступен: {fallback_error}")
+                    raise
+            
+            # Шаг 2: Получение аналитических данных (если включено)
+            analytics_stocks = []
+            if include_analytics and main_api_success:
+                if self.sync_logger:
+                    self.sync_logger.log_info("Шаг 2: Получение аналитических данных")
+                
+                try:
+                    analytics_stocks = self.get_all_ozon_analytics_stocks()
+                    analytics_api_success = True
+                    api_requests += 5  # Примерное количество запросов для аналитики
+                    
+                    if self.sync_logger:
+                        self.sync_logger.log_info(f"Аналитический API: получено {len(analytics_stocks)} записей")
+                
+                except Exception as e:
+                    error_msg = f"Ошибка аналитического API: {e}"
+                    if self.sync_logger:
+                        self.sync_logger.log_error(error_msg)
+                    
+                    # Аналитические данные не критичны, продолжаем без них
+                    analytics_stocks = []
+            
+            # Шаг 3: Создание единой структуры данных
+            if self.sync_logger:
+                self.sync_logger.log_info("Шаг 3: Объединение данных из разных источников")
+            
+            stock_mapping = self.create_stock_mapping(main_stocks, analytics_stocks)
+            
+            # Валидация объединенных данных
+            if self.validator:
+                combined_records = list(stock_mapping.values())
+                validation_result = self.validator.validate_combined_stock_data(combined_records, "Ozon")
+                
+                if self.sync_logger:
+                    self.sync_logger.log_info(f"Валидация: {validation_result.valid_records}/{validation_result.total_records} записей валидны")
+                
+                # Логируем критические ошибки валидации
+                for issue in validation_result.issues:
+                    if issue.severity.value == "error":
+                        if self.sync_logger:
+                            self.sync_logger.log_error(f"Валидация: {issue}")
+            
+            # Шаг 4: Сохранение в БД
+            if self.sync_logger:
+                self.sync_logger.log_info("Шаг 4: Сохранение объединенных данных в БД")
+            
+            # Конвертируем в формат InventoryRecord
+            inventory_records = self.convert_to_inventory_records(main_stocks)
+            
+            # Сохраняем основные данные
+            if inventory_records:
+                saved_count = self.save_inventory_records(inventory_records)
+                records_inserted = saved_count
+                
+                if self.sync_logger:
+                    self.sync_logger.log_info(f"Сохранено {saved_count} основных записей остатков")
+            
+            # Сохраняем детализацию по складам
+            if stock_mapping:
+                self.save_warehouse_stock_details(stock_mapping)
+                
+                if self.sync_logger:
+                    self.sync_logger.log_info(f"Сохранена детализация по {len(stock_mapping)} складам")
+            
+            # Сохраняем сравнения (если есть аналитические данные)
+            if analytics_api_success and main_stocks and analytics_stocks:
+                comparisons = self.compare_stock_data(main_stocks, analytics_stocks)
+                if comparisons:
+                    self.save_stock_comparisons(comparisons)
+                    
+                    # Генерируем алерты при значительных расхождениях
+                    alerts = self.generate_discrepancy_alerts(comparisons)
+                    if alerts and self.sync_logger:
+                        for alert in alerts:
+                            self.sync_logger.log_warning(f"Алерт: {alert['message']}")
+            
+            # Завершаем синхронизацию
+            completed_at = datetime.now()
+            
+            # Определяем статус синхронизации
+            if main_api_success and records_inserted > 0:
+                if analytics_api_success or not include_analytics:
+                    status = SyncStatus.SUCCESS
+                else:
+                    status = SyncStatus.PARTIAL  # Основные данные есть, аналитических нет
+            else:
+                status = SyncStatus.FAILED
+            
+            result = SyncResult(
+                source="Ozon_Combined",
+                status=status,
+                records_processed=records_processed,
+                records_updated=0,  # Будет вычислено в save_inventory_records
+                records_inserted=records_inserted,
+                records_failed=records_failed,
+                started_at=started_at,
+                completed_at=completed_at,
+                api_requests_count=api_requests
+            )
+            
+            # Логируем результат
+            if self.sync_logger:
+                self.sync_logger.log_sync_completion(
+                    status=LogSyncStatus.SUCCESS if status == SyncStatus.SUCCESS else LogSyncStatus.PARTIAL,
+                    stats=ProcessingStats(
+                        records_processed=records_processed,
+                        records_inserted=records_inserted,
+                        records_updated=0,
+                        records_failed=records_failed,
+                        api_requests=api_requests
+                    ),
+                    duration_seconds=result.duration_seconds
+                )
+                
+                self.sync_logger.log_info(f"Комбинированная синхронизация завершена: {status.value}")
+            
+            return result
+            
+        except Exception as e:
+            completed_at = datetime.now()
+            error_msg = f"Критическая ошибка комбинированной синхронизации: {e}"
+            
+            if self.sync_logger:
+                self.sync_logger.log_error(error_msg)
+                self.sync_logger.log_sync_completion(
+                    status=LogSyncStatus.FAILED,
+                    stats=ProcessingStats(
+                        records_processed=records_processed,
+                        records_inserted=records_inserted,
+                        records_updated=0,
+                        records_failed=records_failed,
+                        api_requests=api_requests
+                    ),
+                    duration_seconds=int((completed_at - started_at).total_seconds()),
+                    error_message=error_msg
+                )
+            
+            return SyncResult(
+                source="Ozon_Combined",
+                status=SyncStatus.FAILED,
+                records_processed=records_processed,
+                records_updated=0,
+                records_inserted=records_inserted,
+                records_failed=records_failed,
+                started_at=started_at,
+                completed_at=completed_at,
+                error_message=error_msg,
+                api_requests_count=api_requests
+            )
+
+    def _convert_v3_to_v4_format(self, v3_items: List[Dict]) -> List[Dict]:
+        """
+        Конвертация данных из v3 API в формат v4 API для совместимости.
+        
+        Args:
+            v3_items: Список товаров из v3 API
+            
+        Returns:
+            Список товаров в формате v4 API
+        """
+        v4_items = []
+        
+        for item in v3_items:
+            try:
+                # Извлекаем основные поля из v3
+                offer_id = item.get("offer_id", "")
+                product_id = item.get("product_id", 0)
+                
+                # Конвертируем остатки в формат v4
+                stocks = []
+                
+                # v3 API возвращает остатки в другом формате
+                v3_stocks = item.get("stocks", [])
+                for stock in v3_stocks:
+                    v4_stock = {
+                        "sku": offer_id,  # В v3 SKU обычно равен offer_id
+                        "warehouse_id": stock.get("warehouse_id", 0),
+                        "type": stock.get("type", "fbo"),
+                        "present": stock.get("present", 0),
+                        "reserved": stock.get("reserved", 0)
+                    }
+                    stocks.append(v4_stock)
+                
+                # Если нет детализации по складам, создаем общую запись
+                if not stocks:
+                    stocks.append({
+                        "sku": offer_id,
+                        "warehouse_id": 0,
+                        "type": "fbo",
+                        "present": item.get("present", 0),
+                        "reserved": item.get("reserved", 0)
+                    })
+                
+                v4_item = {
+                    "offer_id": offer_id,
+                    "product_id": product_id,
+                    "stocks": stocks
+                }
+                v4_items.append(v4_item)
+                
+            except Exception as e:
+                if self.sync_logger:
+                    self.sync_logger.log_warning(f"Ошибка конвертации v3->v4 для товара {item.get('offer_id', 'unknown')}: {e}")
+                continue
+        
+        return v4_items
+
+    def handle_api_unavailability(self, primary_error: Exception, api_name: str) -> Dict[str, Any]:
+        """
+        Обработка случаев недоступности API с определением стратегии восстановления.
+        
+        Args:
+            primary_error: Исключение от основного API
+            api_name: Название API для логирования
+            
+        Returns:
+            Словарь с информацией о стратегии восстановления
+        """
+        recovery_strategy = {
+            "use_fallback": False,
+            "use_cache": False,
+            "skip_api": False,
+            "retry_later": False,
+            "error_type": type(primary_error).__name__,
+            "error_message": str(primary_error)
+        }
+        
+        if self.sync_logger:
+            self.sync_logger.log_error(f"API {api_name} недоступен: {primary_error}")
+        
+        # Определяем стратегию на основе типа ошибки
+        if isinstance(primary_error, OzonRateLimitError):
+            recovery_strategy["retry_later"] = True
+            recovery_strategy["retry_delay"] = 300  # 5 минут
+            if self.sync_logger:
+                self.sync_logger.log_info("Стратегия: повтор через 5 минут из-за rate limit")
+        
+        elif isinstance(primary_error, OzonAuthenticationError):
+            recovery_strategy["skip_api"] = True
+            if self.sync_logger:
+                self.sync_logger.log_error("Стратегия: пропуск API из-за ошибки аутентификации")
+        
+        elif isinstance(primary_error, OzonServerError):
+            recovery_strategy["use_fallback"] = True
+            if self.sync_logger:
+                self.sync_logger.log_info("Стратегия: использование fallback API")
+        
+        elif isinstance(primary_error, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+            recovery_strategy["use_fallback"] = True
+            recovery_strategy["use_cache"] = True
+            if self.sync_logger:
+                self.sync_logger.log_info("Стратегия: fallback API + кэш")
+        
+        else:
+            # Неизвестная ошибка - пробуем fallback
+            recovery_strategy["use_fallback"] = True
+            if self.sync_logger:
+                self.sync_logger.log_info("Стратегия: fallback API для неизвестной ошибки")
+        
+        return recovery_strategy
+
+    def get_cached_stock_data(self, max_age_hours: int = 24) -> List[OzonStockRecord]:
+        """
+        Получение кэшированных данных об остатках из БД.
+        
+        Args:
+            max_age_hours: Максимальный возраст кэша в часах
+            
+        Returns:
+            Список кэшированных записей об остатках
+        """
+        try:
+            if self.sync_logger:
+                self.sync_logger.log_info(f"Получаем кэшированные данные (возраст <= {max_age_hours}ч)")
+            
+            query = """
+            SELECT 
+                product_id, sku as offer_id, warehouse_name, stock_type,
+                current_stock as present, reserved_stock as reserved,
+                0 as warehouse_id
+            FROM inventory_data 
+            WHERE source = 'Ozon' 
+                AND last_sync_at >= DATE_SUB(NOW(), INTERVAL %s HOUR)
+                AND current_stock > 0
+            ORDER BY last_sync_at DESC
+            """
+            
+            self.cursor.execute(query, (max_age_hours,))
+            cached_rows = self.cursor.fetchall()
+            
+            cached_stocks = []
+            for row in cached_rows:
+                try:
+                    stock_record = OzonStockRecord(
+                        offer_id=row["offer_id"],
+                        product_id=row["product_id"],
+                        warehouse_id=row["warehouse_id"],
+                        warehouse_name=row["warehouse_name"],
+                        stock_type=row["stock_type"],
+                        present=row["present"],
+                        reserved=row["reserved"],
+                        sku=row["offer_id"]
+                    )
+                    cached_stocks.append(stock_record)
+                except Exception as e:
+                    if self.sync_logger:
+                        self.sync_logger.log_warning(f"Ошибка обработки кэшированной записи: {e}")
+                    continue
+            
+            if self.sync_logger:
+                self.sync_logger.log_info(f"Получено {len(cached_stocks)} кэшированных записей")
+            
+            return cached_stocks
+            
+        except Exception as e:
+            error_msg = f"Ошибка получения кэшированных данных: {e}"
+            if self.sync_logger:
+                self.sync_logger.log_error(error_msg)
+            return []
+
+    def create_unified_data_structure(self, main_stocks: List[OzonStockRecord], 
+                                    analytics_stocks: List[OzonAnalyticsStock],
+                                    include_metadata: bool = True) -> Dict[str, Any]:
+        """
+        Создание единой структуры данных, объединяющей информацию из обоих источников.
+        
+        Args:
+            main_stocks: Данные из основного API
+            analytics_stocks: Данные из аналитического API
+            include_metadata: Включать ли метаданные о источниках
+            
+        Returns:
+            Единая структура данных с метаданными
+        """
+        unified_structure = {
+            "metadata": {
+                "main_api_records": len(main_stocks),
+                "analytics_api_records": len(analytics_stocks),
+                "combined_records": 0,
+                "main_only_records": 0,
+                "analytics_only_records": 0,
+                "timestamp": datetime.now().isoformat(),
+                "data_sources": []
+            } if include_metadata else {},
+            "stock_data": {},
+            "warehouse_summary": {},
+            "discrepancies": []
+        }
+        
+        # Создаем маппинг данных
+        stock_mapping = self.create_stock_mapping(main_stocks, analytics_stocks)
+        unified_structure["stock_data"] = stock_mapping
+        
+        # Обновляем метаданные
+        if include_metadata:
+            unified_structure["metadata"]["combined_records"] = len(stock_mapping)
+            unified_structure["metadata"]["main_only_records"] = sum(
+                1 for v in stock_mapping.values() if not v["has_analytics_data"]
+            )
+            unified_structure["metadata"]["analytics_only_records"] = sum(
+                1 for v in stock_mapping.values() if v["main_present"] == 0 and v["has_analytics_data"]
+            )
+            
+            # Информация об источниках данных
+            if main_stocks:
+                unified_structure["metadata"]["data_sources"].append("main_api_v4")
+            if analytics_stocks:
+                unified_structure["metadata"]["data_sources"].append("analytics_api_v2")
+        
+        # Создаем сводку по складам
+        warehouse_summary = {}
+        for key, stock_data in stock_mapping.items():
+            warehouse_id = stock_data["warehouse_id"]
+            warehouse_name = stock_data["warehouse_name"]
+            
+            if warehouse_id not in warehouse_summary:
+                warehouse_summary[warehouse_id] = {
+                    "warehouse_name": warehouse_name,
+                    "total_products": 0,
+                    "total_present": 0,
+                    "total_reserved": 0,
+                    "has_analytics": False
+                }
+            
+            warehouse_summary[warehouse_id]["total_products"] += 1
+            warehouse_summary[warehouse_id]["total_present"] += stock_data["main_present"]
+            warehouse_summary[warehouse_id]["total_reserved"] += stock_data["main_reserved"]
+            
+            if stock_data["has_analytics_data"]:
+                warehouse_summary[warehouse_id]["has_analytics"] = True
+        
+        unified_structure["warehouse_summary"] = warehouse_summary
+        
+        # Выявляем значительные расхождения
+        if main_stocks and analytics_stocks:
+            comparisons = self.compare_stock_data(main_stocks, analytics_stocks)
+            significant_discrepancies = [
+                {
+                    "offer_id": c.offer_id,
+                    "warehouse_id": c.warehouse_id,
+                    "main_present": c.main_api_present,
+                    "analytics_free_to_sell": c.analytics_free_to_sell,
+                    "discrepancy": c.discrepancy_present
+                }
+                for c in comparisons if c.has_significant_discrepancy
+            ]
+            unified_structure["discrepancies"] = significant_discrepancies
+        
+        if self.sync_logger:
+            self.sync_logger.log_info(f"Создана единая структура данных: {len(stock_mapping)} записей, "
+                                    f"{len(warehouse_summary)} складов, "
+                                    f"{len(unified_structure.get('discrepancies', []))} расхождений")
+        
+        return unified_structure
+
+    def save_warehouse_stock_details(self, stock_mapping: Dict[str, Dict]) -> None:
+        """
+        Сохранение детализации по конкретным складам в БД.
+        
+        Args:
+            stock_mapping: Маппинг с объединенными данными по товарам и складам
+        """
+        try:
+            if self.sync_logger:
+                self.sync_logger.log_info(f"Сохраняем детализацию по {len(stock_mapping)} складам в БД")
+            
+            # Создаем таблицу для детализации по складам если не существует
+            create_table_query = """
+            CREATE TABLE IF NOT EXISTS ozon_warehouse_stock_details (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                offer_id VARCHAR(255) NOT NULL,
+                product_id INT DEFAULT 0,
+                warehouse_id INT NOT NULL,
+                warehouse_name VARCHAR(255) NOT NULL,
+                stock_type VARCHAR(50) DEFAULT 'unknown',
+                sku VARCHAR(255) DEFAULT '',
+                main_present INT DEFAULT 0,
+                main_reserved INT DEFAULT 0,
+                analytics_free_to_sell INT DEFAULT 0,
+                analytics_promised INT DEFAULT 0,
+                analytics_reserved INT DEFAULT 0,
+                has_analytics_data BOOLEAN DEFAULT FALSE,
+                snapshot_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_offer_warehouse_date (offer_id, warehouse_id, snapshot_date),
+                INDEX idx_offer_id (offer_id),
+                INDEX idx_warehouse_id (warehouse_id),
+                INDEX idx_snapshot_date (snapshot_date),
+                INDEX idx_has_analytics (has_analytics_data)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+            self.cursor.execute(create_table_query)
+            
+            # Сохраняем детализацию по складам
+            snapshot_date = date.today()
+            saved_count = 0
+            
+            for key, stock_data in stock_mapping.items():
+                try:
+                    upsert_query = """
+                    INSERT INTO ozon_warehouse_stock_details 
+                    (offer_id, product_id, warehouse_id, warehouse_name, stock_type, sku,
+                     main_present, main_reserved, analytics_free_to_sell, analytics_promised,
+                     analytics_reserved, has_analytics_data, snapshot_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        product_id = VALUES(product_id),
+                        warehouse_name = VALUES(warehouse_name),
+                        stock_type = VALUES(stock_type),
+                        sku = VALUES(sku),
+                        main_present = VALUES(main_present),
+                        main_reserved = VALUES(main_reserved),
+                        analytics_free_to_sell = VALUES(analytics_free_to_sell),
+                        analytics_promised = VALUES(analytics_promised),
+                        analytics_reserved = VALUES(analytics_reserved),
+                        has_analytics_data = VALUES(has_analytics_data),
+                        updated_at = CURRENT_TIMESTAMP
+                    """
+                    
+                    self.cursor.execute(upsert_query, (
+                        stock_data["offer_id"],
+                        stock_data["product_id"],
+                        stock_data["warehouse_id"],
+                        stock_data["warehouse_name"],
+                        stock_data["stock_type"],
+                        stock_data["sku"],
+                        stock_data["main_present"],
+                        stock_data["main_reserved"],
+                        stock_data["analytics_free_to_sell"],
+                        stock_data["analytics_promised"],
+                        stock_data["analytics_reserved"],
+                        stock_data["has_analytics_data"],
+                        snapshot_date
+                    ))
+                    
+                    saved_count += 1
+                    
+                except Exception as e:
+                    if self.sync_logger:
+                        self.sync_logger.log_error(f"Ошибка сохранения детализации для {stock_data['offer_id']}: {e}")
+                    continue
+            
+            self.connection.commit()
+            
+            if self.sync_logger:
+                self.sync_logger.log_info(f"Детализация по складам успешно сохранена: {saved_count} записей")
+            
+        except Exception as e:
+            self.connection.rollback()
+            error_msg = f"Ошибка сохранения детализации по складам в БД: {e}"
             if self.sync_logger:
                 self.sync_logger.log_error(error_msg)
             raise
@@ -1087,8 +1990,13 @@ class InventorySyncServiceV4:
         """
         Обработка данных об остатках из Ozon v4 API.
         
+        Обновленная версия для работы с новой структурой v4 API:
+        - Корректная обработка product_id, offer_id, stocks[]
+        - Извлечение SKU из поля stocks[].sku
+        - Поддержка всех типов складов: fbo, fbs, realFbs
+        
         Args:
-            api_items: Список товаров из API ответа
+            api_items: Список товаров из API ответа (уже обработанных в get_ozon_stocks_v4)
             
         Returns:
             Список обработанных записей об остатках
@@ -1103,14 +2011,14 @@ class InventorySyncServiceV4:
                         self.sync_logger.log_warning("Товар без offer_id пропущен")
                     continue
                 
-                # Используем product_id из API ответа
+                # Используем product_id из v4 API ответа
                 product_id = item.get("product_id", 0)
                 if not product_id:
                     if self.sync_logger:
                         self.sync_logger.log_warning(f"Товар {offer_id} без product_id пропущен")
                     continue
                 
-                # Обрабатываем остатки по складам
+                # Обрабатываем остатки по складам из массива stocks[]
                 stocks = item.get("stocks", [])
                 if not stocks:
                     # Если нет остатков, создаем запись с нулевыми значениями
@@ -1126,15 +2034,23 @@ class InventorySyncServiceV4:
                     stock_records.append(stock_record)
                     continue
                 
-                # Обрабатываем каждый склад
+                # Обрабатываем каждый склад из массива stocks[]
                 for stock in stocks:
+                    # Извлекаем SKU из поля stocks[].sku (новая структура v4)
+                    sku = stock.get("sku", "")
                     warehouse_id = stock.get("warehouse_id", 0)
                     warehouse_name = self.get_warehouse_name(warehouse_id)
+                    
+                    # Поддержка всех типов складов: fbo, fbs, realFbs
                     stock_type = stock.get("type", "fbo")
+                    if stock_type not in ["fbo", "fbs", "realFbs"]:
+                        stock_type = "fbo"  # Fallback к FBO
+                    
                     present = stock.get("present", 0)
                     reserved = stock.get("reserved", 0)
                     
                     # Создаем запись для всех товаров (даже с нулевыми остатками)
+                    # Добавляем SKU в качестве дополнительной информации
                     stock_record = OzonStockRecord(
                         offer_id=offer_id,
                         product_id=product_id,
@@ -1144,6 +2060,10 @@ class InventorySyncServiceV4:
                         present=present,
                         reserved=reserved
                     )
+                    
+                    # Добавляем SKU как дополнительное поле (если нужно для валидации)
+                    stock_record.sku = sku
+                    
                     stock_records.append(stock_record)
                 
             except Exception as e:
@@ -1152,11 +2072,19 @@ class InventorySyncServiceV4:
                     self.sync_logger.log_error(error_msg)
                 continue
         
+        if self.sync_logger:
+            self.sync_logger.log_info(f"Обработано {len(stock_records)} записей остатков из {len(api_items)} товаров")
+        
         return stock_records
 
     def convert_to_inventory_records(self, ozon_stocks: List[OzonStockRecord]) -> List[InventoryRecord]:
         """
         Конвертация записей Ozon в универсальный формат InventoryRecord.
+        
+        Обновленная версия для работы с v4 API:
+        - Использует SKU из поля stocks[].sku если доступно
+        - Fallback к offer_id если SKU отсутствует
+        - Поддержка всех типов складов: fbo, fbs, realFbs
         
         Args:
             ozon_stocks: Список записей об остатках с Ozon
@@ -1168,12 +2096,15 @@ class InventorySyncServiceV4:
         
         for stock in ozon_stocks:
             try:
+                # Используем SKU из v4 API если доступно, иначе fallback к offer_id
+                sku_value = stock.sku if stock.sku else stock.offer_id
+                
                 inventory_record = InventoryRecord(
                     product_id=stock.product_id,
-                    sku=stock.offer_id,
+                    sku=sku_value,  # Используем SKU из stocks[].sku (v4 API)
                     source='Ozon',
                     warehouse_name=stock.warehouse_name,
-                    stock_type=stock.stock_type.upper(),
+                    stock_type=stock.stock_type.upper(),  # FBO, FBS, REALFBS
                     current_stock=stock.present,
                     reserved_stock=stock.reserved,
                     available_stock=max(0, stock.present - stock.reserved),
@@ -1188,6 +2119,9 @@ class InventorySyncServiceV4:
                 if self.sync_logger:
                     self.sync_logger.log_error(error_msg)
                 continue
+        
+        if self.sync_logger:
+            self.sync_logger.log_info(f"Конвертировано {len(inventory_records)} записей из {len(ozon_stocks)} остатков")
         
         return inventory_records
 
@@ -1245,9 +2179,8 @@ class InventorySyncServiceV4:
                     self.sync_logger.log_info(f"Обрабатываем страницу {page}, cursor: {cursor}")
                 
                 # Получаем данные с API
-                api_response = self.get_ozon_stocks_v4(
+                api_response = self.get_ozon_stocks_v4_old(
                     cursor=cursor,
-                    offer_ids=offer_ids,
                     visibility=visibility,
                     limit=1000
                 )

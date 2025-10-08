@@ -155,6 +155,13 @@ class InventoryDataValidator:
             if not self._validate_quantity(record.get(field, 0), field, record_id):
                 is_valid = False
         
+        # Валидация новых полей из аналитического API (если присутствуют)
+        analytics_fields = ['analytics_free_to_sell', 'analytics_promised', 'analytics_reserved']
+        for field in analytics_fields:
+            if field in record:
+                if not self._validate_quantity(record.get(field, 0), field, record_id):
+                    is_valid = False
+        
         # Валидация логики остатков
         if not self._validate_stock_logic(record, record_id):
             is_valid = False
@@ -225,12 +232,24 @@ class InventoryDataValidator:
         return True
     
     def _validate_sku(self, sku: Any, source: str, record_id: str) -> bool:
-        """Валидация SKU."""
+        """
+        Валидация SKU с поддержкой числовых значений от Ozon.
+        
+        Обновленная версия:
+        - Поддержка числовых значений от Ozon (из v4 API)
+        - Разрешение как числовых, так и буквенно-цифровых значений
+        - Убраны ложные предупреждения о "необычных символах"
+        - Добавлена валидация новых полей из аналитического API
+        """
+        # Конвертируем в строку если это число
+        if isinstance(sku, (int, float)):
+            sku = str(sku)
+        
         if not sku or not isinstance(sku, str):
             self._add_issue(
                 ValidationSeverity.ERROR,
                 "sku",
-                "SKU должен быть непустой строкой",
+                "SKU должен быть непустой строкой или числом",
                 sku,
                 record_id
             )
@@ -249,22 +268,50 @@ class InventoryDataValidator:
         
         # Специфичные проверки для разных источников
         if source == 'Ozon':
-            # Ozon SKU обычно содержат буквы, цифры, дефисы
-            if not sku.replace('-', '').replace('_', '').isalnum():
+            # Ozon SKU могут быть:
+            # 1. Числовыми (product_id из v4 API) - например: "123456789"
+            # 2. Буквенно-цифровыми с дефисами/подчеркиваниями - например: "ABC-123_DEF"
+            # 3. Смешанными форматами - например: "123-ABC", "SKU_456"
+            
+            # Проверяем базовые символы (буквы, цифры, дефисы, подчеркивания, точки)
+            import re
+            if not re.match(r'^[a-zA-Z0-9\-_.]+$', sku):
                 self._add_issue(
                     ValidationSeverity.WARNING,
                     "sku",
-                    "Ozon SKU содержит необычные символы",
+                    f"Ozon SKU содержит специальные символы: {sku}",
                     sku,
                     record_id
                 )
+            
+            # Проверяем минимальную длину
+            if len(sku) < 1:
+                self._add_issue(
+                    ValidationSeverity.ERROR,
+                    "sku",
+                    "Ozon SKU не может быть пустым",
+                    sku,
+                    record_id
+                )
+                return False
+                
         elif source == 'Wildberries':
             # WB nmId должен быть числом
             if not sku.isdigit():
                 self._add_issue(
                     ValidationSeverity.WARNING,
                     "sku",
-                    "Wildberries SKU (nmId) должен быть числом",
+                    f"Wildberries SKU (nmId) должен быть числом: {sku}",
+                    sku,
+                    record_id
+                )
+            
+            # Проверяем длину nmId (обычно 8-9 цифр)
+            if sku.isdigit() and (len(sku) < 6 or len(sku) > 12):
+                self._add_issue(
+                    ValidationSeverity.WARNING,
+                    "sku",
+                    f"Wildberries nmId имеет необычную длину: {len(sku)} символов",
                     sku,
                     record_id
                 )
@@ -592,6 +639,299 @@ class InventoryDataValidator:
                 valid_records=0,
                 issues=self.issues.copy()
             )
+
+    def validate_analytics_data(self, analytics_records: List[Dict[str, Any]], source: str) -> ValidationResult:
+        """
+        Валидация аналитических данных об остатках.
+        
+        Args:
+            analytics_records: Список записей аналитических данных
+            source: Источник данных ('Ozon')
+            
+        Returns:
+            ValidationResult: Результат валидации
+        """
+        logger.info(f"🔍 Начинаем валидацию {len(analytics_records)} аналитических записей от {source}")
+        
+        self.issues = []
+        valid_records = 0
+        
+        for i, record in enumerate(analytics_records):
+            record_id = f"{source}_analytics_{i}"
+            
+            try:
+                if self._validate_single_analytics_record(record, source, record_id):
+                    valid_records += 1
+            except Exception as e:
+                self._add_issue(
+                    ValidationSeverity.ERROR,
+                    "validation_error",
+                    f"Критическая ошибка валидации аналитических данных: {e}",
+                    record_id=record_id
+                )
+        
+        is_valid = len([issue for issue in self.issues if issue.severity == ValidationSeverity.ERROR]) == 0
+        
+        result = ValidationResult(
+            is_valid=is_valid,
+            total_records=len(analytics_records),
+            valid_records=valid_records,
+            issues=self.issues.copy()
+        )
+        
+        logger.info(f"✅ Валидация аналитических данных завершена: {valid_records}/{len(analytics_records)} записей валидны, "
+                   f"ошибок: {result.error_count}, предупреждений: {result.warning_count}")
+        
+        return result
+
+    def _validate_single_analytics_record(self, record: Dict[str, Any], source: str, record_id: str) -> bool:
+        """
+        Валидация одной записи аналитических данных.
+        
+        Args:
+            record: Запись аналитических данных для валидации
+            source: Источник данных
+            record_id: Идентификатор записи для логирования
+            
+        Returns:
+            bool: True если запись валидна
+        """
+        is_valid = True
+        
+        # Валидация обязательных полей для аналитических данных
+        required_fields = ['offer_id', 'warehouse_id', 'warehouse_name']
+        for field in required_fields:
+            if not self._validate_required_field(record, field, record_id):
+                is_valid = False
+        
+        # Валидация offer_id (аналог SKU)
+        if not self._validate_sku(record.get('offer_id'), source, record_id):
+            is_valid = False
+        
+        # Валидация warehouse_id
+        warehouse_id = record.get('warehouse_id')
+        if warehouse_id is not None:
+            try:
+                warehouse_id_int = int(warehouse_id)
+                if warehouse_id_int < 0:
+                    self._add_issue(
+                        ValidationSeverity.ERROR,
+                        "warehouse_id",
+                        "Warehouse ID не может быть отрицательным",
+                        warehouse_id,
+                        record_id
+                    )
+                    is_valid = False
+            except (ValueError, TypeError):
+                self._add_issue(
+                    ValidationSeverity.ERROR,
+                    "warehouse_id",
+                    "Warehouse ID должен быть числом",
+                    warehouse_id,
+                    record_id
+                )
+                is_valid = False
+        
+        # Валидация аналитических метрик
+        analytics_fields = ['free_to_sell_amount', 'promised_amount', 'reserved_amount']
+        for field in analytics_fields:
+            if not self._validate_quantity(record.get(field, 0), field, record_id):
+                is_valid = False
+        
+        # Валидация логики аналитических данных
+        if not self._validate_analytics_logic(record, record_id):
+            is_valid = False
+        
+        return is_valid
+
+    def _validate_analytics_logic(self, record: Dict[str, Any], record_id: str) -> bool:
+        """
+        Валидация логики аналитических данных.
+        
+        Args:
+            record: Запись аналитических данных
+            record_id: Идентификатор записи
+            
+        Returns:
+            bool: True если логика корректна
+        """
+        is_valid = True
+        
+        try:
+            free_to_sell = int(record.get('free_to_sell_amount', 0))
+            promised = int(record.get('promised_amount', 0))
+            reserved = int(record.get('reserved_amount', 0))
+            
+            # Проверка: promised_amount обычно >= free_to_sell_amount
+            if promised > 0 and free_to_sell > promised:
+                self._add_issue(
+                    ValidationSeverity.WARNING,
+                    "analytics_logic",
+                    f"Свободные к продаже ({free_to_sell}) больше обещанных ({promised})",
+                    record_id=record_id
+                )
+            
+            # Проверка: reserved_amount должен быть разумным
+            if reserved > promised + free_to_sell:
+                self._add_issue(
+                    ValidationSeverity.WARNING,
+                    "analytics_logic",
+                    f"Зарезервированное количество ({reserved}) больше суммы обещанных и свободных ({promised + free_to_sell})",
+                    record_id=record_id
+                )
+            
+            # Проверка на нулевые значения во всех полях
+            if free_to_sell == 0 and promised == 0 and reserved == 0:
+                self._add_issue(
+                    ValidationSeverity.INFO,
+                    "analytics_logic",
+                    "Все аналитические метрики равны нулю",
+                    record_id=record_id
+                )
+            
+        except (ValueError, TypeError) as e:
+            self._add_issue(
+                ValidationSeverity.ERROR,
+                "analytics_logic",
+                f"Ошибка валидации логики аналитических данных: {e}",
+                record_id=record_id
+            )
+            is_valid = False
+        
+        return is_valid
+
+    def validate_combined_stock_data(self, combined_records: List[Dict[str, Any]], source: str) -> ValidationResult:
+        """
+        Валидация объединенных данных (основной API + аналитический API).
+        
+        Args:
+            combined_records: Список записей с объединенными данными
+            source: Источник данных
+            
+        Returns:
+            ValidationResult: Результат валидации
+        """
+        logger.info(f"🔍 Начинаем валидацию {len(combined_records)} объединенных записей от {source}")
+        
+        self.issues = []
+        valid_records = 0
+        
+        for i, record in enumerate(combined_records):
+            record_id = f"{source}_combined_{i}"
+            
+            try:
+                if self._validate_combined_record(record, source, record_id):
+                    valid_records += 1
+            except Exception as e:
+                self._add_issue(
+                    ValidationSeverity.ERROR,
+                    "validation_error",
+                    f"Критическая ошибка валидации объединенных данных: {e}",
+                    record_id=record_id
+                )
+        
+        is_valid = len([issue for issue in self.issues if issue.severity == ValidationSeverity.ERROR]) == 0
+        
+        result = ValidationResult(
+            is_valid=is_valid,
+            total_records=len(combined_records),
+            valid_records=valid_records,
+            issues=self.issues.copy()
+        )
+        
+        logger.info(f"✅ Валидация объединенных данных завершена: {valid_records}/{len(combined_records)} записей валидны, "
+                   f"ошибок: {result.error_count}, предупреждений: {result.warning_count}")
+        
+        return result
+
+    def _validate_combined_record(self, record: Dict[str, Any], source: str, record_id: str) -> bool:
+        """
+        Валидация записи с объединенными данными из основного и аналитического API.
+        
+        Args:
+            record: Запись с объединенными данными
+            source: Источник данных
+            record_id: Идентификатор записи
+            
+        Returns:
+            bool: True если запись валидна
+        """
+        is_valid = True
+        
+        # Базовая валидация как для обычной записи
+        if not self._validate_single_record(record, source, record_id):
+            is_valid = False
+        
+        # Дополнительная валидация для аналитических полей
+        analytics_fields = ['analytics_free_to_sell', 'analytics_promised', 'analytics_reserved']
+        for field in analytics_fields:
+            if field in record:
+                if not self._validate_quantity(record.get(field, 0), field, record_id):
+                    is_valid = False
+        
+        # Валидация соответствия между основными и аналитическими данными
+        if not self._validate_main_vs_analytics_consistency(record, record_id):
+            is_valid = False
+        
+        return is_valid
+
+    def _validate_main_vs_analytics_consistency(self, record: Dict[str, Any], record_id: str) -> bool:
+        """
+        Валидация соответствия между основными и аналитическими данными.
+        
+        Args:
+            record: Запись с объединенными данными
+            record_id: Идентификатор записи
+            
+        Returns:
+            bool: True если данные согласованы
+        """
+        is_valid = True
+        
+        try:
+            # Основные данные
+            main_present = int(record.get('main_present', 0))
+            main_reserved = int(record.get('main_reserved', 0))
+            
+            # Аналитические данные
+            analytics_free_to_sell = int(record.get('analytics_free_to_sell', 0))
+            analytics_reserved = int(record.get('analytics_reserved', 0))
+            
+            has_analytics = record.get('has_analytics_data', False)
+            
+            if has_analytics:
+                # Проверяем соответствие зарезервированных количеств
+                reserved_diff = abs(main_reserved - analytics_reserved)
+                if reserved_diff > max(5, main_reserved * 0.1):  # Разница больше 10% или 5 единиц
+                    self._add_issue(
+                        ValidationSeverity.WARNING,
+                        "consistency",
+                        f"Значительное расхождение в зарезервированных остатках: основной API={main_reserved}, аналитический API={analytics_reserved}",
+                        record_id=record_id
+                    )
+                
+                # Проверяем логическое соответствие
+                expected_free_to_sell = max(0, main_present - main_reserved)
+                free_to_sell_diff = abs(expected_free_to_sell - analytics_free_to_sell)
+                
+                if free_to_sell_diff > max(5, expected_free_to_sell * 0.1):  # Разница больше 10% или 5 единиц
+                    self._add_issue(
+                        ValidationSeverity.WARNING,
+                        "consistency",
+                        f"Расхождение в свободных к продаже: ожидаемо={expected_free_to_sell}, аналитический API={analytics_free_to_sell}",
+                        record_id=record_id
+                    )
+            
+        except (ValueError, TypeError) as e:
+            self._add_issue(
+                ValidationSeverity.ERROR,
+                "consistency",
+                f"Ошибка валидации соответствия данных: {e}",
+                record_id=record_id
+            )
+            is_valid = False
+        
+        return is_valid
 
 
 def main():
