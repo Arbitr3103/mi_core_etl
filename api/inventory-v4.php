@@ -13,11 +13,27 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// Конфигурация БД
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'mi_core_db');
-define('DB_USER', 'mi_core_user');
-define('DB_PASS', 'secure_password_123');
+// Конфигурация БД из .env файла
+function loadEnvConfig() {
+    $envFile = __DIR__ . '/../.env';
+    if (file_exists($envFile)) {
+        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos($line, '=') !== false && strpos($line, '#') !== 0) {
+                list($key, $value) = explode('=', $line, 2);
+                $value = trim($value, '"\'');
+                $_ENV[trim($key)] = $value;
+            }
+        }
+    }
+}
+
+loadEnvConfig();
+
+define('DB_HOST', $_ENV['DB_HOST'] ?? 'localhost');
+define('DB_NAME', $_ENV['DB_NAME'] ?? 'mi_core');
+define('DB_USER', $_ENV['DB_USER'] ?? 'v_admin');
+define('DB_PASS', $_ENV['DB_PASSWORD'] ?? 'Arbitr09102022!');
 
 class InventoryV4API {
     private $pdo;
@@ -58,40 +74,7 @@ class InventoryV4API {
     private function runSync() {
         try {
             // Запускаем Python скрипт синхронизации v4
-            $command = 'cd /var/www/mi_core_api && python3 -c "
-from inventory_sync_service_v4 import InventorySyncServiceV4
-import json
-
-service = InventorySyncServiceV4()
-try:
-    service.connect_to_database()
-    result = service.sync_ozon_inventory_v4()
-    
-    output = {
-        \"success\": True,
-        \"source\": result.source,
-        \"status\": result.status.value,
-        \"records_processed\": result.records_processed,
-        \"records_inserted\": result.records_inserted,
-        \"records_failed\": result.records_failed,
-        \"duration_seconds\": result.duration_seconds,
-        \"api_requests_count\": result.api_requests_count,
-        \"error_message\": result.error_message,
-        \"timestamp\": result.completed_at.isoformat() if result.completed_at else None
-    }
-    print(json.dumps(output))
-    
-except Exception as e:
-    output = {
-        \"success\": False,
-        \"error\": str(e),
-        \"timestamp\": None
-    }
-    print(json.dumps(output))
-    
-finally:
-    service.close_database_connection()
-" 2>&1';
+            $command = 'cd ' . dirname(__DIR__) . ' && python3 web_inventory_sync_v4.py sync 2>&1';
             
             $output = shell_exec($command);
             $result = json_decode($output, true);
@@ -111,34 +94,9 @@ finally:
     
     private function testV4API() {
         try {
-            $command = 'cd /var/www/mi_core_api && python3 -c "
-from inventory_sync_service_v4 import InventorySyncServiceV4
-import json
-
-service = InventorySyncServiceV4()
-try:
-    # Тест API без БД
-    result = service.get_ozon_stocks_v4(limit=5)
-    
-    output = {
-        \"success\": True,
-        \"api_working\": True,
-        \"items_received\": result[\"total_items\"],
-        \"has_next\": result[\"has_next\"],
-        \"cursor_present\": bool(result[\"last_id\"]),
-        \"message\": \"v4 API работает корректно\"
-    }
-    print(json.dumps(output))
-    
-except Exception as e:
-    output = {
+            $command = 'cd ' . dirname(__DIR__) . ' && python3 web_inventory_sync_v4.py test 2>&1';
         \"success\": False,
         \"api_working\": False,
-        \"error\": str(e),
-        \"message\": \"v4 API недоступен\"
-    }
-    print(json.dumps(output))
-" 2>&1';
             
             $output = shell_exec($command);
             $result = json_decode($output, true);
