@@ -176,6 +176,22 @@ try {
         <div class="header">
             <h1>🚀 Дашборд остатков Ozon</h1>
             <p>Мониторинг товарных остатков в реальном времени</p>
+            <div style="margin-top: 15px;">
+                <a href="dashboard_inventory_v4.php" 
+                   style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                          color: white; 
+                          padding: 12px 24px; 
+                          text-decoration: none; 
+                          border-radius: 8px; 
+                          font-weight: 500;
+                          display: inline-block;
+                          transition: transform 0.2s ease;">
+                    🆕 Новый v4 API Дашборд
+                </a>
+                <span style="margin-left: 15px; color: #e2e8f0; font-size: 0.9rem;">
+                    Управление синхронизацией через улучшенный v4 API
+                </span>
+            </div>
         </div>
         
         <?php if (!empty($stats)): ?>
