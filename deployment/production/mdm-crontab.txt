@@ -1,0 +1,14 @@
+# MDM System Production Crontab
+# Создан: 09.10.2025
+
+# Синхронизация складов Ozon каждые 6 часов
+0 */6 * * * cd /Users/vladimirbragin/CascadeProjects/mi_core_etl && php scripts/load-ozon-warehouses.php >> logs/etl/ozon-warehouses.log 2>&1
+
+# Проверка качества данных ежедневно в 3:00
+0 3 * * * cd /Users/vladimirbragin/CascadeProjects/mi_core_etl && php scripts/data-quality-check.php >> logs/monitoring/data-quality.log 2>&1
+
+# Очистка старых логов еженедельно
+0 2 * * 0 find /Users/vladimirbragin/CascadeProjects/mi_core_etl/logs -name "*.log" -mtime +7 -delete
+
+# Health check каждые 5 минут
+*/5 * * * * cd /Users/vladimirbragin/CascadeProjects/mi_core_etl && php health-check.php >> logs/monitoring/health-check.log 2>&1
