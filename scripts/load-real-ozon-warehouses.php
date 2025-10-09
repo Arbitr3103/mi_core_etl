@@ -121,8 +121,8 @@ try {
     // Извлекаем уникальные склады из данных
     $warehouses = [];
     foreach ($rows as $row) {
-        if (isset($row['dimensions']) && isset($row['dimensions']['warehouse'])) {
-            $warehouse = $row['dimensions']['warehouse'];
+        if (isset($row['warehouse_name'])) {
+            $warehouse = $row['warehouse_name'];
             if (!isset($warehouses[$warehouse])) {
                 $warehouses[$warehouse] = [
                     'name' => $warehouse,
@@ -133,12 +133,10 @@ try {
             $warehouses[$warehouse]['products_count']++;
             
             // Суммируем остатки
-            if (isset($row['metrics'])) {
-                $free_to_sell = $row['metrics']['free_to_sell_amount'] ?? 0;
-                $promised = $row['metrics']['promised_amount'] ?? 0;
-                $reserved = $row['metrics']['reserved_amount'] ?? 0;
-                $warehouses[$warehouse]['total_stock'] += ($free_to_sell + $promised + $reserved);
-            }
+            $free_to_sell = $row['free_to_sell_amount'] ?? 0;
+            $promised = $row['promised_amount'] ?? 0;
+            $reserved = $row['reserved_amount'] ?? 0;
+            $warehouses[$warehouse]['total_stock'] += ($free_to_sell + $promised + $reserved);
         }
     }
     
