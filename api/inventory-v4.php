@@ -52,7 +52,7 @@ $action = $_GET['action'] ?? 'status';
 switch ($action) {
     case 'test':
         // Тест API - используем правильные таблицы
-        $stmt = $pdo->query("SELECT COUNT(*) as count FROM inventory WHERE quantity_present > 0");
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM inventory_data WHERE quantity_present > 0");
         $inventory_count = $stmt->fetch()['count'];
         
         echo json_encode([
@@ -70,7 +70,7 @@ switch ($action) {
         
     case 'sync':
         // Имитация синхронизации - возвращаем данные как после реальной синхронизации
-        $stmt = $pdo->query("SELECT COUNT(*) as count FROM inventory");
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM inventory_data");
         $total_records = $stmt->fetch()['count'];
         
         echo json_encode([
@@ -112,7 +112,7 @@ switch ($action) {
                 i.stock_type,
                 CONCAT('Товар ID ', i.product_id) as display_name,
                 'Числовой ID' as name_source
-            FROM inventory i
+            FROM inventory_data i
             $whereClause
             ORDER BY i.quantity_present DESC
             LIMIT $limit OFFSET $offset
@@ -175,7 +175,7 @@ switch ($action) {
                     WHEN i.quantity_present < 5 AND i.quantity_reserved > 0 THEN 'Требует пополнения'
                     ELSE 'Низкий остаток'
                 END as urgency_level
-            FROM inventory i
+            FROM inventory_data i
             WHERE i.quantity_present > 0 AND i.quantity_present < ?
             ORDER BY i.quantity_present ASC
         ");
@@ -190,7 +190,7 @@ switch ($action) {
                 COUNT(DISTINCT i.product_id) as unique_products,
                 SUM(i.quantity_present) as total_critical_stock,
                 SUM(i.quantity_reserved) as total_reserved_stock
-            FROM inventory i
+            FROM inventory_data i
             WHERE i.quantity_present > 0 AND i.quantity_present < ?
         ");
         $stats_stmt->execute([$threshold]);
@@ -217,7 +217,7 @@ switch ($action) {
                 COUNT(CASE WHEN i.quantity_present > 50 THEN 1 END) as well_stocked_products,
                 COUNT(CASE WHEN i.quantity_present BETWEEN 10 AND 50 THEN 1 END) as medium_stocked_products,
                 COUNT(CASE WHEN i.quantity_present < 10 AND i.quantity_present > 0 THEN 1 END) as low_stocked_products
-            FROM inventory i
+            FROM inventory_data i
             WHERE i.quantity_present > 0
         ");
         $stats = $stats_stmt->fetch();
@@ -235,7 +235,7 @@ switch ($action) {
                     WHEN SUM(i.quantity_present) > 20 THEN 'Средние остатки'
                     ELSE 'Низкие остатки'
                 END as stock_level
-            FROM inventory i
+            FROM inventory_data i
             WHERE i.quantity_present > 0
             GROUP BY i.product_id
             ORDER BY total_stock DESC
@@ -253,8 +253,9 @@ switch ($action) {
         ]);
         break;
         
+    case 'overview':
     case 'stats':
-        // Общая статистика
+        // Общая статистика и обзор
         $stmt = $pdo->query("
             SELECT 
                 COUNT(*) as total_products,
@@ -264,7 +265,7 @@ switch ($action) {
                 COUNT(DISTINCT i.warehouse_name) as total_warehouses,
                 AVG(i.quantity_present) as avg_stock,
                 MAX(i.updated_at) as last_update
-            FROM inventory i
+            FROM inventory_data i
         ");
         
         $overview = $stmt->fetch();
@@ -276,19 +277,25 @@ switch ($action) {
                 i.source,
                 COUNT(*) as count,
                 SUM(i.quantity_present) as total_stock
-            FROM inventory i
+            FROM inventory_data i
             WHERE i.quantity_present > 0
             GROUP BY i.stock_type, i.source
             ORDER BY total_stock DESC
         ");
         $stock_types = $stock_types_stmt->fetchAll();
         
+        // Последняя синхронизация
+        $sync_stmt = $pdo->query("SELECT * FROM sync_logs ORDER BY created_at DESC LIMIT 1");
+        $last_sync = $sync_stmt->fetch();
+        
         echo json_encode([
             'success' => true,
             'data' => [
                 'overview' => $overview,
                 'stock_types' => $stock_types,
-                'api_version' => 'v4'
+                'last_sync' => $last_sync,
+                'api_version' => 'v4',
+                'timestamp' => date('Y-m-d H:i:s')
             ]
         ]);
         break;
