@@ -23,16 +23,20 @@ try {
     echo "🔍 1. Ищем товары без реальных названий...\n";
     
     $stmt = $pdo->query("
-        SELECT DISTINCT i.product_id
+        SELECT i.product_id, MAX(i.quantity_present) as max_stock
         FROM inventory_data i
         LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
         WHERE i.product_id != 0 
         AND (dp.name LIKE 'Товар Ozon ID%' OR dp.name IS NULL)
-        ORDER BY i.quantity_present DESC
+        GROUP BY i.product_id
+        ORDER BY max_stock DESC
         LIMIT 50
     ");
     
-    $products_to_sync = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $products_to_sync = [];
+    while ($row = $stmt->fetch()) {
+        $products_to_sync[] = $row['product_id'];
+    }
     $count = count($products_to_sync);
     
     echo "   Найдено товаров для синхронизации: $count\n";
