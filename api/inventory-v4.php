@@ -110,9 +110,14 @@ switch ($action) {
                 i.warehouse_name,
                 i.source,
                 i.stock_type,
-                CONCAT('Товар ID ', i.product_id) as display_name,
-                'Числовой ID' as name_source
+                COALESCE(dp.name, dp.product_name, CONCAT('Товар ID ', i.product_id)) as display_name,
+                CASE 
+                    WHEN dp.name IS NOT NULL THEN 'Мастер-таблица (name)'
+                    WHEN dp.product_name IS NOT NULL THEN 'Мастер-таблица (product_name)'
+                    ELSE 'Числовой ID'
+                END as name_source
             FROM inventory_data i
+            LEFT JOIN dim_products dp ON i.product_id = dp.sku_ozon
             $whereClause
             ORDER BY i.quantity_present DESC
             LIMIT $limit OFFSET $offset
@@ -168,7 +173,7 @@ switch ($action) {
                 i.warehouse_name,
                 i.source,
                 i.stock_type,
-                CONCAT('Товар ID ', i.product_id) as display_name,
+                COALESCE(dp.name, dp.product_name, CONCAT('Товар ID ', i.product_id)) as display_name,
                 CASE 
                     WHEN i.quantity_present < 2 AND i.quantity_reserved > 0 THEN 'Критично - есть заказы'
                     WHEN i.quantity_present < 2 THEN 'Критично - нет заказов'
@@ -176,6 +181,7 @@ switch ($action) {
                     ELSE 'Низкий остаток'
                 END as urgency_level
             FROM inventory_data i
+            LEFT JOIN dim_products dp ON i.product_id = dp.sku_ozon
             WHERE i.quantity_present > 0 AND i.quantity_present < ?
             ORDER BY i.quantity_present ASC
         ");
@@ -226,7 +232,7 @@ switch ($action) {
         $top_products_stmt = $pdo->query("
             SELECT 
                 i.product_id as sku,
-                CONCAT('Товар ID ', i.product_id) as product_name,
+                COALESCE(dp.name, dp.product_name, CONCAT('Товар ID ', i.product_id)) as product_name,
                 SUM(i.quantity_present) as total_stock,
                 SUM(i.quantity_reserved) as total_reserved,
                 COUNT(DISTINCT i.warehouse_name) as warehouses_count,
@@ -236,8 +242,9 @@ switch ($action) {
                     ELSE 'Низкие остатки'
                 END as stock_level
             FROM inventory_data i
+            LEFT JOIN dim_products dp ON i.product_id = dp.sku_ozon
             WHERE i.quantity_present > 0
-            GROUP BY i.product_id
+            GROUP BY i.product_id, dp.name, dp.product_name
             ORDER BY total_stock DESC
             LIMIT 15
         ");
