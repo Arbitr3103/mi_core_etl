@@ -110,14 +110,23 @@ switch ($action) {
                 i.warehouse_name,
                 i.source,
                 i.stock_type,
-                COALESCE(dp.name, dp.product_name, CONCAT('Товар ID ', i.product_id)) as display_name,
+                COALESCE(
+                    pcr.cached_name,
+                    dp.name,
+                    dp.product_name,
+                    CONCAT('Товар ID ', i.product_id)
+                ) as display_name,
+                pcr.sync_status,
                 CASE 
+                    WHEN pcr.cached_name IS NOT NULL AND pcr.cached_name NOT LIKE 'Товар%ID%' AND pcr.sync_status = 'synced' THEN 'Cross-reference (synced)'
+                    WHEN pcr.cached_name IS NOT NULL THEN 'Cross-reference (cached)'
                     WHEN dp.name IS NOT NULL THEN 'Мастер-таблица (name)'
                     WHEN dp.product_name IS NOT NULL THEN 'Мастер-таблица (product_name)'
                     ELSE 'Числовой ID'
                 END as name_source
             FROM inventory_data i
-            LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
+            LEFT JOIN product_cross_reference pcr ON CAST(i.product_id AS CHAR) = pcr.inventory_product_id
+            LEFT JOIN dim_products dp ON pcr.sku_ozon = dp.sku_ozon
             $whereClause
             ORDER BY i.quantity_present DESC
             LIMIT $limit OFFSET $offset
@@ -173,7 +182,13 @@ switch ($action) {
                 i.warehouse_name,
                 i.source,
                 i.stock_type,
-                COALESCE(dp.name, dp.product_name, CONCAT('Товар ID ', i.product_id)) as display_name,
+                COALESCE(
+                    pcr.cached_name,
+                    dp.name,
+                    dp.product_name,
+                    CONCAT('Товар ID ', i.product_id)
+                ) as display_name,
+                pcr.sync_status,
                 CASE 
                     WHEN i.quantity_present < 2 AND i.quantity_reserved > 0 THEN 'Критично - есть заказы'
                     WHEN i.quantity_present < 2 THEN 'Критично - нет заказов'
@@ -181,7 +196,8 @@ switch ($action) {
                     ELSE 'Низкий остаток'
                 END as urgency_level
             FROM inventory_data i
-            LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
+            LEFT JOIN product_cross_reference pcr ON CAST(i.product_id AS CHAR) = pcr.inventory_product_id
+            LEFT JOIN dim_products dp ON pcr.sku_ozon = dp.sku_ozon
             WHERE i.quantity_present > 0 AND i.quantity_present < ?
             ORDER BY i.quantity_present ASC
         ");
@@ -232,7 +248,13 @@ switch ($action) {
         $top_products_stmt = $pdo->query("
             SELECT 
                 i.product_id as sku,
-                COALESCE(dp.name, dp.product_name, CONCAT('Товар ID ', i.product_id)) as product_name,
+                COALESCE(
+                    pcr.cached_name,
+                    dp.name,
+                    dp.product_name,
+                    CONCAT('Товар ID ', i.product_id)
+                ) as product_name,
+                pcr.sync_status,
                 SUM(i.quantity_present) as total_stock,
                 SUM(i.quantity_reserved) as total_reserved,
                 COUNT(DISTINCT i.warehouse_name) as warehouses_count,
@@ -242,9 +264,10 @@ switch ($action) {
                     ELSE 'Низкие остатки'
                 END as stock_level
             FROM inventory_data i
-            LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
+            LEFT JOIN product_cross_reference pcr ON CAST(i.product_id AS CHAR) = pcr.inventory_product_id
+            LEFT JOIN dim_products dp ON pcr.sku_ozon = dp.sku_ozon
             WHERE i.quantity_present > 0
-            GROUP BY i.product_id, dp.name, dp.product_name
+            GROUP BY i.product_id, pcr.cached_name, dp.name, dp.product_name, pcr.sync_status
             ORDER BY total_stock DESC
             LIMIT 15
         ");

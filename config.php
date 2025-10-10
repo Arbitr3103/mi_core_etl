@@ -151,6 +151,48 @@ function printConfigStatus() {
     echo "WB Statistics API: " . WB_STATISTICS_API_URL . "\n";
 }
 
+// ===================================================================
+// ПОДКЛЮЧЕНИЕ К БАЗЕ ДАННЫХ
+// ===================================================================
+
+/**
+ * Создает и возвращает PDO подключение к базе данных
+ * @return PDO
+ */
+function getDatabaseConnection() {
+    try {
+        $dsn = sprintf(
+            "mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4",
+            DB_HOST,
+            DB_PORT,
+            DB_NAME
+        );
+        
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ];
+        
+        $pdo = new PDO($dsn, DB_USER, DB_PASSWORD, $options);
+        return $pdo;
+    } catch (PDOException $e) {
+        throw new Exception('Database connection failed: ' . $e->getMessage());
+    }
+}
+
+// Создаем глобальное подключение к БД (если не в CLI режиме или если требуется)
+if (!isset($pdo)) {
+    try {
+        $pdo = getDatabaseConnection();
+    } catch (Exception $e) {
+        // В CLI режиме не критично, в веб-режиме - критично
+        if (php_sapi_name() !== 'cli') {
+            die('Database connection error: ' . $e->getMessage());
+        }
+    }
+}
+
 // Если файл запущен напрямую, показываем статус конфигурации
 if (php_sapi_name() === 'cli' && basename(__FILE__) === basename($_SERVER['SCRIPT_NAME'])) {
     printConfigStatus();

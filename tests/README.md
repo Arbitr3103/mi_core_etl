@@ -1,243 +1,252 @@
-# MDM Matching Engine Tests
+# MDM Sync Engine Test Suite
 
-This directory contains comprehensive unit tests for the MDM (Master Data Management) system's matching engine components.
+Comprehensive test suite for the Master Data Management synchronization system, covering unit tests and integration tests for all components.
 
 ## Test Structure
 
 ```
 tests/
-├── Unit/
-│   └── Services/
-│       ├── MatchingEngineTest.php           # Core matching algorithms
-│       ├── MatchingScoreServiceTest.php     # Confidence scoring system
-│       ├── DataEnrichmentServiceTest.php    # Data enrichment from external sources
-│       └── ProductMatchingOrchestratorTest.php # Orchestration of matching process
-├── Performance/
-│   └── MatchingEnginePerformanceTest.php    # Performance and scalability tests
-├── bootstrap.php                            # Test environment setup
-├── results/                                 # Test results and reports
-└── README.md                               # This file
+├── bootstrap.php                  # Test environment setup
+├── SafeSyncEngineTest.php        # Unit tests for SafeSyncEngine
+├── FallbackDataProviderTest.php  # Unit tests for FallbackDataProvider
+├── DataTypeNormalizerTest.php    # Unit tests for DataTypeNormalizer
+├── SyncIntegrationTest.php       # Integration tests for full sync cycle
+└── README.md                      # This file
 ```
 
-## Test Coverage
+## Requirements
 
-### MatchingEngineTest.php
+- PHP 7.4 or higher
+- PHPUnit 9.5 or higher
+- PDO extension with SQLite support (for integration tests)
+- MySQL/MariaDB (for production tests)
 
-Tests all matching algorithms:
+## Installation
 
-- **Exact SKU matching** - Tests precise SKU-based matching
-- **Exact barcode matching** - Tests barcode-based product identification
-- **Fuzzy name matching** - Tests Levenshtein distance-based name similarity
-- **Brand/category matching** - Tests brand and category-based matching
-- **Overall score calculation** - Tests weighted scoring algorithm
-- **Edge cases** - Tests handling of null values, special characters, Unicode
-- **String normalization** - Tests case-insensitive and whitespace handling
-- **Performance** - Tests with large datasets (1000+ products)
+Install PHPUnit via Composer:
 
-### MatchingScoreServiceTest.php
-
-Tests confidence scoring and decision making:
-
-- **Confidence score calculation** - Tests scoring algorithm with various inputs
-- **Decision thresholds** - Tests auto-accept, manual review, auto-reject decisions
-- **Score adjustments** - Tests penalties and bonuses for edge cases
-- **Threshold configuration** - Tests customizable decision thresholds
-- **Statistics calculation** - Tests decision statistics and reporting
-- **Performance** - Tests scoring performance with large match sets
-
-### DataEnrichmentServiceTest.php
-
-Tests data enrichment from external sources:
-
-- **Multi-source enrichment** - Tests Ozon, Wildberries, Barcode APIs
-- **Cache management** - Tests caching of enrichment results
-- **Error handling** - Tests graceful handling of API failures
-- **Data mapping** - Tests transformation of external API responses
-- **Configuration** - Tests source configuration and timeouts
-- **Performance** - Tests enrichment performance and memory usage
-
-### ProductMatchingOrchestratorTest.php
-
-Tests orchestration of the complete matching process:
-
-- **End-to-end processing** - Tests complete product processing workflow
-- **Batch processing** - Tests bulk product processing
-- **Decision workflows** - Tests auto-accept, manual review, create new flows
-- **Error handling** - Tests error recovery and reporting
-- **Performance** - Tests orchestration performance with large batches
-
-### MatchingEnginePerformanceTest.php
-
-Tests performance and scalability:
-
-- **Large dataset performance** - Tests with 5000+ master products
-- **Scalability testing** - Tests performance scaling with dataset size
-- **Memory efficiency** - Tests memory usage and garbage collection
-- **Concurrent processing** - Tests concurrent matching requests
-- **Complex product handling** - Tests performance with complex product data
+```bash
+composer require --dev phpunit/phpunit
+```
 
 ## Running Tests
-
-### Prerequisites
-
-- PHP 8.1 or higher
-- PHPUnit 10.x
-- Composer dependencies installed
 
 ### Run All Tests
 
 ```bash
-# Using PHPUnit directly
-./vendor/bin/phpunit
-
-# Using custom test runner
-php run_matching_tests.php
+vendor/bin/phpunit
 ```
 
-### Run Specific Test Suites
+### Run Specific Test Suite
 
 ```bash
 # Unit tests only
-./vendor/bin/phpunit --testsuite="Unit Tests"
+vendor/bin/phpunit --testsuite="Unit Tests"
 
-# Performance tests only
-./vendor/bin/phpunit --testsuite="Performance Tests"
+# Integration tests only
+vendor/bin/phpunit --testsuite="Integration Tests"
 ```
 
-### Run Individual Test Classes
+### Run Specific Test File
 
 ```bash
-# Matching engine tests
-./vendor/bin/phpunit tests/Unit/Services/MatchingEngineTest.php
+vendor/bin/phpunit tests/SafeSyncEngineTest.php
+vendor/bin/phpunit tests/DataTypeNormalizerTest.php
+```
 
-# Score service tests
-./vendor/bin/phpunit tests/Unit/Services/MatchingScoreServiceTest.php
+### Run Specific Test Method
 
-# Performance tests
-./vendor/bin/phpunit tests/Performance/MatchingEnginePerformanceTest.php
+```bash
+vendor/bin/phpunit --filter testSyncProductNamesSuccess
+vendor/bin/phpunit --filter testNormalizeIntegerIdToString
 ```
 
 ### Run with Coverage Report
 
 ```bash
-./vendor/bin/phpunit --coverage-html tests/results/coverage
+vendor/bin/phpunit --coverage-html coverage/html
+vendor/bin/phpunit --coverage-text
 ```
 
-## Test Configuration
+### Alternative: Simple Test Runner
 
-### PHPUnit Configuration (phpunit.xml)
-
-- **Bootstrap**: `tests/bootstrap.php` - Sets up test environment
-- **Test Suites**: Separate unit and performance test suites
-- **Coverage**: Includes `src/` directory, excludes migrations and config
-- **Logging**: JUnit XML, HTML testdox, and text reports
-
-### Environment Variables
+If PHPUnit is not installed, use the simplified test runner:
 
 ```bash
-APP_ENV=testing          # Test environment
-DB_CONNECTION=sqlite     # In-memory SQLite for tests
-DB_DATABASE=:memory:     # Memory database for speed
+php run_sync_tests.php
 ```
 
-## Performance Benchmarks
+## Test Coverage
 
-### Expected Performance Targets
+### SafeSyncEngineTest.php
 
-| Test Type        | Dataset Size      | Target Time    | Target Memory |
-| ---------------- | ----------------- | -------------- | ------------- |
-| Fuzzy Name Match | 5000 products     | < 10 seconds   | < 50MB        |
-| Confidence Score | 1000 calculations | < 1 second     | < 5MB         |
-| Batch Processing | 100 products      | < 60 seconds   | < 100MB       |
-| Scalability      | 100→5000 products | < 100x scaling | Linear memory |
+Tests for the main synchronization engine:
 
-### Performance Test Results
+- ✅ Successful synchronization of product names
+- ✅ Database connection failure handling
+- ✅ Empty product list handling
+- ✅ Batch processing with multiple products
+- ✅ Retry logic on database failure
+- ✅ Invalid product data handling
+- ✅ Transaction rollback on error
+- ✅ Custom batch size configuration
+- ✅ Sync statistics retrieval
+- ✅ SQL query error handling
+- ✅ Limit parameter functionality
 
-Performance tests generate detailed reports including:
+**Total: 11 test methods**
 
-- Execution time per operation
-- Memory usage patterns
-- Scaling factors
-- Concurrent processing efficiency
+### FallbackDataProviderTest.php
 
-## Test Data
+Tests for the fallback data provider:
 
-### Test Helpers
+- ✅ Get product name from cache
+- ✅ Get product name with cache disabled
+- ✅ Fallback to temporary name
+- ✅ Cache product name successfully
+- ✅ Create new cache entry
+- ✅ Handle database errors when caching
+- ✅ Get cached name for missing product
+- ✅ Placeholder name detection
+- ✅ Update cache from API response
+- ✅ Get cache statistics
+- ✅ Clear stale cache
+- ✅ Clear stale cache with custom age
+- ✅ Handle errors when clearing cache
+- ✅ Set API timeout
+- ✅ Set API timeout with minimum value
+- ✅ Cache enabled/disabled toggle
+- ✅ Get product name with different sources
+- ✅ Handle null product ID
+- ✅ Cache with additional data
 
-The bootstrap file provides helper functions:
+**Total: 19 test methods**
 
-- `createTestMasterProduct()` - Creates test master products
-- `generateTestProductData()` - Generates test product data
-- `assertMatchingResult()` - Validates matching results
-- `TestPerformanceTracker` - Tracks performance metrics
-- `TestDataGenerator` - Generates large test datasets
+### DataTypeNormalizerTest.php
 
-### Sample Test Data
+Tests for data type normalization:
 
-Tests use realistic product data including:
+- ✅ Normalize integer ID to string
+- ✅ Normalize string ID
+- ✅ Normalize ID with whitespace
+- ✅ Normalize null ID
+- ✅ Normalize empty string ID
+- ✅ Normalize zero ID
+- ✅ Normalize product with all fields
+- ✅ Normalize string value
+- ✅ Normalize numeric value from string
+- ✅ Normalize numeric value with comma
+- ✅ Normalize integer value
+- ✅ Normalize datetime value
+- ✅ Normalize invalid datetime
+- ✅ Normalize boolean value from string
+- ✅ Validate product ID - valid cases
+- ✅ Validate product ID - invalid cases
+- ✅ Compare IDs with same values
+- ✅ Compare IDs with different values
+- ✅ Compare IDs with null values
+- ✅ Normalize Ozon API response
+- ✅ Normalize Wildberries API response
+- ✅ Normalize Analytics API response
+- ✅ Normalize Inventory API response
+- ✅ Validate normalized data - valid
+- ✅ Validate normalized data - missing required field
+- ✅ Validate normalized data - invalid ID format
+- ✅ Validate normalized data - string too long
+- ✅ Validate normalized data - invalid numeric field
+- ✅ Create safe JOIN value for VARCHAR
+- ✅ Create safe JOIN value for INT
+- ✅ Create safe JOIN value for null
+- ✅ Get safe comparison SQL
+- ✅ Normalize empty string to null
+- ✅ Normalize whitespace-only string to null
+- ✅ Normalize product with mixed types
 
-- Russian product names with Cyrillic characters
-- Various product categories (electronics, food, auto parts)
-- Different brands and manufacturers
-- Complex product attributes and specifications
+**Total: 35 test methods**
 
-## Edge Cases Tested
+### SyncIntegrationTest.php
 
-### Data Quality Issues
+Integration tests for the complete synchronization workflow:
 
-- Empty or null values
-- Very short product names (< 3 characters)
-- Very long product descriptions (> 1000 characters)
-- Special characters and Unicode text
-- Malformed barcodes and SKUs
+- ✅ Complete synchronization workflow
+- ✅ Data type normalization in full cycle
+- ✅ Fallback provider integration
+- ✅ Cache statistics calculation
+- ✅ Batch processing with transaction rollback
+- ✅ Update cache from API response
+- ✅ Clear stale cache entries
+- ✅ Normalize different API responses
+- ✅ Validate normalized data before storage
+- ✅ Safe ID comparison across different types
+- ✅ End-to-end sync with retry logic
+- ✅ Concurrent product updates
+- ✅ Placeholder name detection and replacement
+- ✅ Sync statistics accuracy
 
-### Performance Edge Cases
+**Total: 14 test methods**
 
-- Large datasets (5000+ products)
-- Complex products with many attributes
-- Concurrent processing scenarios
-- Memory-intensive operations
-- Repeated operations (memory leaks)
+## Total Test Coverage
 
-### Error Conditions
+- **Total Test Files:** 4
+- **Total Test Methods:** 79
+- **Components Tested:** 3 (SafeSyncEngine, FallbackDataProvider, DataTypeNormalizer)
 
-- External API failures
-- Database connection errors
-- Invalid configuration
-- Malformed input data
-- Resource exhaustion
+## Test Scenarios Covered
 
-## Troubleshooting
+### Error Scenarios
 
-### Common Issues
+1. Database connection failures
+2. SQL query errors
+3. Transaction rollback scenarios
+4. API request failures
+5. Invalid data handling
+6. Missing required fields
+7. Data type mismatches
+8. Constraint violations
 
-**Tests fail with memory errors:**
+### Normal Operation
+
+1. Successful synchronization
+2. Batch processing
+3. Cache hit/miss scenarios
+4. Data normalization
+5. API response handling
+6. Statistics calculation
+7. Configuration changes
+
+### Edge Cases
+
+1. Empty product lists
+2. Null values
+3. Zero values
+4. Whitespace handling
+5. Very long strings
+6. Concurrent updates
+7. Stale cache entries
+8. Placeholder names
+
+## Configuration
+
+Test configuration is defined in `phpunit.xml`:
+
+- Test database: SQLite in-memory (for integration tests)
+- Log directory: `/tmp`
+- Coverage reports: `coverage/` directory
+- Test results: `test-results/` directory
+
+## Environment Variables
+
+Set these environment variables to customize test behavior:
 
 ```bash
-# Increase PHP memory limit
-php -d memory_limit=512M ./vendor/bin/phpunit
-```
-
-**Performance tests timeout:**
-
-```bash
-# Increase time limit
-php -d max_execution_time=300 ./vendor/bin/phpunit
-```
-
-**Database connection errors:**
-
-```bash
-# Ensure SQLite extension is installed
-php -m | grep sqlite
-```
-
-### Debug Mode
-
-Enable verbose output for debugging:
-
-```bash
-./vendor/bin/phpunit --verbose --debug
+export DB_HOST=localhost
+export DB_PORT=3306
+export DB_NAME=test_db
+export DB_USER=test_user
+export DB_PASSWORD=test_password
+export LOG_DIR=/tmp
+export OZON_CLIENT_ID=test_client_id
+export OZON_API_KEY=test_api_key
 ```
 
 ## Continuous Integration
@@ -245,48 +254,81 @@ Enable verbose output for debugging:
 ### GitHub Actions Example
 
 ```yaml
-name: MDM Tests
+name: Tests
+
 on: [push, pull_request]
+
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v2
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.1
-          extensions: sqlite3, pdo_sqlite
+          php-version: "7.4"
+          extensions: pdo, pdo_sqlite, pdo_mysql
+
       - name: Install dependencies
         run: composer install
+
       - name: Run tests
-        run: ./vendor/bin/phpunit
-      - name: Upload coverage
-        uses: codecov/codecov-action@v1
+        run: vendor/bin/phpunit --coverage-text
 ```
+
+## Best Practices
+
+1. **Run tests before committing:** Always run the full test suite before pushing changes
+2. **Write tests for new features:** Add tests for any new functionality
+3. **Test error scenarios:** Ensure error handling is properly tested
+4. **Keep tests isolated:** Each test should be independent
+5. **Use descriptive names:** Test method names should clearly describe what they test
+6. **Mock external dependencies:** Use mocks for database and API calls in unit tests
+7. **Use real database for integration tests:** Integration tests use SQLite in-memory database
+
+## Troubleshooting
+
+### PHPUnit not found
+
+```bash
+composer install
+# or
+composer require --dev phpunit/phpunit
+```
+
+### PDO SQLite extension missing
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install php-sqlite3
+
+# macOS
+brew install php
+```
+
+### Permission denied for log directory
+
+```bash
+sudo mkdir -p /tmp
+sudo chmod 777 /tmp
+```
+
+### Tests failing due to database connection
+
+Check that test database credentials are correct in `phpunit.xml` or environment variables.
 
 ## Contributing
 
-### Adding New Tests
+When adding new tests:
 
 1. Follow existing test structure and naming conventions
-2. Include both positive and negative test cases
-3. Add performance tests for new algorithms
-4. Update this README with new test descriptions
+2. Add test documentation to this README
+3. Ensure all tests pass before submitting PR
+4. Aim for >80% code coverage
+5. Test both success and failure scenarios
 
-### Test Guidelines
+## License
 
-- Use descriptive test method names
-- Include docblocks explaining test purpose
-- Test edge cases and error conditions
-- Verify performance characteristics
-- Use appropriate assertions for data types
-
-### Code Coverage
-
-Maintain high code coverage (>90%) for all matching engine components:
-
-- All public methods must be tested
-- All decision branches must be covered
-- All error conditions must be tested
-- Performance characteristics must be verified
+Same as the main project.

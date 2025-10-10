@@ -2,7 +2,7 @@
 
 ## Overview
 
-Система MDM (Master Data Management) предназначена для централизованного управления товарными данными, устранения дублирования и обеспечения единой точки истины для всех товарных атрибутов. Система включает автоматическое сопоставление, ручную верификацию, мониторинг качества данных и интеграцию с существующими системами.
+Система MDM (Master Data Management) решает критическую проблему несовместимости данных между разными API эндпоинтами Ozon. Основные проблемы: SQL ошибки при объединении таблиц, разные типы данных для ID товаров, отсутствие надежной связи между product_id из inventory и названиями из product info API. Система обеспечивает стабильную синхронизацию данных, исправляет SQL запросы и создает надежную систему сопоставления товаров.
 
 ## Architecture
 
@@ -10,65 +10,68 @@
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Внешние       │    │   ETL/Data      │    │   MDM Core      │
-│   источники     │───▶│   Pipeline      │───▶│   System        │
-│   (Ozon, WB)    │    │                 │    │                 │
+│   Ozon API      │    │   SQL Query     │    │   Fixed Data    │
+│   Endpoints     │───▶│   Fixer         │───▶│   Layer         │
+│ (Analytics,     │    │                 │    │                 │
+│  Inventory,     │    │                 │    │                 │
+│  Product Info)  │    │                 │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                        │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Reporting     │    │   Management    │    │   Data Quality  │
-│   & Analytics   │◀───│   Interface     │◀───│   Monitor       │
-│                 │    │                 │    │                 │
+│   Dashboard     │    │   Cross-Ref     │    │   Sync Engine   │
+│   (Real Names)  │◀───│   Mapping       │◀───│   (No Errors)   │
+│                 │    │   Table         │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ### Компоненты системы
 
-1. **MDM Core System** - основная система управления мастер-данными
-2. **ETL Pipeline** - процессы извлечения, трансформации и загрузки данных
-3. **Matching Engine** - движок автоматического сопоставления
-4. **Management Interface** - веб-интерфейс для управления данными
-5. **Data Quality Monitor** - система мониторинга качества данных
-6. **API Gateway** - единая точка доступа к очищенным данным
+1. **SQL Query Fixer** - исправление проблемных SQL запросов с DISTINCT и ORDER BY
+2. **Cross-Reference Mapping** - таблица сопоставления разных ID одного товара
+3. **Sync Engine** - надежная синхронизация без SQL ошибок
+4. **Data Type Normalizer** - приведение типов данных к совместимым форматам
+5. **API Response Harmonizer** - унификация ответов от разных эндпоинтов
+6. **Fallback Data Provider** - резервные данные при недоступности API
 
 ## Components and Interfaces
 
-### 1. База данных MDM
+### 1. База данных MDM - Исправленная схема
 
-#### Таблица master_products
+#### Таблица product_cross_reference - Решение проблемы разных ID
 
 ```sql
-CREATE TABLE master_products (
-    master_id VARCHAR(50) PRIMARY KEY,
-    canonical_name VARCHAR(500) NOT NULL,
-    canonical_brand VARCHAR(200),
-    canonical_category VARCHAR(200),
-    description TEXT,
-    attributes JSON,
+CREATE TABLE product_cross_reference (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    -- Унифицированные типы данных для избежания JOIN ошибок
+    inventory_product_id VARCHAR(50) NOT NULL,  -- Из inventory_data
+    analytics_product_id VARCHAR(50),           -- Из analytics API
+    ozon_product_id VARCHAR(50),               -- Из product info API
+    sku_ozon VARCHAR(50),                      -- Для совместимости с dim_products
+
+    -- Кэшированные данные для fallback
+    cached_name VARCHAR(500),
+    cached_brand VARCHAR(200),
+    last_api_sync TIMESTAMP,
+    sync_status ENUM('synced', 'pending', 'failed') DEFAULT 'pending',
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    status ENUM('active', 'inactive', 'pending_review') DEFAULT 'active'
+
+    -- Индексы для быстрого поиска
+    INDEX idx_inventory_id (inventory_product_id),
+    INDEX idx_ozon_id (ozon_product_id),
+    INDEX idx_sku_ozon (sku_ozon)
 );
 ```
 
-#### Таблица sku_mapping
+#### Исправленная таблица dim_products
 
 ```sql
-CREATE TABLE sku_mapping (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    master_id VARCHAR(50) NOT NULL,
-    external_sku VARCHAR(200) NOT NULL,
-    source VARCHAR(50) NOT NULL,
-    source_name VARCHAR(500),
-    source_brand VARCHAR(200),
-    source_category VARCHAR(200),
-    confidence_score DECIMAL(3,2),
-    verification_status ENUM('auto', 'manual', 'pending') DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (master_id) REFERENCES master_products(master_id),
-    UNIQUE KEY unique_source_sku (source, external_sku)
-);
+-- Исправляем существующую таблицу для совместимости
+ALTER TABLE dim_products
+MODIFY COLUMN sku_ozon VARCHAR(50) NOT NULL,  -- Было INT, теперь VARCHAR
+ADD COLUMN cross_ref_id BIGINT,
+ADD FOREIGN KEY (cross_ref_id) REFERENCES product_cross_reference(id);
 ```
 
 #### Таблица data_quality_metrics
@@ -85,55 +88,119 @@ CREATE TABLE data_quality_metrics (
 );
 ```
 
-### 2. Matching Engine
+### 2. SQL Query Fixer - Решение проблем с запросами
 
-#### Алгоритмы сопоставления
+#### Исправленные запросы
 
-1. **Exact Match** - точное совпадение по SKU или штрихкоду
-2. **Fuzzy Name Matching** - нечеткое сравнение названий (Levenshtein, Jaro-Winkler)
-3. **Brand + Category Matching** - сопоставление по бренду и категории
-4. **Attribute Similarity** - сравнение по ключевым атрибутам
+**Проблемный запрос (вызывает ошибку):**
 
-#### Scoring System
-
-```python
-def calculate_match_score(candidate, target):
-    scores = {
-        'name_similarity': fuzzy_match(candidate.name, target.name) * 0.4,
-        'brand_match': exact_match(candidate.brand, target.brand) * 0.3,
-        'category_match': exact_match(candidate.category, target.category) * 0.2,
-        'attributes_similarity': attribute_similarity(candidate, target) * 0.1
-    }
-    return sum(scores.values())
+```sql
+-- ОШИБКА: Expression #1 of ORDER BY clause is not in SELECT list
+SELECT DISTINCT i.product_id
+FROM inventory_data i
+LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
+WHERE i.product_id != 0
+ORDER BY i.quantity_present DESC
+LIMIT 20;
 ```
 
-### 3. ETL Pipeline
+**Исправленный запрос:**
 
-#### Процесс обработки данных
+```sql
+-- РЕШЕНИЕ: Включаем сортируемую колонку в SELECT или убираем ORDER BY
+SELECT DISTINCT i.product_id, MAX(i.quantity_present) as max_quantity
+FROM inventory_data i
+LEFT JOIN product_cross_reference pcr ON CAST(i.product_id AS CHAR) = pcr.inventory_product_id
+WHERE i.product_id != 0
+GROUP BY i.product_id
+ORDER BY max_quantity DESC
+LIMIT 20;
+```
 
-1. **Extract** - извлечение данных из источников
-2. **Transform** - очистка и стандартизация
-3. **Match** - поиск соответствий в мастер-данных
-4. **Load** - загрузка новых данных или обновление существующих
+#### Безопасные паттерны запросов
 
-#### Правила трансформации
+```sql
+-- Паттерн 1: Простой запрос без ORDER BY для DISTINCT
+SELECT DISTINCT pcr.inventory_product_id
+FROM product_cross_reference pcr
+WHERE pcr.sync_status = 'pending'
+LIMIT 20;
 
-```python
-transformation_rules = {
-    'name_cleanup': [
-        'remove_extra_spaces',
-        'standardize_units',
-        'fix_encoding_issues'
-    ],
-    'brand_standardization': [
-        'normalize_case',
-        'fix_common_typos',
-        'map_brand_aliases'
-    ],
-    'category_mapping': [
-        'map_to_standard_taxonomy',
-        'handle_multilevel_categories'
-    ]
+-- Паттерн 2: Подзапрос для сложной логики
+SELECT product_id, product_name
+FROM (
+    SELECT i.product_id, dp.name as product_name, i.quantity_present
+    FROM inventory_data i
+    JOIN product_cross_reference pcr ON CAST(i.product_id AS CHAR) = pcr.inventory_product_id
+    LEFT JOIN dim_products dp ON pcr.sku_ozon = dp.sku_ozon
+    WHERE i.product_id != 0
+    ORDER BY i.quantity_present DESC
+) ranked_products
+LIMIT 20;
+```
+
+### 3. Sync Engine - Надежная синхронизация без ошибок
+
+#### Процесс безопасной синхронизации
+
+1. **Pre-Check** - проверка структуры данных перед запросами
+2. **Safe Extract** - извлечение с обработкой типов данных
+3. **Error-Free Transform** - трансформация с валидацией
+4. **Atomic Load** - загрузка с транзакциями и rollback
+
+#### Исправленный алгоритм синхронизации
+
+```php
+class SafeSyncEngine {
+    public function syncProductNames() {
+        try {
+            // Шаг 1: Безопасный поиск товаров без названий
+            $products = $this->findProductsNeedingSync();
+
+            // Шаг 2: Пакетная обработка для избежания timeout
+            foreach (array_chunk($products, 10) as $batch) {
+                $this->processBatch($batch);
+            }
+
+        } catch (Exception $e) {
+            $this->handleSyncError($e);
+        }
+    }
+
+    private function findProductsNeedingSync() {
+        // Используем безопасный запрос без ORDER BY проблем
+        $sql = "
+            SELECT DISTINCT pcr.inventory_product_id, pcr.ozon_product_id
+            FROM product_cross_reference pcr
+            LEFT JOIN dim_products dp ON pcr.sku_ozon = dp.sku_ozon
+            WHERE (dp.name LIKE 'Товар Ozon ID%' OR dp.name IS NULL)
+            AND pcr.sync_status != 'failed'
+            LIMIT 50
+        ";
+        return $this->db->query($sql)->fetchAll();
+    }
+}
+```
+
+#### Fallback механизмы
+
+```php
+class FallbackDataProvider {
+    public function getProductName($productId) {
+        // 1. Попробовать из кэша
+        $cached = $this->getCachedName($productId);
+        if ($cached) return $cached;
+
+        // 2. Попробовать из API
+        try {
+            $apiName = $this->fetchFromOzonAPI($productId);
+            $this->cacheProductName($productId, $apiName);
+            return $apiName;
+        } catch (Exception $e) {
+            // 3. Использовать временное название
+            return "Товар ID {$productId} (требует обновления)";
+        }
+    }
 }
 ```
 

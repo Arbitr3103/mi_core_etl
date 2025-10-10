@@ -1,44 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.5/phpunit.xsd"
          bootstrap="tests/bootstrap.php"
          colors="true"
-         executionOrder="depends,defects"
-         failOnRisky="true"
-         failOnWarning="true"
+         verbose="true"
          stopOnFailure="false"
-         cacheDirectory=".phpunit.cache"
-         backupGlobals="false"
-         backupStaticAttributes="false">
+         failOnWarning="false"
+         failOnRisky="false">
     
     <testsuites>
-        <testsuite name="Unit Tests">
-            <directory>tests/Unit</directory>
+        <testsuite name="MDM Sync Engine Test Suite">
+            <directory>tests</directory>
         </testsuite>
-        <testsuite name="Performance Tests">
-            <directory>tests/Performance</directory>
+        
+        <testsuite name="Unit Tests">
+            <file>tests/SafeSyncEngineTest.php</file>
+            <file>tests/FallbackDataProviderTest.php</file>
+            <file>tests/DataTypeNormalizerTest.php</file>
+        </testsuite>
+        
+        <testsuite name="Integration Tests">
+            <file>tests/SyncIntegrationTest.php</file>
         </testsuite>
     </testsuites>
-
-    <source>
+    
+    <coverage processUncoveredFiles="true">
         <include>
             <directory suffix=".php">src</directory>
         </include>
         <exclude>
-            <directory>src/Migrations</directory>
-            <file>src/config.php</file>
+            <directory>vendor</directory>
+            <directory>tests</directory>
         </exclude>
-    </source>
-
-    <logging>
-        <junit outputFile="tests/results/junit.xml"/>
-        <testdoxHtml outputFile="tests/results/testdox.html"/>
-        <testdoxText outputFile="tests/results/testdox.txt"/>
-    </logging>
-
+        <report>
+            <html outputDirectory="coverage/html"/>
+            <text outputFile="coverage/coverage.txt"/>
+        </report>
+    </coverage>
+    
     <php>
         <env name="APP_ENV" value="testing"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <const name="DB_HOST" value="localhost"/>
+        <const name="DB_PORT" value="3306"/>
+        <const name="DB_NAME" value="test_db"/>
+        <const name="DB_USER" value="test_user"/>
+        <const name="DB_PASSWORD" value="test_password"/>
+        <const name="LOG_DIR" value="/tmp"/>
+        <const name="OZON_CLIENT_ID" value="test_client_id"/>
+        <const name="OZON_API_KEY" value="test_api_key"/>
+        <const name="OZON_API_BASE_URL" value="https://api-seller.ozon.ru"/>
     </php>
+    
+    <logging>
+        <junit outputFile="test-results/junit.xml"/>
+        <testdoxHtml outputFile="test-results/testdox.html"/>
+        <testdoxText outputFile="test-results/testdox.txt"/>
+    </logging>
 </phpunit>

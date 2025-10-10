@@ -1,188 +1,92 @@
 <?php
-
 /**
- * PHPUnit Bootstrap File for MDM System Tests
+ * PHPUnit Bootstrap File
  * 
- * Sets up the testing environment and autoloading
+ * Sets up the testing environment and loads necessary dependencies.
  */
 
-// Set error reporting for tests
+// Set error reporting
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', '1');
+
+// Define test constants if not already defined
+if (!defined('DB_HOST')) {
+    define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+}
+if (!defined('DB_PORT')) {
+    define('DB_PORT', getenv('DB_PORT') ?: '3306');
+}
+if (!defined('DB_NAME')) {
+    define('DB_NAME', getenv('DB_NAME') ?: 'test_db');
+}
+if (!defined('DB_USER')) {
+    define('DB_USER', getenv('DB_USER') ?: 'test_user');
+}
+if (!defined('DB_PASSWORD')) {
+    define('DB_PASSWORD', getenv('DB_PASSWORD') ?: 'test_password');
+}
+if (!defined('LOG_DIR')) {
+    define('LOG_DIR', getenv('LOG_DIR') ?: '/tmp');
+}
+if (!defined('OZON_CLIENT_ID')) {
+    define('OZON_CLIENT_ID', getenv('OZON_CLIENT_ID') ?: 'test_client_id');
+}
+if (!defined('OZON_API_KEY')) {
+    define('OZON_API_KEY', getenv('OZON_API_KEY') ?: 'test_api_key');
+}
+if (!defined('OZON_API_BASE_URL')) {
+    define('OZON_API_BASE_URL', getenv('OZON_API_BASE_URL') ?: 'https://api-seller.ozon.ru');
+}
+
+// Create log directory if it doesn't exist
+if (!is_dir(LOG_DIR)) {
+    mkdir(LOG_DIR, 0755, true);
+}
+
+// Create test results directory
+$testResultsDir = __DIR__ . '/../test-results';
+if (!is_dir($testResultsDir)) {
+    mkdir($testResultsDir, 0755, true);
+}
+
+// Create coverage directory
+$coverageDir = __DIR__ . '/../coverage';
+if (!is_dir($coverageDir)) {
+    mkdir($coverageDir, 0755, true);
+}
+
+// Load Composer autoloader if available
+$autoloadPaths = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',
+    __DIR__ . '/../../../vendor/autoload.php',
+];
+
+foreach ($autoloadPaths as $autoloadPath) {
+    if (file_exists($autoloadPath)) {
+        require_once $autoloadPath;
+        break;
+    }
+}
+
+// Load source files
+$srcDir = __DIR__ . '/../src';
+if (is_dir($srcDir)) {
+    foreach (glob($srcDir . '/*.php') as $file) {
+        require_once $file;
+    }
+}
 
 // Set timezone
 date_default_timezone_set('UTC');
 
-// Define test constants
-define('TEST_ROOT', __DIR__);
-define('PROJECT_ROOT', dirname(__DIR__));
-
-// Composer autoloader (if available)
-$autoloaderPath = PROJECT_ROOT . '/vendor/autoload.php';
-if (file_exists($autoloaderPath)) {
-    $autoloader = require $autoloaderPath;
-    // Add src directory to autoloader for MDM namespace
-    $autoloader->addPsr4('MDM\\', PROJECT_ROOT . '/src/');
-} else {
-    // Manual autoloader for testing without Composer
-    spl_autoload_register(function ($class) {
-        $prefix = 'MDM\\';
-        $baseDir = PROJECT_ROOT . '/src/';
-        
-        $len = strlen($prefix);
-        if (strncmp($prefix, $class, $len) !== 0) {
-            return;
-        }
-        
-        $relativeClass = substr($class, $len);
-        $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
-        
-        if (file_exists($file)) {
-            require $file;
-        }
-    });
-}
-
-// Create results directory if it doesn't exist
-$resultsDir = TEST_ROOT . '/results';
-if (!is_dir($resultsDir)) {
-    mkdir($resultsDir, 0755, true);
-}
-
-// Test helper functions
-function createTestMasterProduct(string $masterId, ?string $name = null, ?string $brand = null, ?string $category = null): \MDM\Models\MasterProduct
-{
-    return new \MDM\Models\MasterProduct(
-        $masterId,
-        $name ?? "Test Product {$masterId}",
-        $brand ?? 'Test Brand',
-        $category ?? 'Test Category',
-        'Test description',
-        ['test_attribute' => 'test_value'],
-        '1234567890123'
-    );
-}
-
-function generateTestProductData(string $sku, array $overrides = []): array
-{
-    $defaults = [
-        'sku' => $sku,
-        'name' => "Test Product {$sku}",
-        'brand' => 'Test Brand',
-        'category' => 'Test Category',
-        'description' => 'Test product description',
-        'barcode' => '1234567890123',
-        'source' => 'test'
-    ];
-
-    return array_merge($defaults, $overrides);
-}
-
-function assertMatchingResult(array $result, \PHPUnit\Framework\TestCase $testCase): void
-{
-    $testCase->assertArrayHasKey('master_product_id', $result);
-    $testCase->assertArrayHasKey('confidence_score', $result);
-    $testCase->assertArrayHasKey('decision', $result);
-    $testCase->assertArrayHasKey('match_details', $result);
-    $testCase->assertArrayHasKey('reasoning', $result);
-    
-    $testCase->assertIsString($result['master_product_id']);
-    $testCase->assertIsFloat($result['confidence_score']);
-    $testCase->assertIsString($result['decision']);
-    $testCase->assertIsArray($result['match_details']);
-    $testCase->assertIsString($result['reasoning']);
-    
-    $testCase->assertGreaterThanOrEqual(0.0, $result['confidence_score']);
-    $testCase->assertLessThanOrEqual(1.0, $result['confidence_score']);
-}
-
-// Memory and performance tracking
-class TestPerformanceTracker
-{
-    private static array $measurements = [];
-    
-    public static function startMeasurement(string $name): void
-    {
-        self::$measurements[$name] = [
-            'start_time' => microtime(true),
-            'start_memory' => memory_get_usage()
-        ];
-    }
-    
-    public static function endMeasurement(string $name): array
-    {
-        if (!isset(self::$measurements[$name])) {
-            throw new InvalidArgumentException("Measurement '{$name}' not started");
-        }
-        
-        $measurement = self::$measurements[$name];
-        $endTime = microtime(true);
-        $endMemory = memory_get_usage();
-        
-        $result = [
-            'execution_time' => $endTime - $measurement['start_time'],
-            'memory_used' => $endMemory - $measurement['start_memory'],
-            'peak_memory' => memory_get_peak_usage() - $measurement['start_memory']
-        ];
-        
-        unset(self::$measurements[$name]);
-        return $result;
-    }
-    
-    public static function getAllMeasurements(): array
-    {
-        return self::$measurements;
-    }
-}
-
-// Test data generators
-class TestDataGenerator
-{
-    public static function generateMasterProducts(int $count): array
-    {
-        $products = [];
-        $brands = ['Samsung', 'Apple', 'Sony', 'LG', 'Bosch', 'Philips'];
-        $categories = ['Electronics', 'Appliances', 'Auto Parts', 'Clothing', 'Food'];
-        
-        for ($i = 0; $i < $count; $i++) {
-            $brand = $brands[$i % count($brands)];
-            $category = $categories[$i % count($categories)];
-            
-            $products[] = new \MDM\Models\MasterProduct(
-                "MASTER_GEN_{$i}",
-                "Generated Product {$i} {$brand}",
-                $brand,
-                $category,
-                "Generated description for product {$i}",
-                ['generated' => true, 'index' => $i],
-                sprintf('%013d', 1000000000000 + $i)
-            );
-        }
-        
-        return $products;
-    }
-    
-    public static function generateProductDataBatch(int $count): array
-    {
-        $batch = [];
-        
-        for ($i = 0; $i < $count; $i++) {
-            $batch[] = [
-                'sku' => "GEN_SKU_{$i}",
-                'name' => "Generated Product {$i}",
-                'brand' => 'Generated Brand',
-                'category' => 'Generated Category',
-                'description' => "Generated description {$i}",
-                'source' => 'generator'
-            ];
-        }
-        
-        return $batch;
-    }
-}
-
-echo "MDM System Test Bootstrap Loaded\n";
-echo "Test environment initialized\n";
-echo "Available test helpers: createTestMasterProduct, generateTestProductData, assertMatchingResult\n";
-echo "Performance tracker: TestPerformanceTracker\n";
-echo "Data generator: TestDataGenerator\n";
+// Display test environment info
+echo "\n";
+echo "========================================\n";
+echo "MDM Sync Engine Test Suite\n";
+echo "========================================\n";
+echo "PHP Version: " . PHP_VERSION . "\n";
+echo "Test Environment: " . (getenv('APP_ENV') ?: 'testing') . "\n";
+echo "Log Directory: " . LOG_DIR . "\n";
+echo "========================================\n";
+echo "\n";
