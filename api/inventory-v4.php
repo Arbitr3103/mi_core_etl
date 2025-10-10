@@ -117,7 +117,7 @@ switch ($action) {
                     ELSE 'Числовой ID'
                 END as name_source
             FROM inventory_data i
-            LEFT JOIN dim_products dp ON CAST(i.product_id AS CHAR) = dp.sku_ozon
+            LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
             $whereClause
             ORDER BY i.quantity_present DESC
             LIMIT $limit OFFSET $offset
@@ -181,7 +181,7 @@ switch ($action) {
                     ELSE 'Низкий остаток'
                 END as urgency_level
             FROM inventory_data i
-            LEFT JOIN dim_products dp ON CAST(i.product_id AS CHAR) = dp.sku_ozon
+            LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
             WHERE i.quantity_present > 0 AND i.quantity_present < ?
             ORDER BY i.quantity_present ASC
         ");
@@ -242,7 +242,7 @@ switch ($action) {
                     ELSE 'Низкие остатки'
                 END as stock_level
             FROM inventory_data i
-            LEFT JOIN dim_products dp ON CAST(i.product_id AS CHAR) = dp.sku_ozon
+            LEFT JOIN dim_products dp ON CONCAT('', i.product_id) = dp.sku_ozon
             WHERE i.quantity_present > 0
             GROUP BY i.product_id, dp.name, dp.product_name
             ORDER BY total_stock DESC
