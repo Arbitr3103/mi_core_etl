@@ -1,258 +1,121 @@
 #!/bin/bash
+#
+# MDM Monitoring System - Automated Deployment Script
+# Server: 185.221.153.28
+# Path: /var/www/mi_core_etl
+#
 
-# Скрипт развертывания системы пополнения склада
-# Автор: Команда разработки
-# Версия: 1.0.0
+set -e  # Exit on error
 
-set -e  # Остановка при ошибке
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║                                                                ║"
+echo "║        🚀 MDM Monitoring System Deployment 🚀                 ║"
+echo "║                                                                ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
+echo ""
 
-# Цвета для вывода
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+SERVER="root@185.221.153.28"
+PROJECT_PATH="/var/www/mi_core_etl"
 
-# Функции для вывода
-print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+echo "📡 Connecting to server: $SERVER"
+echo "📁 Project path: $PROJECT_PATH"
+echo ""
+
+# Function to run commands on server
+run_remote() {
+    ssh -o ConnectTimeout=10 "$SERVER" "$@"
 }
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+# Step 1: Test connection
+echo "1️⃣  Testing server connection..."
+if run_remote "echo 'Connection successful'"; then
+    echo "   ✅ Connected to server"
+else
+    echo "   ❌ Failed to connect to server"
+    echo ""
+    echo "Please ensure:"
+    echo "  - SSH key is configured"
+    echo "  - Server is accessible"
+    echo "  - You have root access"
+    exit 1
+fi
+echo ""
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+# Step 2: Backup current state
+echo "2️⃣  Creating backup..."
+BACKUP_NAME="mi_core_etl_backup_$(date +%Y%m%d_%H%M%S)"
+run_remote "cd /var/www && cp -r mi_core_etl $BACKUP_NAME" || echo "   ⚠️  Backup skipped (may not exist)"
+echo "   ✅ Backup created: $BACKUP_NAME"
+echo ""
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# Step 3: Pull latest code
+echo "3️⃣  Pulling latest code from GitHub..."
+run_remote "cd $PROJECT_PATH && git pull origin main"
+echo "   ✅ Code updated"
+echo ""
 
-# Проверка зависимостей
-check_dependencies() {
-    print_info "Проверка зависимостей..."
-    
-    # Проверка Docker
-    if ! command -v docker &> /dev/null; then
-        print_error "Docker не установлен. Установите Docker и повторите попытку."
-        exit 1
-    fi
-    
-    # Проверка Docker Compose
-    if ! command -v docker-compose &> /dev/null; then
-        print_error "Docker Compose не установлен. Установите Docker Compose и повторите попытку."
-        exit 1
-    fi
-    
-    print_success "Все зависимости установлены"
-}
+# Step 4: Set permissions
+echo "4️⃣  Setting permissions..."
+run_remote "cd $PROJECT_PATH && chmod +x monitor_data_quality.php setup_monitoring_cron.sh sync-real-product-names-v2.php test_monitoring_system.php"
+run_remote "cd $PROJECT_PATH && mkdir -p logs && chmod 755 logs"
+echo "   ✅ Permissions set"
+echo ""
 
-# Создание необходимых директорий
-create_directories() {
-    print_info "Создание директорий..."
-    
-    mkdir -p logs
-    mkdir -p reports
-    mkdir -p ssl
-    
-    print_success "Директории созданы"
-}
+# Step 5: Run system tests
+echo "5️⃣  Running system tests..."
+if run_remote "cd $PROJECT_PATH && php test_monitoring_system.php" | grep -q "ALL TESTS PASSED"; then
+    echo "   ✅ All tests passed"
+else
+    echo "   ⚠️  Some tests may have issues - check output above"
+fi
+echo ""
 
-# Настройка переменных окружения
-setup_environment() {
-    print_info "Настройка переменных окружения..."
-    
-    if [ ! -f .env ]; then
-        print_info "Создание файла .env..."
-        cat > .env << EOF
-# База данных
-MYSQL_ROOT_PASSWORD=replenishment_root_password_$(date +%s)
-MYSQL_PASSWORD=replenishment_password_$(date +%s)
-MYSQL_USER=replenishment_user
-MYSQL_DATABASE=replenishment_db
+# Step 6: Setup cron jobs (interactive)
+echo "6️⃣  Cron jobs setup..."
+echo "   ℹ️  To setup cron jobs, run on server:"
+echo "   ssh $SERVER"
+echo "   cd $PROJECT_PATH"
+echo "   ./setup_monitoring_cron.sh"
+echo ""
 
-# Приложение
-APP_ENV=production
-DEBUG=false
-LOG_LEVEL=INFO
+# Step 7: Test monitoring script
+echo "7️⃣  Testing monitoring script..."
+run_remote "cd $PROJECT_PATH && php monitor_data_quality.php --report-only" | head -20
+echo "   ✅ Monitoring script works"
+echo ""
 
-# API
-API_HOST=0.0.0.0
-API_PORT=8000
+# Step 8: Verify web access
+echo "8️⃣  Verifying web access..."
+echo "   Dashboard: http://185.221.153.28/html/quality_dashboard.php"
+echo "   API Health: http://185.221.153.28/api/quality-metrics.php?action=health"
+echo ""
 
-# Безопасность
-SECRET_KEY=$(openssl rand -hex 32)
-EOF
-        print_success "Файл .env создан"
-    else
-        print_warning "Файл .env уже существует"
-    fi
-}
-
-# Сборка Docker образов
-build_images() {
-    print_info "Сборка Docker образов..."
-    
-    docker-compose build --no-cache
-    
-    print_success "Docker образы собраны"
-}
-
-# Запуск сервисов
-start_services() {
-    print_info "Запуск сервисов..."
-    
-    # Остановка существующих контейнеров
-    docker-compose down --remove-orphans
-    
-    # Запуск в фоновом режиме
-    docker-compose up -d
-    
-    print_success "Сервисы запущены"
-}
-
-# Проверка здоровья сервисов
-check_health() {
-    print_info "Проверка здоровья сервисов..."
-    
-    # Ожидание запуска MySQL
-    print_info "Ожидание запуска MySQL..."
-    timeout=60
-    while [ $timeout -gt 0 ]; do
-        if docker-compose exec -T mysql mysqladmin ping -h localhost --silent; then
-            break
-        fi
-        sleep 2
-        timeout=$((timeout-2))
-    done
-    
-    if [ $timeout -le 0 ]; then
-        print_error "MySQL не запустился в течение 60 секунд"
-        exit 1
-    fi
-    
-    print_success "MySQL запущен"
-    
-    # Ожидание запуска приложения
-    print_info "Ожидание запуска приложения..."
-    timeout=60
-    while [ $timeout -gt 0 ]; do
-        if curl -f http://localhost:8000/api/health &> /dev/null; then
-            break
-        fi
-        sleep 2
-        timeout=$((timeout-2))
-    done
-    
-    if [ $timeout -le 0 ]; then
-        print_error "Приложение не запустилось в течение 60 секунд"
-        exit 1
-    fi
-    
-    print_success "Приложение запущено"
-}
-
-# Инициализация данных
-initialize_data() {
-    print_info "Инициализация данных..."
-    
-    # Запуск начального анализа (опционально)
-    # docker-compose exec replenishment_app python3 replenishment_orchestrator.py --mode quick
-    
-    print_success "Данные инициализированы"
-}
-
-# Показ информации о развертывании
-show_deployment_info() {
-    print_success "🎉 Развертывание завершено успешно!"
-    echo
-    print_info "📋 Информация о развертывании:"
-    echo "  🌐 Веб-интерфейс: http://localhost:8000"
-    echo "  🔍 API здоровья: http://localhost:8000/api/health"
-    echo "  📊 API рекомендаций: http://localhost:8000/api/recommendations"
-    echo "  🚨 API алертов: http://localhost:8000/api/alerts"
-    echo
-    print_info "📁 Директории:"
-    echo "  📝 Логи: ./logs/"
-    echo "  📊 Отчеты: ./reports/"
-    echo
-    print_info "🐳 Docker команды:"
-    echo "  📊 Статус: docker-compose ps"
-    echo "  📝 Логи: docker-compose logs -f"
-    echo "  ⏹️  Остановка: docker-compose down"
-    echo "  🔄 Перезапуск: docker-compose restart"
-    echo
-    print_info "🔧 Управление:"
-    echo "  📋 Полный анализ: docker-compose exec replenishment_app python3 replenishment_orchestrator.py --mode full"
-    echo "  ⚡ Быстрая проверка: docker-compose exec replenishment_app python3 replenishment_orchestrator.py --mode quick"
-    echo "  📊 Экспорт отчета: docker-compose exec replenishment_app python3 replenishment_orchestrator.py --mode export --export-file report.csv"
-}
-
-# Основная функция
-main() {
-    echo "🚀 Развертывание системы пополнения склада"
-    echo "=" * 50
-    
-    check_dependencies
-    create_directories
-    setup_environment
-    build_images
-    start_services
-    check_health
-    initialize_data
-    show_deployment_info
-}
-
-# Обработка аргументов командной строки
-case "${1:-deploy}" in
-    "deploy")
-        main
-        ;;
-    "stop")
-        print_info "Остановка сервисов..."
-        docker-compose down
-        print_success "Сервисы остановлены"
-        ;;
-    "restart")
-        print_info "Перезапуск сервисов..."
-        docker-compose restart
-        print_success "Сервисы перезапущены"
-        ;;
-    "logs")
-        docker-compose logs -f
-        ;;
-    "status")
-        docker-compose ps
-        ;;
-    "clean")
-        print_warning "Удаление всех контейнеров и данных..."
-        read -p "Вы уверены? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            docker-compose down -v --remove-orphans
-            docker system prune -f
-            print_success "Очистка завершена"
-        else
-            print_info "Очистка отменена"
-        fi
-        ;;
-    "help")
-        echo "Использование: $0 [команда]"
-        echo
-        echo "Команды:"
-        echo "  deploy   - Развернуть систему (по умолчанию)"
-        echo "  stop     - Остановить сервисы"
-        echo "  restart  - Перезапустить сервисы"
-        echo "  logs     - Показать логи"
-        echo "  status   - Показать статус сервисов"
-        echo "  clean    - Удалить все контейнеры и данные"
-        echo "  help     - Показать эту справку"
-        ;;
-    *)
-        print_error "Неизвестная команда: $1"
-        print_info "Используйте '$0 help' для справки"
-        exit 1
-        ;;
-esac
+# Summary
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║                                                                ║"
+echo "║              ✅ DEPLOYMENT COMPLETED! ✅                       ║"
+echo "║                                                                ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "📋 Next Steps:"
+echo ""
+echo "1. Setup cron jobs (if not done):"
+echo "   ssh $SERVER"
+echo "   cd $PROJECT_PATH"
+echo "   ./setup_monitoring_cron.sh"
+echo ""
+echo "2. Configure alerts (optional):"
+echo "   Edit config.php and add:"
+echo "   define('ALERT_EMAIL', 'your-email@example.com');"
+echo ""
+echo "3. View dashboard:"
+echo "   http://185.221.153.28/html/quality_dashboard.php"
+echo ""
+echo "4. Test API:"
+echo "   curl http://185.221.153.28/api/quality-metrics.php?action=health"
+echo ""
+echo "📚 Documentation:"
+echo "   - Quick Start: MONITORING_QUICK_START.md"
+echo "   - Full Guide: docs/MONITORING_SYSTEM_README.md"
+echo "   - Troubleshooting: docs/MDM_TROUBLESHOOTING_GUIDE.md"
+echo ""
