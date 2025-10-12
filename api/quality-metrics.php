@@ -6,8 +6,9 @@
  * Requirements: 8.3, 4.3
  */
 
-require_once '../config.php';
-require_once '../src/DataQualityMonitor.php';
+// Use absolute path for web server compatibility
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../src/DataQualityMonitor.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
