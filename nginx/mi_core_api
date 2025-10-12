@@ -1,0 +1,72 @@
+# Country Filter API - Separate subdomain configuration
+# This config is for the mi_core_api system on a separate subdomain
+
+server {
+    listen 80;
+    listen [::]:80;
+    
+    # Separate subdomain for country filter API
+    server_name filter.zavodprostavok.ru;
+    
+    root /var/www/mi_core_api/src;
+    index index.php index.html index.htm;
+    
+    # Logs
+    access_log /var/log/nginx/country-filter-access.log;
+    error_log /var/log/nginx/country-filter-error.log;
+    
+    # Main location
+    location / {
+        try_files $uri $uri/ /demo/country-filter-demo.html;
+        
+        # CORS headers
+        add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+    }
+    
+    # OPTIONS handling
+    location = /api/options {
+        add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+        add_header 'Access-Control-Max-Age' 1728000;
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
+    
+    # PHP processing
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+        
+        # CORS headers for PHP
+        add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+    }
+    
+    # Cache static files
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1M;
+        add_header Cache-Control "public, immutable";
+    }
+    
+    # Security
+    location ~ /\. {
+        deny all;
+    }
+    
+    location ~* \.(log|sql|bak)$ {
+        deny all;
+    }
+    
+    # Gzip
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+}

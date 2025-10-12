@@ -1,0 +1,79 @@
+# Main server configuration for MDM System
+# Handles all dashboards, APIs, and monitoring interfaces
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    
+    # Main server - responds to IP and main domain
+    server_name 178.72.129.61 api.zavodprostavok.ru zavodprostavok.ru;
+    
+    root /var/www/html;
+    index index.php index.html index.htm;
+    
+    # Logs
+    access_log /var/log/nginx/mdm-access.log;
+    error_log /var/log/nginx/mdm-error.log;
+    
+    # CORS headers for all responses
+    add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+    
+    # Main location - serve files from /var/www/html
+    location / {
+        try_files $uri $uri/ =404;
+    }
+    
+    # PHP processing for root directory
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+    }
+    
+    # API directory with PHP support
+    location /api/ {
+        try_files $uri $uri/ =404;
+        
+        location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+        }
+    }
+    
+    # Handle OPTIONS requests for CORS
+    if ($request_method = 'OPTIONS') {
+        add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+        add_header 'Access-Control-Max-Age' 1728000;
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
+    
+    # Security - deny access to hidden files
+    location ~ /\. {
+        deny all;
+    }
+    
+    # Cache static files
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1M;
+        add_header Cache-Control "public, immutable";
+    }
+    
+    # Deny access to sensitive files
+    location ~* \.(log|sql|bak)$ {
+        deny all;
+    }
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+}
