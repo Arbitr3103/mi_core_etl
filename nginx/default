@@ -44,8 +44,8 @@ server {
         }
     }
     
-    # Handle OPTIONS requests for CORS
-    if ($request_method = 'OPTIONS') {
+    # Handle OPTIONS requests for CORS preflight
+    location @options {
         add_header 'Access-Control-Allow-Origin' 'http://zavodprostavok.ru' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
