@@ -43,7 +43,17 @@ fi
 cp /var/www/mi_core_api/api/*.php /var/www/html/api/
 echo "✓ API files copied"
 
-# Step 3: Deploy widgets
+# Step 3: Deploy src files (PHP classes)
+echo -e "${YELLOW}📚 Deploying src files...${NC}"
+if [ -d /var/www/mi_core_api/src ]; then
+    mkdir -p /var/www/html/src
+    cp -r /var/www/mi_core_api/src/*.php /var/www/html/src/ 2>/dev/null || true
+    echo "✓ Src files copied"
+else
+    echo "⚠️  No src directory found, skipping"
+fi
+
+# Step 4: Deploy widgets
 echo -e "${YELLOW}🎨 Deploying widgets...${NC}"
 if [ -d /var/www/mi_core_api/html/widgets ]; then
     mkdir -p /var/www/html/widgets
@@ -53,7 +63,7 @@ else
     echo "⚠️  No widgets directory found, skipping"
 fi
 
-# Step 4: Set permissions
+# Step 5: Set permissions
 echo -e "${YELLOW}🔐 Setting permissions...${NC}"
 chown -R www-data:www-data /var/www/html/
 chmod -R 755 /var/www/html/
@@ -61,7 +71,7 @@ chmod 644 /var/www/html/*.php
 chmod 644 /var/www/html/api/*.php
 echo "✓ Permissions set"
 
-# Step 5: Verify deployment
+# Step 6: Verify deployment
 echo -e "${YELLOW}🔍 Verifying deployment...${NC}"
 echo ""
 echo "HTML files:"
