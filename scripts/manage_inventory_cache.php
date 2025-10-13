@@ -9,7 +9,7 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../api/inventory_cache_manager.php';
 
-class InventoryCacheManager {
+class InventoryCacheManagerCLI {
     private $cache;
     private $pdo;
     
@@ -317,7 +317,7 @@ class InventoryCacheManager {
 
 // Запуск утилиты
 if (php_sapi_name() === 'cli') {
-    $manager = new InventoryCacheManager();
+    $manager = new InventoryCacheManagerCLI();
     $args = array_slice($argv, 1);
     $manager->run($args);
 } else {
