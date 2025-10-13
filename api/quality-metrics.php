@@ -20,7 +20,7 @@ try {
         $host = $_ENV['DB_HOST'] ?? 'localhost';
         $dbname = $_ENV['DB_NAME'] ?? 'mi_core_db';
         $username = $_ENV['DB_USER'] ?? 'mi_core_user';
-        $password = $_ENV['DB_PASS'] ?? '';
+        $password = $_ENV['DB_PASSWORD'] ?? $_ENV['DB_PASS'] ?? '';
         
         $dsn = "mysql:host=$host;dbname=$dbname;charset=utf8mb4";
         $pdo = new PDO($dsn, $username, $password, [
