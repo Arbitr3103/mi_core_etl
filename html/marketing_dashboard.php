@@ -464,8 +464,8 @@
                     <a href="quality_dashboard.php" class="btn btn-primary">
                         📊 Технический дашборд
                     </a>
-                    <a href="../sync-real-product-names-v2.php" class="btn btn-secondary">
-                        🔄 Запустить синхронизацию
+                    <a href="sync_control.php" class="btn btn-secondary">
+                        🔄 Управление синхронизацией
                     </a>
                     <button onclick="exportReport()" class="btn btn-secondary">
                         📄 Экспорт отчета
