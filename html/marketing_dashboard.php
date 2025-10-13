@@ -461,7 +461,10 @@
             // Кнопки действий
             html += `
                 <div class="action-buttons">
-                    <a href="quality_dashboard.php" class="btn btn-primary">
+                    <a href="inventory_marketing_dashboard.php" class="btn btn-primary">
+                        📦 Складской дашборд
+                    </a>
+                    <a href="quality_dashboard.php" class="btn btn-secondary">
                         📊 Технический дашборд
                     </a>
                     <a href="sync_control.php" class="btn btn-secondary">
