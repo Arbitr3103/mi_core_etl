@@ -36,6 +36,7 @@ TASK_*.md
 .env*
 config_*.py
 *.conf
+importers/config.py
 
 # Python
 __pycache__/
