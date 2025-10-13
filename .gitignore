@@ -3,18 +3,46 @@ cache/
 backups/
 *.tmp
 *.log
+*.bak
 
 # Отладочные скрипты
 debug_*.php
 check_*.php
 test_*_direct.php
 verify_*.php
+fix_*.php
+fix_*.sh
+fix_*.py
 
 # Временные тестовые файлы (не в папке tests/)
 test_*.php
+test_*.py
+test_*.html
+test_*.sh
 
 # Синхронизационные скрипты
 *_sync.php
+*_sync.py
+
+# Отчеты и документация (временные)
+*_REPORT.md
+*_SUMMARY.md
+*_GUIDE.md
+*_INSTRUCTIONS.md
+*_CHECKLIST.md
+TASK_*.md
+
+# Конфигурационные файлы
+.env*
+config_*.py
+*.conf
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.pytest_cache/
 
 # IDE файлы
 .vscode/
@@ -29,3 +57,24 @@ Thumbs.db
 # Логи
 logs/
 *.log
+
+# Данные и загрузки
+basebuy_data/
+uploads/
+data/
+
+# Временные скрипты развертывания
+deploy_*.sh
+*_deploy*.sh
+apply_*.sh
+setup_*.sh
+
+# Миграции и SQL скрипты (временные)
+migrate_*.sql
+create_*.sql
+fix_*.sql
+
+# Мониторинг и тестирование
+*_benchmark*.json
+*_report*.json
+performance_*.json
