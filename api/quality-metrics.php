@@ -14,6 +14,22 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
 try {
+    // Ensure PDO connection exists
+    if (!isset($pdo)) {
+        // Create PDO connection if not available from config
+        $host = $_ENV['DB_HOST'] ?? 'localhost';
+        $dbname = $_ENV['DB_NAME'] ?? 'mi_core_db';
+        $username = $_ENV['DB_USER'] ?? 'mi_core_user';
+        $password = $_ENV['DB_PASS'] ?? '';
+        
+        $dsn = "mysql:host=$host;dbname=$dbname;charset=utf8mb4";
+        $pdo = new PDO($dsn, $username, $password, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    }
+    
     // Initialize monitor
     $monitor = new DataQualityMonitor($pdo);
     
