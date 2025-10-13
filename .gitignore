@@ -1,84 +1,31 @@
-# Файлы конфигурации с секретными данными
-.env
-.env.local
-.env.production
-.env.staging
-
-# Виртуальное окружение Python
-venv/
-env/
-ENV/
-.venv/
-.ENV/
-
-# Кэш и временные файлы Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Логи
+# Временные файлы и кэш
+cache/
+backups/
+*.tmp
 *.log
-logs/
-log/
 
-# Файлы IDE
+# Отладочные скрипты
+debug_*.php
+check_*.php
+test_*_direct.php
+verify_*.php
+
+# Временные тестовые файлы (не в папке tests/)
+test_*.php
+
+# Синхронизационные скрипты
+*_sync.php
+
+# IDE файлы
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# macOS
+# OS файлы
 .DS_Store
-.AppleDouble
-.LSOverride
+Thumbs.db
 
-# Временные файлы
-*.tmp
-*.temp
-.cache/
-
-# Файлы базы данных (если есть локальные)
-*.db
-*.sqlite
-*.sqlite3
-
-# Резервные копии
-*.bak
-*.backup
-
-# Файлы с паролями и ключами
-*password*
-*secret*
-*key*
-credentials.json
-config.json
-config.py
-basebuy_data/
-
-# Lock файлы системы управления складом
-inventory_update.lock
-movements_update.lock
-
-# Архивы данных
-archive/
-*.xlsx.bak
-data/*.xlsx
+# Логи
+logs/
+*.log
