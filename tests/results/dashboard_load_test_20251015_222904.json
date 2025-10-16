@@ -1,0 +1,269 @@
+{
+    "test_timestamp": "2025-10-15 22:29:04",
+    "overall_score": 55.00000000000001,
+    "results": {
+        "basic_load": {
+            "critical_stock": {
+                "endpoint": "critical_stock",
+                "total_requests": 25,
+                "total_time": 0.01024484634399414,
+                "avg_time": 0.4095458984375,
+                "max_time": 0.8401870727539062,
+                "min_time": 0.2551078796386719,
+                "requests_per_second": 2440.2513381428903,
+                "errors": 25,
+                "success_rate": 0,
+                "avg_response_size": 0
+            },
+            "low_stock": {
+                "endpoint": "low_stock",
+                "total_requests": 25,
+                "total_time": 0.007668018341064453,
+                "avg_time": 0.30653953552246094,
+                "max_time": 0.4420280456542969,
+                "min_time": 0.21409988403320312,
+                "requests_per_second": 3260.294757788695,
+                "errors": 25,
+                "success_rate": 0,
+                "avg_response_size": 0
+            },
+            "overstock": {
+                "endpoint": "overstock",
+                "total_requests": 25,
+                "total_time": 0.006417036056518555,
+                "avg_time": 0.25664329528808594,
+                "max_time": 0.3809928894042969,
+                "min_time": 0.21910667419433594,
+                "requests_per_second": 3895.8796210291657,
+                "errors": 25,
+                "success_rate": 0,
+                "avg_response_size": 0
+            },
+            "activity_stats": {
+                "endpoint": "activity_stats",
+                "total_requests": 25,
+                "total_time": 0.0058460235595703125,
+                "avg_time": 0.23375511169433594,
+                "max_time": 0.2770423889160156,
+                "min_time": 0.20599365234375,
+                "requests_per_second": 4276.411092985318,
+                "errors": 25,
+                "success_rate": 0,
+                "avg_response_size": 0
+            }
+        },
+        "high_frequency": {
+            "total_requests": 100,
+            "total_time": 0.02344799041748047,
+            "requests_per_second": 4264.757798836784,
+            "avg_time": 0.2343606948852539,
+            "max_time": 0.4181861877441406,
+            "min_time": 0.19407272338867188,
+            "errors": 100,
+            "success_rate": 0
+        },
+        "concurrent_users": {
+            "concurrent_users": 15,
+            "requests_per_user": 8,
+            "total_requests": 120,
+            "overall_time": 15.295098066329956,
+            "throughput": 7.845650905904514,
+            "avg_user_response_time": 1.6938050587972004,
+            "max_user_response_time": 14.416933059692383,
+            "total_errors": 120,
+            "overall_success_rate": 0,
+            "user_results": [
+                {
+                    "user_id": 0,
+                    "avg_time": 1.379847526550293,
+                    "max_time": 2.9718875885009766,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 1,
+                    "avg_time": 1.7250478267669678,
+                    "max_time": 3.484010696411133,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 2,
+                    "avg_time": 1.8863677978515625,
+                    "max_time": 4.490137100219727,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 3,
+                    "avg_time": 1.629561185836792,
+                    "max_time": 2.9251575469970703,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 4,
+                    "avg_time": 1.483619213104248,
+                    "max_time": 2.067089080810547,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 5,
+                    "avg_time": 1.2555718421936035,
+                    "max_time": 2.090930938720703,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 6,
+                    "avg_time": 1.8156170845031738,
+                    "max_time": 3.512144088745117,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 7,
+                    "avg_time": 2.853572368621826,
+                    "max_time": 14.416933059692383,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 8,
+                    "avg_time": 1.3670027256011963,
+                    "max_time": 2.686023712158203,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 9,
+                    "avg_time": 1.499950885772705,
+                    "max_time": 1.8770694732666016,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 10,
+                    "avg_time": 1.2434422969818115,
+                    "max_time": 2.087116241455078,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 11,
+                    "avg_time": 1.8475055694580078,
+                    "max_time": 4.287004470825195,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 12,
+                    "avg_time": 1.575082540512085,
+                    "max_time": 1.9578933715820312,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 13,
+                    "avg_time": 2.3820102214813232,
+                    "max_time": 6.855964660644531,
+                    "errors": 8,
+                    "success_rate": 0
+                },
+                {
+                    "user_id": 14,
+                    "avg_time": 1.462876796722412,
+                    "max_time": 1.8811225891113281,
+                    "errors": 8,
+                    "success_rate": 0
+                }
+            ]
+        },
+        "endpoint_specific": {
+            "activity_stats": {
+                "endpoint": "?action=activity_stats",
+                "complexity": "medium",
+                "requests": 30,
+                "avg_time": 0.5393346150716146,
+                "max_time": 2.5670528411865234,
+                "min_time": 0.22983551025390625,
+                "errors": 30,
+                "success_rate": 0,
+                "avg_response_size": 0
+            },
+            "inactive_products": {
+                "endpoint": "?action=inactive_products",
+                "complexity": "high",
+                "requests": 20,
+                "avg_time": 0.6511330604553223,
+                "max_time": 2.465963363647461,
+                "min_time": 0.27108192443847656,
+                "errors": 20,
+                "success_rate": 0,
+                "avg_response_size": 0
+            },
+            "critical_stock_active": {
+                "endpoint": "?action=critical_stock&active_only=true",
+                "complexity": "medium",
+                "requests": 25,
+                "avg_time": 0.36461830139160156,
+                "max_time": 0.6470680236816406,
+                "min_time": 0.2238750457763672,
+                "errors": 25,
+                "success_rate": 0,
+                "avg_response_size": 0
+            },
+            "activity_changes": {
+                "endpoint": "?action=activity_changes&date_from=2024-01-01&date_to=2024-12-31",
+                "complexity": "high",
+                "requests": 15,
+                "avg_time": 0.40747324625651044,
+                "max_time": 0.9551048278808594,
+                "min_time": 0.2620220184326172,
+                "errors": 15,
+                "success_rate": 0,
+                "avg_response_size": 0
+            }
+        },
+        "data_volume": {
+            "small_dataset": {
+                "endpoint": "?action=critical_stock&active_only=true&limit=10",
+                "avg_time": 0.29578208923339844,
+                "max_time": 0.39887428283691406,
+                "min_time": 0.22602081298828125,
+                "avg_response_size": 0,
+                "errors": 10,
+                "success_rate": 0
+            },
+            "medium_dataset": {
+                "endpoint": "?action=low_stock&active_only=true&limit=50",
+                "avg_time": 0.2780914306640625,
+                "max_time": 0.4119873046875,
+                "min_time": 0.24199485778808594,
+                "avg_response_size": 0,
+                "errors": 10,
+                "success_rate": 0
+            },
+            "large_dataset": {
+                "endpoint": "?action=activity_stats",
+                "avg_time": 0.2521038055419922,
+                "max_time": 0.3809928894042969,
+                "min_time": 0.2257823944091797,
+                "avg_response_size": 0,
+                "errors": 10,
+                "success_rate": 0
+            },
+            "full_dataset": {
+                "endpoint": "?action=inactive_products",
+                "avg_time": 0.2259969711303711,
+                "max_time": 0.24199485778808594,
+                "min_time": 0.2181529998779297,
+                "avg_response_size": 0,
+                "errors": 10,
+                "success_rate": 0
+            }
+        }
+    },
+    "errors": []
+}

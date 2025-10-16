@@ -58,6 +58,17 @@ class ETLConfigManager
             'default_filters' => [
                 'visibility' => 'ALL',
                 'limit' => (int)$this->getConfigValue('ozon', 'batch_size', 1000)
+            ],
+            
+            // Active product filtering configuration
+            'filter_active_only' => $this->getConfigValue('ozon', 'filter_active_only', 'true') === 'true',
+            'activity_check_interval' => (int)$this->getConfigValue('ozon', 'activity_check_interval', 3600),
+            'activity_checker' => [
+                'stock_threshold' => (int)$this->getConfigValue('ozon', 'stock_threshold', 0),
+                'required_states' => explode(',', $this->getConfigValue('ozon', 'required_states', 'processed')),
+                'required_visibility' => $this->getConfigValue('ozon', 'required_visibility', 'VISIBLE'),
+                'check_pricing' => $this->getConfigValue('ozon', 'check_pricing', 'true') === 'true',
+                'batch_size' => (int)$this->getConfigValue('ozon', 'activity_batch_size', 100)
             ]
         ];
         

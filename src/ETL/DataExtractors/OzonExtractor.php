@@ -4,6 +4,7 @@ namespace MDM\ETL\DataExtractors;
 
 use Exception;
 use PDO;
+use Services\ProductActivityChecker;
 
 /**
  * Экстрактор данных из Ozon API
@@ -16,6 +17,8 @@ class OzonExtractor extends BaseExtractor
     private string $baseUrl;
     private array $rateLimits;
     private float $lastRequestTime = 0;
+    private ProductActivityChecker $activityChecker;
+    private bool $filterActiveOnly;
     
     public function __construct(PDO $pdo, array $config = [])
     {
@@ -28,6 +31,10 @@ class OzonExtractor extends BaseExtractor
             'requests_per_second' => 10,
             'delay_between_requests' => 0.1
         ];
+        $this->filterActiveOnly = $config['filter_active_only'] ?? true;
+        
+        // Initialize ProductActivityChecker
+        $this->activityChecker = new ProductActivityChecker($config['activity_checker'] ?? []);
         
         if (empty($this->clientId) || empty($this->apiKey)) {
             throw new Exception('Ozon API credentials are required');
@@ -48,6 +55,11 @@ class OzonExtractor extends BaseExtractor
             $products = $this->executeWithRetry(function() use ($filters) {
                 return $this->fetchProducts($filters);
             });
+            
+            // If active filtering is enabled, fetch additional data for activity checking
+            if ($this->filterActiveOnly && !empty($products)) {
+                $products = $this->enrichProductsWithActivityData($products);
+            }
             
             $normalizedProducts = [];
             foreach ($products as $product) {
@@ -158,7 +170,10 @@ class OzonExtractor extends BaseExtractor
     {
         $ozonFilters = [];
         
-        if (!empty($filters['visibility'])) {
+        // Add visibility filter by default for active products
+        if ($this->filterActiveOnly && !isset($filters['visibility'])) {
+            $ozonFilters['visibility'] = 'VISIBLE';
+        } elseif (!empty($filters['visibility'])) {
             $ozonFilters['visibility'] = $filters['visibility'];
         }
         
@@ -181,20 +196,57 @@ class OzonExtractor extends BaseExtractor
      */
     private function normalizeOzonProduct(array $ozonProduct): array
     {
-        // Получаем дополнительную информацию о товаре если нужно
-        $productInfo = $this->getProductInfo($ozonProduct['product_id'] ?? '');
+        // Use enriched data if available, otherwise fetch individual product info
+        $productInfo = $ozonProduct['detailed_info'] ?? $this->getProductInfo($ozonProduct['product_id'] ?? '');
+        $stockData = $ozonProduct['stock_data'] ?? [];
+        $priceData = $ozonProduct['price_data'] ?? [];
         
-        return [
+        // Determine activity status
+        $activityData = $this->determineProductActivity($ozonProduct, $productInfo, $stockData, $priceData);
+        
+        $normalized = [
             'external_sku' => $ozonProduct['offer_id'] ?? $ozonProduct['product_id'] ?? '',
             'source' => $this->getSourceName(),
             'source_name' => $this->sanitizeString($productInfo['name'] ?? $ozonProduct['name'] ?? ''),
             'source_brand' => $this->sanitizeString($productInfo['brand'] ?? ''),
             'source_category' => $this->sanitizeString($productInfo['category'] ?? ''),
-            'price' => $this->sanitizePrice($productInfo['price'] ?? $ozonProduct['price'] ?? 0),
+            'price' => $this->sanitizePrice($priceData['price'] ?? $productInfo['price'] ?? $ozonProduct['price'] ?? 0),
             'description' => $this->sanitizeString($productInfo['description'] ?? ''),
             'attributes' => $this->extractOzonAttributes($ozonProduct, $productInfo),
             'extracted_at' => date('Y-m-d H:i:s'),
-            'raw_data' => json_encode($ozonProduct, JSON_UNESCAPED_UNICODE)
+            'raw_data' => json_encode($ozonProduct, JSON_UNESCAPED_UNICODE),
+            
+            // Activity status fields
+            'is_active' => $activityData['is_active'],
+            'activity_checked_at' => $activityData['checked_at'],
+            'activity_reason' => $activityData['reason']
+        ];
+        
+        return $normalized;
+    }
+    
+    /**
+     * Определение статуса активности товара
+     * 
+     * @param array $ozonProduct Основные данные товара
+     * @param array $productInfo Детальная информация
+     * @param array $stockData Данные об остатках
+     * @param array $priceData Данные о ценах
+     * @return array Данные об активности
+     */
+    private function determineProductActivity(array $ozonProduct, array $productInfo, array $stockData, array $priceData): array
+    {
+        // Prepare data for activity checker
+        $productData = array_merge($ozonProduct, $productInfo);
+        
+        // Use activity checker to determine status
+        $isActive = $this->activityChecker->isProductActive($productData, $stockData, $priceData);
+        $reason = $this->activityChecker->getActivityReason($productData, $stockData, $priceData);
+        
+        return [
+            'is_active' => $isActive,
+            'checked_at' => date('Y-m-d H:i:s'),
+            'reason' => $reason
         ];
     }
     
@@ -220,6 +272,147 @@ class OzonExtractor extends BaseExtractor
         } catch (Exception $e) {
             $this->log('WARNING', 'Не удалось получить детальную информацию о товаре', [
                 'product_id' => $productId,
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+    
+    /**
+     * Получение детальной информации о товарах (batch)
+     * 
+     * @param array $productIds Массив ID товаров
+     * @return array Информация о товарах
+     */
+    private function getProductInfoBatch(array $productIds): array
+    {
+        if (empty($productIds)) {
+            return [];
+        }
+        
+        try {
+            // Convert to integers and limit batch size
+            $productIds = array_map('intval', array_slice($productIds, 0, 1000));
+            
+            $response = $this->makeRequest('POST', '/v2/product/info/list', [
+                'product_id' => $productIds
+            ]);
+            
+            $results = [];
+            if (isset($response['result']['items'])) {
+                foreach ($response['result']['items'] as $item) {
+                    $productId = $item['id'] ?? '';
+                    if ($productId) {
+                        $results[$productId] = $item;
+                    }
+                }
+            }
+            
+            return $results;
+            
+        } catch (Exception $e) {
+            $this->log('WARNING', 'Не удалось получить детальную информацию о товарах (batch)', [
+                'product_ids_count' => count($productIds),
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+    
+    /**
+     * Получение данных об остатках товаров
+     * 
+     * @param array $productIds Массив ID товаров
+     * @return array Данные об остатках
+     */
+    private function getProductStocks(array $productIds): array
+    {
+        if (empty($productIds)) {
+            return [];
+        }
+        
+        try {
+            // Convert to integers and limit batch size
+            $productIds = array_map('intval', array_slice($productIds, 0, 100));
+            
+            $response = $this->makeRequest('POST', '/v3/product/info/stocks', [
+                'filter' => [
+                    'product_id' => $productIds,
+                    'visibility' => 'ALL'
+                ],
+                'limit' => 1000
+            ]);
+            
+            $results = [];
+            if (isset($response['result']['items'])) {
+                foreach ($response['result']['items'] as $item) {
+                    $productId = $item['product_id'] ?? '';
+                    if ($productId) {
+                        $results[$productId] = [
+                            'present' => $item['present'] ?? 0,
+                            'reserved' => $item['reserved'] ?? 0,
+                            'stocks' => $item['stocks'] ?? []
+                        ];
+                    }
+                }
+            }
+            
+            return $results;
+            
+        } catch (Exception $e) {
+            $this->log('WARNING', 'Не удалось получить данные об остатках товаров', [
+                'product_ids_count' => count($productIds),
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+    
+    /**
+     * Получение данных о ценах товаров
+     * 
+     * @param array $productIds Массив ID товаров
+     * @return array Данные о ценах
+     */
+    private function getProductPrices(array $productIds): array
+    {
+        if (empty($productIds)) {
+            return [];
+        }
+        
+        try {
+            // Convert to integers and limit batch size
+            $productIds = array_map('intval', array_slice($productIds, 0, 1000));
+            
+            $response = $this->makeRequest('POST', '/v4/product/info/prices', [
+                'filter' => [
+                    'product_id' => $productIds,
+                    'visibility' => 'ALL'
+                ],
+                'limit' => 1000
+            ]);
+            
+            $results = [];
+            if (isset($response['result']['items'])) {
+                foreach ($response['result']['items'] as $item) {
+                    $productId = $item['product_id'] ?? '';
+                    if ($productId) {
+                        $results[$productId] = [
+                            'price' => $item['price']['value'] ?? 0,
+                            'old_price' => $item['old_price']['value'] ?? 0,
+                            'premium_price' => $item['premium_price']['value'] ?? 0,
+                            'recommended_price' => $item['recommended_price']['value'] ?? 0,
+                            'currency_code' => $item['price']['currency_code'] ?? 'RUB'
+                        ];
+                    }
+                }
+            }
+            
+            return $results;
+            
+        } catch (Exception $e) {
+            $this->log('WARNING', 'Не удалось получить данные о ценах товаров', [
+                'product_ids_count' => count($productIds),
                 'error' => $e->getMessage()
             ]);
             return [];
@@ -387,5 +580,52 @@ class OzonExtractor extends BaseExtractor
         }
         
         $this->lastRequestTime = microtime(true);
+    }
+    
+    /**
+     * Обогащение товаров дополнительными данными для проверки активности
+     * 
+     * @param array $products Массив товаров
+     * @return array Обогащенные товары
+     */
+    private function enrichProductsWithActivityData(array $products): array
+    {
+        if (empty($products)) {
+            return $products;
+        }
+        
+        // Extract product IDs
+        $productIds = [];
+        foreach ($products as $product) {
+            if (!empty($product['product_id'])) {
+                $productIds[] = $product['product_id'];
+            }
+        }
+        
+        if (empty($productIds)) {
+            return $products;
+        }
+        
+        $this->log('INFO', 'Получение дополнительных данных для проверки активности', [
+            'product_count' => count($productIds)
+        ]);
+        
+        // Fetch additional data in batches
+        $productInfos = $this->getProductInfoBatch($productIds);
+        $stockData = $this->getProductStocks($productIds);
+        $priceData = $this->getProductPrices($productIds);
+        
+        // Enrich products with additional data
+        foreach ($products as &$product) {
+            $productId = $product['product_id'] ?? '';
+            
+            if ($productId) {
+                $product['detailed_info'] = $productInfos[$productId] ?? [];
+                $product['stock_data'] = $stockData[$productId] ?? [];
+                $product['price_data'] = $priceData[$productId] ?? [];
+            }
+        }
+        
+        return $products;
     }
 }

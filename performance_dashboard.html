@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Performance Dashboard - Inventory Analytics</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background-color: #f5f5f5;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        font-size: 1.1em;
+        opacity: 0.9;
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .card {
+        background: white;
+        border-radius: 10px;
+        padding: 25px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #667eea;
+      }
+
+      .card h3 {
+        color: #333;
+        margin-bottom: 15px;
+        font-size: 1.3em;
+      }
+
+      .metric {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+      }
+
+      .metric:last-child {
+        border-bottom: none;
+      }
+
+      .metric-label {
+        font-weight: 500;
+        color: #666;
+      }
+
+      .metric-value {
+        font-weight: bold;
+        color: #333;
+      }
+
+      .metric-value.good {
+        color: #28a745;
+      }
+
+      .metric-value.warning {
+        color: #ffc107;
+      }
+
+      .metric-value.danger {
+        color: #dc3545;
+      }
+
+      .alert {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 10px 0;
+      }
+
+      .alert.danger {
+        background: #f8d7da;
+        border-color: #f5c6cb;
+      }
+
+      .alert.success {
+        background: #d4edda;
+        border-color: #c3e6cb;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 50px;
+        color: #666;
+      }
+
+      .error {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+        color: #721c24;
+      }
+
+      .refresh-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        margin: 10px 5px;
+        transition: background 0.3s;
+      }
+
+      .refresh-btn:hover {
+        background: #5a6fd8;
+      }
+
+      .controls {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+      }
+
+      .table th,
+      .table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      .table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+      }
+
+      .table tr:hover {
+        background-color: #f5f5f5;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+
+      .status-indicator.excellent {
+        background-color: #28a745;
+      }
+
+      .status-indicator.good {
+        background-color: #17a2b8;
+      }
+
+      .status-indicator.needs_improvement {
+        background-color: #ffc107;
+      }
+
+      .status-indicator.poor {
+        background-color: #dc3545;
+      }
+
+      .chart-container {
+        height: 300px;
+        margin-top: 20px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Performance Dashboard</h1>
+        <p>Task 7.2: Performance Monitoring & System Health</p>
+      </div>
+
+      <div class="controls">
+        <button class="refresh-btn" onclick="loadDashboard()">
+          🔄 Refresh Dashboard
+        </button>
+        <button class="refresh-btn" onclick="optimizeDatabase()">
+          ⚡ Optimize Database
+        </button>
+        <button class="refresh-btn" onclick="exportMetrics()">
+          📊 Export Metrics
+        </button>
+      </div>
+
+      <div id="loading" class="loading">
+        <p>Loading performance data...</p>
+      </div>
+
+      <div id="error" class="error" style="display: none"></div>
+
+      <div id="dashboard-content" style="display: none">
+        <!-- System Health Overview -->
+        <div class="card">
+          <h3>🏥 System Health Overview</h3>
+          <div id="health-score"></div>
+          <div id="system-alerts"></div>
+        </div>
+
+        <!-- Performance Summary -->
+        <div class="dashboard-grid">
+          <div class="card">
+            <h3>📊 Performance Summary</h3>
+            <div id="performance-summary"></div>
+          </div>
+
+          <div class="card">
+            <h3>💾 Database Performance</h3>
+            <div id="database-performance"></div>
+          </div>
+
+          <div class="card">
+            <h3>🧠 Memory Usage</h3>
+            <div id="memory-usage"></div>
+          </div>
+
+          <div class="card">
+            <h3>⚡ Active Products Stats</h3>
+            <div id="active-products-stats"></div>
+          </div>
+        </div>
+
+        <!-- Slowest Operations -->
+        <div class="card">
+          <h3>🐌 Slowest Operations (Last 24 Hours)</h3>
+          <div id="slowest-operations"></div>
+        </div>
+
+        <!-- Query Performance -->
+        <div class="card">
+          <h3>🔍 Query Performance Analysis</h3>
+          <div id="query-performance"></div>
+        </div>
+
+        <!-- Optimization Recommendations -->
+        <div class="card">
+          <h3>💡 Optimization Recommendations</h3>
+          <div id="recommendations"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let dashboardData = null;
+
+      // Load dashboard data
+      async function loadDashboard() {
+        try {
+          document.getElementById("loading").style.display = "block";
+          document.getElementById("error").style.display = "none";
+          document.getElementById("dashboard-content").style.display = "none";
+
+          const response = await fetch(
+            "api/performance_dashboard.php?action=dashboard&hours=24"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            dashboardData = data.data;
+            renderDashboard();
+          } else {
+            showError(
+              "Failed to load dashboard: " + (data.message || "Unknown error")
+            );
+          }
+        } catch (error) {
+          showError("Network error: " + error.message);
+        } finally {
+          document.getElementById("loading").style.display = "none";
+        }
+      }
+
+      // Render dashboard
+      function renderDashboard() {
+        document.getElementById("dashboard-content").style.display = "block";
+
+        renderHealthScore();
+        renderPerformanceSummary();
+        renderDatabasePerformance();
+        renderMemoryUsage();
+        renderActiveProductsStats();
+        renderSlowestOperations();
+        renderQueryPerformance();
+        renderRecommendations();
+      }
+
+      // Render health score
+      function renderHealthScore() {
+        const healthScore = calculateHealthScore();
+        const scoreColor =
+          healthScore >= 80 ? "good" : healthScore >= 60 ? "warning" : "danger";
+
+        document.getElementById("health-score").innerHTML = `
+                <div class="metric">
+                    <span class="metric-label">Overall Health Score</span>
+                    <span class="metric-value ${scoreColor}">${healthScore}/100</span>
+                </div>
+            `;
+
+        renderAlerts();
+      }
+
+      // Render alerts
+      function renderAlerts() {
+        const alerts = dashboardData.alerts?.alerts || [];
+        const alertsHtml =
+          alerts.length > 0
+            ? alerts
+                .map(
+                  (alert) => `
+                    <div class="alert ${
+                      alert.severity === "high" ? "danger" : "warning"
+                    }">
+                        <strong>${alert.type}:</strong> ${alert.message}
+                    </div>
+                `
+                )
+                .join("")
+            : '<div class="alert success">✅ No performance alerts</div>';
+
+        document.getElementById("system-alerts").innerHTML = alertsHtml;
+      }
+
+      // Render performance summary
+      function renderPerformanceSummary() {
+        const summary = dashboardData.summary || {};
+        const totalOps = summary.total_operations || 0;
+
+        let summaryHtml = `
+                <div class="metric">
+                    <span class="metric-label">Total Operations (24h)</span>
+                    <span class="metric-value">${totalOps}</span>
+                </div>
+            `;
+
+        if (summary.by_type) {
+          Object.entries(summary.by_type).forEach(([type, stats]) => {
+            const avgTime = stats.avg_execution_time_ms || 0;
+            const timeColor =
+              avgTime < 100 ? "good" : avgTime < 500 ? "warning" : "danger";
+
+            summaryHtml += `
+                        <div class="metric">
+                            <span class="metric-label">${type} (avg time)</span>
+                            <span class="metric-value ${timeColor}">${avgTime}ms</span>
+                        </div>
+                    `;
+          });
+        }
+
+        document.getElementById("performance-summary").innerHTML = summaryHtml;
+      }
+
+      // Render database performance
+      function renderDatabasePerformance() {
+        const dbStats = dashboardData.database_stats || {};
+        const activeStats = dbStats.active_products_statistics || {};
+
+        const totalProducts = activeStats.total_products || 0;
+        const activeProducts = activeStats.active_products || 0;
+        const activePercentage =
+          totalProducts > 0
+            ? Math.round((activeProducts / totalProducts) * 100)
+            : 0;
+
+        document.getElementById("database-performance").innerHTML = `
+                <div class="metric">
+                    <span class="metric-label">Total Products</span>
+                    <span class="metric-value">${totalProducts}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Active Products</span>
+                    <span class="metric-value good">${activeProducts} (${activePercentage}%)</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Inactive Products</span>
+                    <span class="metric-value">${
+                      activeStats.inactive_products || 0
+                    }</span>
+                </div>
+            `;
+      }
+
+      // Render memory usage
+      function renderMemoryUsage() {
+        const systemInfo = dashboardData.system_info || {};
+        const currentMemory = systemInfo.current_memory_usage_mb || 0;
+        const peakMemory = systemInfo.peak_memory_usage_mb || 0;
+        const memoryLimit = systemInfo.memory_limit || "Unknown";
+
+        const memoryColor =
+          currentMemory < 64
+            ? "good"
+            : currentMemory < 128
+            ? "warning"
+            : "danger";
+
+        document.getElementById("memory-usage").innerHTML = `
+                <div class="metric">
+                    <span class="metric-label">Current Usage</span>
+                    <span class="metric-value ${memoryColor}">${currentMemory}MB</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Peak Usage</span>
+                    <span class="metric-value">${peakMemory}MB</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Memory Limit</span>
+                    <span class="metric-value">${memoryLimit}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">PHP Version</span>
+                    <span class="metric-value">${
+                      systemInfo.php_version || "Unknown"
+                    }</span>
+                </div>
+            `;
+      }
+
+      // Render active products stats
+      function renderActiveProductsStats() {
+        const dbStats = dashboardData.database_stats || {};
+        const invStats = dbStats.inventory_statistics || {};
+
+        document.getElementById("active-products-stats").innerHTML = `
+                <div class="metric">
+                    <span class="metric-label">Inventory Records</span>
+                    <span class="metric-value">${
+                      invStats.total_records || 0
+                    }</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Unique SKUs</span>
+                    <span class="metric-value">${
+                      invStats.unique_skus || 0
+                    }</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Warehouses</span>
+                    <span class="metric-value">${
+                      invStats.unique_warehouses || 0
+                    }</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Avg Stock Level</span>
+                    <span class="metric-value">${Math.round(
+                      invStats.avg_stock || 0
+                    )}</span>
+                </div>
+            `;
+      }
+
+      // Render slowest operations
+      function renderSlowestOperations() {
+        const slowest = dashboardData.slowest_operations || [];
+
+        if (slowest.length === 0) {
+          document.getElementById("slowest-operations").innerHTML =
+            "<p>No slow operations detected ✅</p>";
+          return;
+        }
+
+        const tableHtml = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Operation</th>
+                            <th>Execution Time</th>
+                            <th>Memory Usage</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${slowest
+                          .map(
+                            (op) => `
+                            <tr>
+                                <td>${op.operation || op.name || "Unknown"}</td>
+                                <td>${op.execution_time_ms || 0}ms</td>
+                                <td>${op.memory_usage_mb || 0}MB</td>
+                                <td>${op.timestamp || "Unknown"}</td>
+                            </tr>
+                        `
+                          )
+                          .join("")}
+                    </tbody>
+                </table>
+            `;
+
+        document.getElementById("slowest-operations").innerHTML = tableHtml;
+      }
+
+      // Render query performance
+      function renderQueryPerformance() {
+        // This would be populated from database performance analysis
+        document.getElementById("query-performance").innerHTML = `
+                <p>Query performance analysis will be displayed here after database optimization.</p>
+                <button class="refresh-btn" onclick="loadQueryPerformance()">🔍 Analyze Query Performance</button>
+            `;
+      }
+
+      // Render recommendations
+      function renderRecommendations() {
+        document.getElementById("recommendations").innerHTML = `
+                <div class="alert">
+                    <strong>💡 Optimization Tips:</strong>
+                    <ul style="margin-top: 10px; padding-left: 20px;">
+                        <li>Run database optimization regularly to maintain performance</li>
+                        <li>Monitor memory usage during peak hours</li>
+                        <li>Enable query result caching for frequently accessed data</li>
+                        <li>Review slow operations and optimize queries as needed</li>
+                    </ul>
+                </div>
+            `;
+      }
+
+      // Calculate health score
+      function calculateHealthScore() {
+        let score = 100;
+
+        // Deduct for alerts
+        const alerts = dashboardData.alerts?.total_alerts || 0;
+        score -= Math.min(alerts * 10, 50);
+
+        // Deduct for high memory usage
+        const memoryUsage =
+          dashboardData.system_info?.current_memory_usage_mb || 0;
+        if (memoryUsage > 128) {
+          score -= Math.min((memoryUsage - 128) / 10, 20);
+        }
+
+        return Math.max(0, Math.min(100, Math.round(score)));
+      }
+
+      // Optimize database
+      async function optimizeDatabase() {
+        try {
+          const btn = event.target;
+          btn.disabled = true;
+          btn.textContent = "⚡ Optimizing...";
+
+          const response = await fetch(
+            "api/performance_dashboard.php?action=optimize_database"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            alert(
+              "Database optimization completed!\n\n" +
+                `Indexes created: ${data.data.index_creation.total_created}\n` +
+                `Tables optimized: ${
+                  Object.keys(data.data.table_optimization).length
+                }`
+            );
+            loadDashboard(); // Refresh dashboard
+          } else {
+            alert("Optimization failed: " + (data.message || "Unknown error"));
+          }
+        } catch (error) {
+          alert("Network error: " + error.message);
+        } finally {
+          const btn = event.target;
+          btn.disabled = false;
+          btn.textContent = "⚡ Optimize Database";
+        }
+      }
+
+      // Export metrics
+      async function exportMetrics() {
+        try {
+          const response = await fetch(
+            "api/performance_dashboard.php?action=export_metrics&hours=24&format=csv"
+          );
+
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `performance_metrics_${new Date()
+              .toISOString()
+              .slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+          } else {
+            alert("Export failed");
+          }
+        } catch (error) {
+          alert("Export error: " + error.message);
+        }
+      }
+
+      // Load query performance
+      async function loadQueryPerformance() {
+        try {
+          const response = await fetch(
+            "api/performance_dashboard.php?action=database_performance"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            const queryPerf = data.data.query_performance || {};
+            let perfHtml =
+              '<table class="table"><thead><tr><th>Query</th><th>Time (ms)</th><th>Rating</th><th>Uses Index</th></tr></thead><tbody>';
+
+            Object.entries(queryPerf).forEach(([query, result]) => {
+              const rating = result.performance_rating || "unknown";
+              const time = result.execution_time_ms || 0;
+              const usesIndex = result.uses_index ? "✅" : "❌";
+
+              perfHtml += `
+                            <tr>
+                                <td>${query}</td>
+                                <td>${time}</td>
+                                <td><span class="status-indicator ${rating}"></span>${rating}</td>
+                                <td>${usesIndex}</td>
+                            </tr>
+                        `;
+            });
+
+            perfHtml += "</tbody></table>";
+            document.getElementById("query-performance").innerHTML = perfHtml;
+          }
+        } catch (error) {
+          console.error("Failed to load query performance:", error);
+        }
+      }
+
+      // Show error
+      function showError(message) {
+        document.getElementById(
+          "error"
+        ).innerHTML = `<strong>Error:</strong> ${message}`;
+        document.getElementById("error").style.display = "block";
+      }
+
+      // Auto-refresh every 5 minutes
+      setInterval(loadDashboard, 5 * 60 * 1000);
+
+      // Load dashboard on page load
+      document.addEventListener("DOMContentLoaded", loadDashboard);
+    </script>
+  </body>
+</html>

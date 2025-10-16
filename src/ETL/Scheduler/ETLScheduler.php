@@ -271,45 +271,126 @@ class ETLScheduler
         }
         
         $savedCount = 0;
+        $activityChanges = [];
         
         try {
             $this->pdo->beginTransaction();
             
-            $stmt = $this->pdo->prepare("
-                INSERT INTO etl_extracted_data 
-                (source, external_sku, source_name, source_brand, source_category, 
-                 price, description, attributes, raw_data, extracted_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE
-                source_name = VALUES(source_name),
-                source_brand = VALUES(source_brand),
-                source_category = VALUES(source_category),
-                price = VALUES(price),
-                description = VALUES(description),
-                attributes = VALUES(attributes),
-                raw_data = VALUES(raw_data),
-                extracted_at = VALUES(extracted_at),
-                updated_at = NOW()
-            ");
+            // Check if we need to handle activity data
+            $hasActivityData = !empty($data[0]['is_active']) || isset($data[0]['is_active']);
+            
+            if ($hasActivityData) {
+                // Prepare statement with activity fields
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO etl_extracted_data 
+                    (source, external_sku, source_name, source_brand, source_category, 
+                     price, description, attributes, raw_data, extracted_at, 
+                     is_active, activity_checked_at, activity_reason, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ON DUPLICATE KEY UPDATE
+                    source_name = VALUES(source_name),
+                    source_brand = VALUES(source_brand),
+                    source_category = VALUES(source_category),
+                    price = VALUES(price),
+                    description = VALUES(description),
+                    attributes = VALUES(attributes),
+                    raw_data = VALUES(raw_data),
+                    extracted_at = VALUES(extracted_at),
+                    is_active = VALUES(is_active),
+                    activity_checked_at = VALUES(activity_checked_at),
+                    activity_reason = VALUES(activity_reason),
+                    updated_at = NOW()
+                ");
+                
+                // Get existing activity status for change tracking
+                $existingActivityStmt = $this->pdo->prepare("
+                    SELECT external_sku, is_active 
+                    FROM etl_extracted_data 
+                    WHERE source = ? AND external_sku IN (" . str_repeat('?,', count($data) - 1) . "?)
+                ");
+                $skus = array_column($data, 'external_sku');
+                $existingActivityStmt->execute(array_merge([$sourceName], $skus));
+                $existingActivity = $existingActivityStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+                
+            } else {
+                // Standard statement without activity fields
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO etl_extracted_data 
+                    (source, external_sku, source_name, source_brand, source_category, 
+                     price, description, attributes, raw_data, extracted_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ON DUPLICATE KEY UPDATE
+                    source_name = VALUES(source_name),
+                    source_brand = VALUES(source_brand),
+                    source_category = VALUES(source_category),
+                    price = VALUES(price),
+                    description = VALUES(description),
+                    attributes = VALUES(attributes),
+                    raw_data = VALUES(raw_data),
+                    extracted_at = VALUES(extracted_at),
+                    updated_at = NOW()
+                ");
+            }
             
             foreach ($data as $item) {
-                $stmt->execute([
-                    $item['source'],
-                    $item['external_sku'],
-                    $item['source_name'],
-                    $item['source_brand'],
-                    $item['source_category'],
-                    $item['price'],
-                    $item['description'],
-                    json_encode($item['attributes'], JSON_UNESCAPED_UNICODE),
-                    $item['raw_data'],
-                    $item['extracted_at']
-                ]);
+                if ($hasActivityData) {
+                    // Track activity changes
+                    $currentActivity = $item['is_active'] ?? null;
+                    $previousActivity = $existingActivity[$item['external_sku']] ?? null;
+                    
+                    if ($previousActivity !== null && $currentActivity !== $previousActivity) {
+                        $activityChanges[] = [
+                            'external_sku' => $item['external_sku'],
+                            'previous_status' => $previousActivity,
+                            'new_status' => $currentActivity,
+                            'reason' => $item['activity_reason'] ?? 'status_change'
+                        ];
+                    }
+                    
+                    $stmt->execute([
+                        $item['source'],
+                        $item['external_sku'],
+                        $item['source_name'],
+                        $item['source_brand'],
+                        $item['source_category'],
+                        $item['price'],
+                        $item['description'],
+                        json_encode($item['attributes'], JSON_UNESCAPED_UNICODE),
+                        $item['raw_data'],
+                        $item['extracted_at'],
+                        $item['is_active'],
+                        $item['activity_checked_at'],
+                        $item['activity_reason']
+                    ]);
+                } else {
+                    $stmt->execute([
+                        $item['source'],
+                        $item['external_sku'],
+                        $item['source_name'],
+                        $item['source_brand'],
+                        $item['source_category'],
+                        $item['price'],
+                        $item['description'],
+                        json_encode($item['attributes'], JSON_UNESCAPED_UNICODE),
+                        $item['raw_data'],
+                        $item['extracted_at']
+                    ]);
+                }
                 
                 $savedCount++;
             }
             
+            // Log activity changes
+            if (!empty($activityChanges)) {
+                $this->logActivityChanges($sourceName, $activityChanges);
+            }
+            
             $this->pdo->commit();
+            
+            // Update activity monitoring stats if we have activity data
+            if ($hasActivityData) {
+                $this->updateActivityMonitoringStats($sourceName);
+            }
             
         } catch (Exception $e) {
             $this->pdo->rollBack();
@@ -324,6 +405,113 @@ class ETLScheduler
         }
         
         return $savedCount;
+    }
+    
+    /**
+     * Логирование изменений активности товаров
+     * 
+     * @param string $sourceName Имя источника
+     * @param array $activityChanges Изменения активности
+     */
+    private function logActivityChanges(string $sourceName, array $activityChanges): void
+    {
+        if (empty($activityChanges)) {
+            return;
+        }
+        
+        try {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO etl_product_activity_log 
+                (source, external_sku, previous_status, new_status, reason, changed_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+            ");
+            
+            foreach ($activityChanges as $change) {
+                $stmt->execute([
+                    $sourceName,
+                    $change['external_sku'],
+                    $change['previous_status'],
+                    $change['new_status'],
+                    $change['reason']
+                ]);
+            }
+            
+            $this->log('INFO', 'Зафиксированы изменения активности товаров', [
+                'source' => $sourceName,
+                'changes_count' => count($activityChanges)
+            ]);
+            
+        } catch (Exception $e) {
+            $this->log('ERROR', 'Ошибка логирования изменений активности', [
+                'source' => $sourceName,
+                'error' => $e->getMessage(),
+                'changes_count' => count($activityChanges)
+            ]);
+        }
+    }
+    
+    /**
+     * Обновление статистики мониторинга активности
+     * 
+     * @param string $sourceName Имя источника
+     */
+    private function updateActivityMonitoringStats(string $sourceName): void
+    {
+        try {
+            $stmt = $this->pdo->prepare("CALL UpdateActivityMonitoringStats(?)");
+            $stmt->execute([$sourceName]);
+            
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($result && $result['should_notify']) {
+                $this->log('WARNING', 'Значительное изменение количества активных товаров', [
+                    'source' => $sourceName,
+                    'current_active' => $result['current_active'],
+                    'previous_active' => $result['previous_active'],
+                    'change_percent' => $result['change_percent'],
+                    'threshold' => $result['threshold']
+                ]);
+                
+                // Here you could trigger notification system
+                $this->triggerActivityChangeNotification($sourceName, $result);
+            }
+            
+        } catch (Exception $e) {
+            $this->log('ERROR', 'Ошибка обновления статистики мониторинга активности', [
+                'source' => $sourceName,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Отправка уведомления об изменении активности товаров
+     * 
+     * @param string $sourceName Имя источника
+     * @param array $changeData Данные об изменении
+     */
+    private function triggerActivityChangeNotification(string $sourceName, array $changeData): void
+    {
+        // This method can be extended to send actual notifications
+        // For now, we just log the notification trigger
+        
+        $message = sprintf(
+            "Источник %s: количество активных товаров изменилось с %d до %d (%.2f%% изменение, порог %.2f%%)",
+            $sourceName,
+            $changeData['previous_active'],
+            $changeData['current_active'],
+            $changeData['change_percent'],
+            $changeData['threshold']
+        );
+        
+        $this->log('WARNING', 'Уведомление об изменении активности товаров', [
+            'source' => $sourceName,
+            'message' => $message,
+            'change_data' => $changeData
+        ]);
+        
+        // TODO: Implement actual notification sending (email, webhook, etc.)
+        // This could integrate with the notification system from task 6.2
     }
     
     /**

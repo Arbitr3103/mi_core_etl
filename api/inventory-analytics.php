@@ -4,10 +4,12 @@
  * Обновлено для работы с реальными данными из inventory_data
  * Включает расширенную обработку ошибок и валидацию данных
  * Добавлено кэширование для оптимизации производительности
+ * Task 7.1 & 7.2: Интегрирована система мониторинга производительности
  */
 
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/inventory_cache_manager.php';
+require_once __DIR__ . '/performance_monitor.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -60,7 +62,7 @@ function validateInput($action, $params = []) {
     $errors = [];
     
     // Валидация action
-    $allowedActions = ['dashboard', 'critical-products', 'overstock-products', 'warehouse-summary', 'warehouse-details', 'products-by-warehouse', 'recommendations'];
+    $allowedActions = ['dashboard', 'critical-products', 'overstock-products', 'warehouse-summary', 'warehouse-details', 'products-by-warehouse', 'recommendations', 'activity_stats', 'inactive_products', 'activity_changes'];
     if (!in_array($action, $allowedActions)) {
         $errors[] = "Недопустимое действие: $action";
     }
@@ -74,10 +76,31 @@ function validateInput($action, $params = []) {
         }
     }
     
+    // Валидация параметра active_only
+    if (isset($params['active_only']) && !in_array($params['active_only'], ['true', 'false', '1', '0'])) {
+        $errors[] = "Параметр active_only должен быть true/false или 1/0";
+    }
+    
     return $errors;
 }
 
+// Функция для получения условия фильтрации активных товаров
+function getActiveProductsFilter($params = []) {
+    // По умолчанию фильтруем только активные товары
+    $activeOnly = $params['active_only'] ?? 'true';
+    
+    if (in_array($activeOnly, ['true', '1'])) {
+        return " AND dp.is_active = 1 ";
+    }
+    
+    return " "; // Возвращаем пустую строку если фильтрация отключена
+}
+
 try {
+    // Инициализируем мониторинг производительности
+    $performance_monitor = getPerformanceMonitor();
+    $performance_monitor->startTimer('api_request_total');
+    
     // Получаем подключение к базе данных
     $pdo = getDatabaseConnection();
     
@@ -124,71 +147,90 @@ try {
     
     switch ($action) {
         case 'dashboard':
-            $cache_key = InventoryCacheKeys::getDashboardKey();
-            $result = $cache->remember($cache_key, function() use ($pdo) {
-                return getInventoryDashboardData($pdo);
+            $performance_monitor->startTimer('dashboard_request');
+            
+            $cache_key = InventoryCacheKeys::getDashboardKey() . '_' . ($params['active_only'] ?? 'true');
+            $result = $cache->remember($cache_key, function() use ($pdo, $params, $performance_monitor) {
+                $performance_monitor->startTimer('dashboard_data_generation');
+                $data = getInventoryDashboardData($pdo, $params);
+                $performance_monitor->endTimer('dashboard_data_generation');
+                return $data;
             }, 300); // 5 минут кэш
+            
+            $dashboard_metrics = $performance_monitor->endTimer('dashboard_request', [
+                'cache_hit' => $cache->get($cache_key) !== null,
+                'active_only' => $params['active_only'] ?? 'true',
+                'result_count' => count($result['data']['critical_products'] ?? [])
+            ]);
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
-                    'cache_key' => $cache_key
+                    'cache_key' => $cache_key,
+                    'active_only' => $params['active_only'] ?? 'true',
+                    'performance' => [
+                        'execution_time_ms' => $dashboard_metrics['execution_time_ms'] ?? null,
+                        'memory_used_mb' => $dashboard_metrics['memory_used_mb'] ?? null
+                    ]
                 ])
             ]);
             break;
             
         case 'critical-products':
-            $cache_key = InventoryCacheKeys::getCriticalProductsKey();
-            $result = $cache->remember($cache_key, function() use ($pdo) {
-                return getCriticalProducts($pdo);
+            $cache_key = InventoryCacheKeys::getCriticalProductsKey() . '_' . ($params['active_only'] ?? 'true');
+            $result = $cache->remember($cache_key, function() use ($pdo, $params) {
+                return getCriticalProducts($pdo, $params);
             }, 180); // 3 минуты кэш для критических товаров
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
-                    'cached' => $cache->get($cache_key) !== null
+                    'cached' => $cache->get($cache_key) !== null,
+                    'active_only' => $params['active_only'] ?? 'true'
                 ])
             ]);
             break;
             
         case 'overstock-products':
-            $cache_key = InventoryCacheKeys::getOverstockProductsKey();
-            $result = $cache->remember($cache_key, function() use ($pdo) {
-                return getOverstockProducts($pdo);
+            $cache_key = InventoryCacheKeys::getOverstockProductsKey() . '_' . ($params['active_only'] ?? 'true');
+            $result = $cache->remember($cache_key, function() use ($pdo, $params) {
+                return getOverstockProducts($pdo, $params);
             }, 600); // 10 минут кэш для товаров с избытком
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
-                    'cached' => $cache->get($cache_key) !== null
+                    'cached' => $cache->get($cache_key) !== null,
+                    'active_only' => $params['active_only'] ?? 'true'
                 ])
             ]);
             break;
             
         case 'warehouse-summary':
-            $cache_key = InventoryCacheKeys::getWarehouseSummaryKey();
-            $result = $cache->remember($cache_key, function() use ($pdo) {
-                return getWarehouseSummary($pdo);
+            $cache_key = InventoryCacheKeys::getWarehouseSummaryKey() . '_' . ($params['active_only'] ?? 'true');
+            $result = $cache->remember($cache_key, function() use ($pdo, $params) {
+                return getWarehouseSummary($pdo, $params);
             }, 300); // 5 минут кэш
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
-                    'cached' => $cache->get($cache_key) !== null
+                    'cached' => $cache->get($cache_key) !== null,
+                    'active_only' => $params['active_only'] ?? 'true'
                 ])
             ]);
             break;
             
         case 'warehouse-details':
             $warehouse_name = $_GET['warehouse'];
-            $cache_key = InventoryCacheKeys::getWarehouseDetailsKey($warehouse_name);
-            $result = $cache->remember($cache_key, function() use ($pdo, $warehouse_name) {
-                return getWarehouseDetails($pdo, $warehouse_name);
+            $cache_key = InventoryCacheKeys::getWarehouseDetailsKey($warehouse_name) . '_' . ($params['active_only'] ?? 'true');
+            $result = $cache->remember($cache_key, function() use ($pdo, $warehouse_name, $params) {
+                return getWarehouseDetails($pdo, $warehouse_name, $params);
             }, 300); // 5 минут кэш
             
             echo json_encode([
@@ -196,31 +238,75 @@ try {
                 'data' => $result,
                 'metadata' => [
                     'cached' => $cache->get($cache_key) !== null,
-                    'warehouse' => $warehouse_name
+                    'warehouse' => $warehouse_name,
+                    'active_only' => $params['active_only'] ?? 'true'
                 ]
             ]);
             break;
             
         case 'products-by-warehouse':
-            $result = getProductsByWarehouse($pdo);
+            $result = getProductsByWarehouse($pdo, $params);
             echo json_encode([
                 'status' => 'success',
-                'data' => $result['data'],
-                'metadata' => $result['metadata'] ?? []
+                'data' => $result,
+                'metadata' => [
+                    'active_only' => $params['active_only'] ?? 'true'
+                ]
             ]);
             break;
             
         case 'recommendations':
-            $cache_key = InventoryCacheKeys::getRecommendationsKey();
-            $result = $cache->remember($cache_key, function() use ($pdo) {
-                return getDetailedRecommendations($pdo);
+            $cache_key = InventoryCacheKeys::getRecommendationsKey() . '_' . ($params['active_only'] ?? 'true');
+            $result = $cache->remember($cache_key, function() use ($pdo, $params) {
+                return getDetailedRecommendations($pdo, $params);
             }, 600); // 10 минут кэш для рекомендаций
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result,
                 'metadata' => [
-                    'cached' => $cache->get($cache_key) !== null
+                    'cached' => $cache->get($cache_key) !== null,
+                    'active_only' => $params['active_only'] ?? 'true'
+                ]
+            ]);
+            break;
+            
+        case 'activity_stats':
+            $result = getActivityStats($pdo);
+            echo json_encode([
+                'status' => 'success',
+                'data' => $result,
+                'metadata' => [
+                    'endpoint' => 'activity_stats',
+                    'generated_at' => date('Y-m-d H:i:s')
+                ]
+            ]);
+            break;
+            
+        case 'inactive_products':
+            $result = getInactiveProducts($pdo);
+            echo json_encode([
+                'status' => 'success',
+                'data' => $result,
+                'metadata' => [
+                    'endpoint' => 'inactive_products',
+                    'generated_at' => date('Y-m-d H:i:s')
+                ]
+            ]);
+            break;
+            
+        case 'activity_changes':
+            $dateFrom = $_GET['date_from'] ?? date('Y-m-d', strtotime('-7 days'));
+            $dateTo = $_GET['date_to'] ?? date('Y-m-d');
+            $result = getActivityChanges($pdo, $dateFrom, $dateTo);
+            echo json_encode([
+                'status' => 'success',
+                'data' => $result,
+                'metadata' => [
+                    'endpoint' => 'activity_changes',
+                    'date_from' => $dateFrom,
+                    'date_to' => $dateTo,
+                    'generated_at' => date('Y-m-d H:i:s')
                 ]
             ]);
             break;
@@ -267,7 +353,7 @@ try {
     ]);
 }
 
-function getInventoryDashboardData($pdo) {
+function getInventoryDashboardData($pdo, $params = []) {
     try {
         // Проверяем наличие таблицы inventory_data
         $tableCheck = $pdo->query("SHOW TABLES LIKE 'inventory_data'");
@@ -275,8 +361,12 @@ function getInventoryDashboardData($pdo) {
             throw new Exception("Таблица inventory_data не найдена");
         }
         
+        // Получаем условие фильтрации активных товаров
+        $activeFilter = getActiveProductsFilter($params);
+        
         // Получаем данные из inventory_data с объединением с dim_products для названий товаров
         // Используем правильные названия колонок: current_stock вместо stock_quantity
+        // Добавляем фильтрацию по активным товарам
         $stmt = $pdo->prepare("
             SELECT 
                 i.sku,
@@ -293,7 +383,8 @@ function getInventoryDashboardData($pdo) {
                     ELSE 'normal'
                 END as stock_status
             FROM inventory_data i
-            WHERE i.current_stock IS NOT NULL
+            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+            WHERE i.current_stock IS NOT NULL {$activeFilter}
             GROUP BY i.sku, i.warehouse_name
             ORDER BY 
                 CASE 
@@ -553,8 +644,11 @@ function getInventoryDashboardData($pdo) {
     }
 }
 
-function getCriticalProducts($pdo) {
+function getCriticalProducts($pdo, $params = []) {
     try {
+        // Получаем условие фильтрации активных товаров
+        $activeFilter = getActiveProductsFilter($params);
+        
         // Получаем товары с критическими остатками (≤5 единиц) согласно требованиям
         $stmt = $pdo->prepare("
             SELECT 
@@ -565,7 +659,8 @@ function getCriticalProducts($pdo) {
                 SUM(i.reserved_stock) as reserved_stock,
                 MAX(i.last_sync_at) as last_updated
             FROM inventory_data i
-            WHERE i.current_stock IS NOT NULL
+            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+            WHERE i.current_stock IS NOT NULL {$activeFilter}
             GROUP BY i.sku, i.warehouse_name
             HAVING SUM(i.current_stock) <= 5
             ORDER BY SUM(i.current_stock) ASC, i.sku
@@ -672,8 +767,11 @@ function getCriticalProducts($pdo) {
     }
 }
 
-function getOverstockProducts($pdo) {
+function getOverstockProducts($pdo, $params = []) {
     try {
+        // Получаем условие фильтрации активных товаров
+        $activeFilter = getActiveProductsFilter($params);
+        
         // Получаем товары с избытком (>100 единиц) согласно требованиям
         $stmt = $pdo->prepare("
             SELECT 
@@ -685,7 +783,8 @@ function getOverstockProducts($pdo) {
                 MAX(i.last_sync_at) as last_updated,
                 (SUM(i.current_stock) - 100) as excess_stock
             FROM inventory_data i
-            WHERE i.current_stock IS NOT NULL
+            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+            WHERE i.current_stock IS NOT NULL {$activeFilter}
             GROUP BY i.sku, i.warehouse_name
             HAVING SUM(i.current_stock) > 100
             ORDER BY SUM(i.current_stock) DESC, i.sku
@@ -781,8 +880,11 @@ function getOverstockProducts($pdo) {
     }
 }
 
-function getWarehouseSummary($pdo) {
+function getWarehouseSummary($pdo, $params = []) {
     try {
+        // Получаем условие фильтрации активных товаров
+        $activeFilter = getActiveProductsFilter($params);
+        
         // Получаем расширенную сводку по складам с агрегацией остатков
         $stmt = $pdo->prepare("
             SELECT 
@@ -799,7 +901,8 @@ function getWarehouseSummary($pdo) {
                 MIN(i.current_stock) as min_stock,
                 MAX(i.current_stock) as max_stock
             FROM inventory_data i
-            WHERE i.current_stock IS NOT NULL
+            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+            WHERE i.current_stock IS NOT NULL {$activeFilter}
             GROUP BY i.warehouse_name
             ORDER BY total_stock DESC, i.warehouse_name
         ");
@@ -821,14 +924,16 @@ function getWarehouseSummary($pdo) {
             ];
         }
     
-    // Получаем общую статистику для расчета процентов
-    $total_stmt = $pdo->query("
+    // Получаем общую статистику для расчета процентов с учетом активных товаров
+    $total_stmt = $pdo->prepare("
         SELECT 
-            COUNT(DISTINCT sku) as total_unique_products,
-            SUM(current_stock) as total_system_stock
-        FROM inventory_data 
-        WHERE current_stock IS NOT NULL
+            COUNT(DISTINCT i.sku) as total_unique_products,
+            SUM(i.current_stock) as total_system_stock
+        FROM inventory_data i
+        LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+        WHERE i.current_stock IS NOT NULL {$activeFilter}
     ");
+    $total_stmt->execute();
     $totals = $total_stmt->fetch();
     
     $result = [];
@@ -873,7 +978,10 @@ function getWarehouseSummary($pdo) {
     }
 }
 
-function getWarehouseDetails($pdo, $warehouse_name) {
+function getWarehouseDetails($pdo, $warehouse_name, $params = []) {
+    // Получаем условие фильтрации активных товаров
+    $activeFilter = getActiveProductsFilter($params);
+    
     // Получаем детальную информацию по конкретному складу
     $stmt = $pdo->prepare("
         SELECT 
@@ -889,7 +997,8 @@ function getWarehouseDetails($pdo, $warehouse_name) {
                 ELSE 'normal'
             END as stock_status
         FROM inventory_data i
-        WHERE i.warehouse_name = ? AND i.current_stock IS NOT NULL
+        LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+        WHERE i.warehouse_name = ? AND i.current_stock IS NOT NULL {$activeFilter}
         ORDER BY 
             CASE 
                 WHEN i.current_stock <= 5 THEN 1
@@ -1000,7 +1109,10 @@ function getWarehouseDetails($pdo, $warehouse_name) {
     ];
 }
 
-function getProductsByWarehouse($pdo) {
+function getProductsByWarehouse($pdo, $params = []) {
+    // Получаем условие фильтрации активных товаров
+    $activeFilter = getActiveProductsFilter($params);
+    
     // Получаем агрегированные данные по товарам с разбивкой по складам
     $stmt = $pdo->prepare("
         SELECT 
@@ -1011,7 +1123,8 @@ function getProductsByWarehouse($pdo) {
             SUM(i.reserved_stock) as reserved_stock,
             MAX(i.last_sync_at) as last_updated
         FROM inventory_data i
-        WHERE i.current_stock IS NOT NULL
+        LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+        WHERE i.current_stock IS NOT NULL {$activeFilter}
         GROUP BY i.sku, i.warehouse_name
         ORDER BY i.sku, total_stock DESC
     ");
@@ -1102,7 +1215,10 @@ function determineWarehouseStatus($warehouse) {
     }
 }
 
-function getDetailedRecommendations($pdo) {
+function getDetailedRecommendations($pdo, $params = []) {
+    // Получаем условие фильтрации активных товаров
+    $activeFilter = getActiveProductsFilter($params);
+    
     // Получаем статистику по товарам для генерации рекомендаций
     $stats_stmt = $pdo->prepare("
         SELECT 
@@ -1116,7 +1232,7 @@ function getDetailedRecommendations($pdo) {
             COUNT(DISTINCT i.sku) as total_products
         FROM inventory_data i
         LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-        WHERE i.current_stock IS NOT NULL
+        WHERE i.current_stock IS NOT NULL {$activeFilter}
         GROUP BY i.sku
     ");
     
@@ -1266,7 +1382,7 @@ function getDetailedRecommendations($pdo) {
     
     // Рекомендации по складам (приоритет 4)
     if ($stats['warehouse_count'] > 1) {
-        $warehouse_analysis = analyzeWarehouseDistribution($pdo);
+        $warehouse_analysis = analyzeWarehouseDistribution($pdo, $params);
         if ($warehouse_analysis['needs_rebalancing']) {
             $recommendation = [
                 'id' => 'warehouse_rebalancing',
@@ -1361,19 +1477,23 @@ function getDetailedRecommendations($pdo) {
     ];
 }
 
-function analyzeWarehouseDistribution($pdo) {
+function analyzeWarehouseDistribution($pdo, $params = []) {
+    // Получаем условие фильтрации активных товаров
+    $activeFilter = getActiveProductsFilter($params);
+    
     // Анализируем распределение товаров по складам
     $stmt = $pdo->prepare("
         SELECT 
-            warehouse_name,
-            COUNT(DISTINCT sku) as unique_products,
-            SUM(current_stock) as total_stock,
-            AVG(current_stock) as avg_stock,
-            COUNT(CASE WHEN current_stock <= 5 THEN 1 END) as critical_count,
-            COUNT(CASE WHEN current_stock > 100 THEN 1 END) as overstock_count
-        FROM inventory_data
-        WHERE current_stock IS NOT NULL
-        GROUP BY warehouse_name
+            i.warehouse_name,
+            COUNT(DISTINCT i.sku) as unique_products,
+            SUM(i.current_stock) as total_stock,
+            AVG(i.current_stock) as avg_stock,
+            COUNT(CASE WHEN i.current_stock <= 5 THEN 1 END) as critical_count,
+            COUNT(CASE WHEN i.current_stock > 100 THEN 1 END) as overstock_count
+        FROM inventory_data i
+        LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+        WHERE i.current_stock IS NOT NULL {$activeFilter}
+        GROUP BY i.warehouse_name
         ORDER BY total_stock DESC
     ");
     
@@ -1403,6 +1523,456 @@ function analyzeWarehouseDistribution($pdo) {
     return [
         'needs_rebalancing' => $needs_rebalancing,
         'warehouses' => $warehouses
+    ];
+}
+
+/**
+ * Get activity statistics for all products
+ */
+function getActivityStats($pdo) {
+    try {
+        // Получаем общую статистику по активности товаров
+        $stats_stmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) as total_products,
+                COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_products,
+                COUNT(CASE WHEN is_active = 0 THEN 1 END) as inactive_products,
+                COUNT(CASE WHEN is_active IS NULL THEN 1 END) as unchecked_products,
+                COUNT(CASE WHEN activity_checked_at IS NOT NULL THEN 1 END) as checked_products,
+                COUNT(CASE WHEN activity_checked_at IS NULL THEN 1 END) as never_checked_products,
+                MAX(activity_checked_at) as last_activity_check,
+                MIN(activity_checked_at) as first_activity_check
+            FROM dim_products
+        ");
+        
+        $stats_stmt->execute();
+        $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Получаем статистику по причинам неактивности
+        $reasons_stmt = $pdo->prepare("
+            SELECT 
+                activity_reason,
+                COUNT(*) as count,
+                COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_count,
+                COUNT(CASE WHEN is_active = 0 THEN 1 END) as inactive_count
+            FROM dim_products 
+            WHERE activity_reason IS NOT NULL
+            GROUP BY activity_reason
+            ORDER BY count DESC
+            LIMIT 10
+        ");
+        
+        $reasons_stmt->execute();
+        $reasons = $reasons_stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Получаем статистику по датам последней проверки
+        $recent_checks_stmt = $pdo->prepare("
+            SELECT 
+                DATE(activity_checked_at) as check_date,
+                COUNT(*) as products_checked,
+                COUNT(CASE WHEN is_active = 1 THEN 1 END) as became_active,
+                COUNT(CASE WHEN is_active = 0 THEN 1 END) as became_inactive
+            FROM dim_products 
+            WHERE activity_checked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY DATE(activity_checked_at)
+            ORDER BY check_date DESC
+            LIMIT 30
+        ");
+        
+        $recent_checks_stmt->execute();
+        $recent_checks = $recent_checks_stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Рассчитываем проценты
+        $total = (int)$stats['total_products'];
+        $active_percentage = $total > 0 ? round(((int)$stats['active_products'] / $total) * 100, 2) : 0;
+        $inactive_percentage = $total > 0 ? round(((int)$stats['inactive_products'] / $total) * 100, 2) : 0;
+        $checked_percentage = $total > 0 ? round(((int)$stats['checked_products'] / $total) * 100, 2) : 0;
+        
+        return [
+            'summary' => [
+                'total_products' => (int)$stats['total_products'],
+                'active_products' => (int)$stats['active_products'],
+                'inactive_products' => (int)$stats['inactive_products'],
+                'unchecked_products' => (int)$stats['unchecked_products'],
+                'checked_products' => (int)$stats['checked_products'],
+                'never_checked_products' => (int)$stats['never_checked_products'],
+                'active_percentage' => $active_percentage,
+                'inactive_percentage' => $inactive_percentage,
+                'checked_percentage' => $checked_percentage,
+                'last_activity_check' => $stats['last_activity_check'],
+                'first_activity_check' => $stats['first_activity_check']
+            ],
+            'reasons_breakdown' => $reasons,
+            'recent_activity_checks' => $recent_checks,
+            'recommendations' => generateActivityRecommendations($stats, $reasons)
+        ];
+        
+    } catch (PDOException $e) {
+        logError("Database error in getActivityStats", ['error' => $e->getMessage()]);
+        throw $e;
+    }
+}
+
+/**
+ * Get list of inactive products
+ */
+function getInactiveProducts($pdo) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                dp.id,
+                dp.sku_ozon,
+                dp.sku_wb,
+                dp.product_name,
+                dp.name,
+                dp.brand,
+                dp.category,
+                dp.cost_price,
+                dp.is_active,
+                dp.activity_checked_at,
+                dp.activity_reason,
+                dp.updated_at,
+                -- Получаем информацию об остатках для неактивных товаров
+                COALESCE(SUM(i.current_stock), 0) as total_stock,
+                COALESCE(SUM(i.available_stock), 0) as available_stock,
+                COALESCE(SUM(i.reserved_stock), 0) as reserved_stock,
+                COUNT(DISTINCT i.warehouse_name) as warehouse_count
+            FROM dim_products dp
+            LEFT JOIN inventory_data i ON (dp.sku_ozon = i.sku OR dp.sku_wb = i.sku)
+            WHERE dp.is_active = 0 OR dp.is_active IS NULL
+            GROUP BY dp.id, dp.sku_ozon, dp.sku_wb, dp.product_name, dp.name, dp.brand, dp.category, 
+                     dp.cost_price, dp.is_active, dp.activity_checked_at, dp.activity_reason, dp.updated_at
+            ORDER BY 
+                CASE 
+                    WHEN dp.is_active IS NULL THEN 1  -- Непроверенные товары первыми
+                    ELSE 2
+                END,
+                dp.activity_checked_at DESC,
+                total_stock DESC
+        ");
+        
+        $stmt->execute();
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Группируем товары по причинам неактивности
+        $grouped_by_reason = [];
+        $unchecked_products = [];
+        $with_stock = [];
+        $without_stock = [];
+        
+        foreach ($products as $product) {
+            $product_data = [
+                'id' => $product['id'],
+                'sku_ozon' => $product['sku_ozon'],
+                'sku_wb' => $product['sku_wb'],
+                'name' => $product['product_name'] ?: $product['name'] ?: 'Товар без названия',
+                'brand' => $product['brand'],
+                'category' => $product['category'],
+                'cost_price' => (float)$product['cost_price'],
+                'is_active' => $product['is_active'],
+                'activity_checked_at' => $product['activity_checked_at'],
+                'activity_reason' => $product['activity_reason'],
+                'total_stock' => (int)$product['total_stock'],
+                'available_stock' => (int)$product['available_stock'],
+                'reserved_stock' => (int)$product['reserved_stock'],
+                'warehouse_count' => (int)$product['warehouse_count'],
+                'updated_at' => $product['updated_at']
+            ];
+            
+            if ($product['is_active'] === null) {
+                $unchecked_products[] = $product_data;
+            } else {
+                $reason = $product['activity_reason'] ?: 'Не указана причина';
+                if (!isset($grouped_by_reason[$reason])) {
+                    $grouped_by_reason[$reason] = [];
+                }
+                $grouped_by_reason[$reason][] = $product_data;
+            }
+            
+            // Разделяем товары с остатками и без
+            if ((int)$product['total_stock'] > 0) {
+                $with_stock[] = $product_data;
+            } else {
+                $without_stock[] = $product_data;
+            }
+        }
+        
+        return [
+            'total_inactive' => count($products),
+            'unchecked_count' => count($unchecked_products),
+            'with_stock_count' => count($with_stock),
+            'without_stock_count' => count($without_stock),
+            'products' => $products,
+            'grouped_by_reason' => $grouped_by_reason,
+            'unchecked_products' => $unchecked_products,
+            'products_with_stock' => $with_stock,
+            'products_without_stock' => $without_stock,
+            'summary' => [
+                'reasons_count' => count($grouped_by_reason),
+                'most_common_reason' => !empty($grouped_by_reason) ? array_keys($grouped_by_reason)[0] : null,
+                'avg_stock_per_inactive' => count($products) > 0 ? array_sum(array_column($products, 'total_stock')) / count($products) : 0
+            ]
+        ];
+        
+    } catch (PDOException $e) {
+        logError("Database error in getInactiveProducts", ['error' => $e->getMessage()]);
+        throw $e;
+    }
+}
+
+/**
+ * Get activity changes within a date range
+ */
+function getActivityChanges($pdo, $dateFrom, $dateTo) {
+    try {
+        // Валидация дат
+        $dateFromObj = DateTime::createFromFormat('Y-m-d', $dateFrom);
+        $dateToObj = DateTime::createFromFormat('Y-m-d', $dateTo);
+        
+        if (!$dateFromObj || !$dateToObj) {
+            throw new Exception("Неверный формат даты. Используйте YYYY-MM-DD");
+        }
+        
+        if ($dateFromObj > $dateToObj) {
+            throw new Exception("Дата начала не может быть больше даты окончания");
+        }
+        
+        // Получаем изменения из лога активности
+        $changes_stmt = $pdo->prepare("
+            SELECT 
+                pal.id,
+                pal.product_id,
+                pal.external_sku,
+                pal.previous_status,
+                pal.new_status,
+                pal.reason,
+                pal.changed_at,
+                pal.changed_by,
+                pal.metadata,
+                dp.product_name,
+                dp.name,
+                dp.brand,
+                dp.category
+            FROM product_activity_log pal
+            LEFT JOIN dim_products dp ON (pal.external_sku = dp.sku_ozon OR pal.external_sku = dp.sku_wb)
+            WHERE DATE(pal.changed_at) BETWEEN ? AND ?
+            ORDER BY pal.changed_at DESC
+            LIMIT 1000
+        ");
+        
+        $changes_stmt->execute([$dateFrom, $dateTo]);
+        $changes = $changes_stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Получаем статистику по изменениям
+        $stats_stmt = $pdo->prepare("
+            SELECT 
+                DATE(changed_at) as change_date,
+                COUNT(*) as total_changes,
+                COUNT(CASE WHEN previous_status = 0 AND new_status = 1 THEN 1 END) as activations,
+                COUNT(CASE WHEN previous_status = 1 AND new_status = 0 THEN 1 END) as deactivations,
+                COUNT(CASE WHEN previous_status IS NULL THEN 1 END) as initial_checks,
+                COUNT(DISTINCT product_id) as unique_products_changed
+            FROM product_activity_log
+            WHERE DATE(changed_at) BETWEEN ? AND ?
+            GROUP BY DATE(changed_at)
+            ORDER BY change_date DESC
+        ");
+        
+        $stats_stmt->execute([$dateFrom, $dateTo]);
+        $daily_stats = $stats_stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Получаем топ причин изменений
+        $reasons_stmt = $pdo->prepare("
+            SELECT 
+                reason,
+                COUNT(*) as count,
+                COUNT(CASE WHEN new_status = 1 THEN 1 END) as activations,
+                COUNT(CASE WHEN new_status = 0 THEN 1 END) as deactivations
+            FROM product_activity_log
+            WHERE DATE(changed_at) BETWEEN ? AND ?
+            GROUP BY reason
+            ORDER BY count DESC
+            LIMIT 10
+        ");
+        
+        $reasons_stmt->execute([$dateFrom, $dateTo]);
+        $top_reasons = $reasons_stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Обрабатываем данные изменений
+        $processed_changes = [];
+        foreach ($changes as $change) {
+            $processed_changes[] = [
+                'id' => (int)$change['id'],
+                'product_id' => $change['product_id'],
+                'external_sku' => $change['external_sku'],
+                'product_name' => $change['product_name'] ?: $change['name'] ?: 'Товар без названия',
+                'brand' => $change['brand'],
+                'category' => $change['category'],
+                'previous_status' => $change['previous_status'] === null ? null : (bool)$change['previous_status'],
+                'new_status' => (bool)$change['new_status'],
+                'change_type' => determineChangeType($change['previous_status'], $change['new_status']),
+                'reason' => $change['reason'],
+                'changed_at' => $change['changed_at'],
+                'changed_by' => $change['changed_by'],
+                'metadata' => $change['metadata'] ? json_decode($change['metadata'], true) : null
+            ];
+        }
+        
+        // Рассчитываем общую статистику
+        $total_changes = count($changes);
+        $total_activations = count(array_filter($processed_changes, function($c) { 
+            return $c['change_type'] === 'activation'; 
+        }));
+        $total_deactivations = count(array_filter($processed_changes, function($c) { 
+            return $c['change_type'] === 'deactivation'; 
+        }));
+        $total_initial_checks = count(array_filter($processed_changes, function($c) { 
+            return $c['change_type'] === 'initial_check'; 
+        }));
+        
+        return [
+            'date_range' => [
+                'from' => $dateFrom,
+                'to' => $dateTo,
+                'days' => $dateFromObj->diff($dateToObj)->days + 1
+            ],
+            'summary' => [
+                'total_changes' => $total_changes,
+                'total_activations' => $total_activations,
+                'total_deactivations' => $total_deactivations,
+                'total_initial_checks' => $total_initial_checks,
+                'unique_products' => count(array_unique(array_column($processed_changes, 'product_id'))),
+                'avg_changes_per_day' => count($daily_stats) > 0 ? round($total_changes / count($daily_stats), 2) : 0
+            ],
+            'changes' => $processed_changes,
+            'daily_statistics' => $daily_stats,
+            'top_reasons' => $top_reasons,
+            'trends' => analyzeTrends($daily_stats)
+        ];
+        
+    } catch (PDOException $e) {
+        logError("Database error in getActivityChanges", ['error' => $e->getMessage()]);
+        throw $e;
+    } catch (Exception $e) {
+        logError("General error in getActivityChanges", ['error' => $e->getMessage()]);
+        throw $e;
+    }
+}
+
+/**
+ * Generate activity recommendations based on statistics
+ */
+function generateActivityRecommendations($stats, $reasons) {
+    $recommendations = [];
+    
+    $total = (int)$stats['total_products'];
+    $active = (int)$stats['active_products'];
+    $inactive = (int)$stats['inactive_products'];
+    $unchecked = (int)$stats['unchecked_products'];
+    
+    // Рекомендация по непроверенным товарам
+    if ($unchecked > 0) {
+        $recommendations[] = [
+            'type' => 'urgent',
+            'title' => 'Проверить активность товаров',
+            'message' => "У вас {$unchecked} товаров без проверки активности. Рекомендуется запустить проверку.",
+            'action' => 'check_product_activity',
+            'priority' => 1,
+            'affected_count' => $unchecked
+        ];
+    }
+    
+    // Рекомендация по соотношению активных/неактивных
+    if ($total > 0) {
+        $active_percentage = ($active / $total) * 100;
+        
+        if ($active_percentage < 30) {
+            $recommendations[] = [
+                'type' => 'warning',
+                'title' => 'Низкий процент активных товаров',
+                'message' => "Только {$active_percentage}% товаров активны. Проверьте критерии активности.",
+                'action' => 'review_activity_criteria',
+                'priority' => 2,
+                'affected_count' => $inactive
+            ];
+        } elseif ($active_percentage > 90) {
+            $recommendations[] = [
+                'type' => 'info',
+                'title' => 'Высокий процент активных товаров',
+                'message' => "У вас {$active_percentage}% активных товаров. Отличный результат!",
+                'action' => 'maintain_current_strategy',
+                'priority' => 5,
+                'affected_count' => $active
+            ];
+        }
+    }
+    
+    // Рекомендации по причинам неактивности
+    if (!empty($reasons)) {
+        $top_reason = $reasons[0];
+        if ((int)$top_reason['count'] > 10) {
+            $recommendations[] = [
+                'type' => 'optimization',
+                'title' => 'Основная причина неактивности',
+                'message' => "Основная причина неактивности: '{$top_reason['activity_reason']}' ({$top_reason['count']} товаров)",
+                'action' => 'address_main_inactivity_reason',
+                'priority' => 3,
+                'affected_count' => (int)$top_reason['count']
+            ];
+        }
+    }
+    
+    return $recommendations;
+}
+
+/**
+ * Determine the type of activity change
+ */
+function determineChangeType($previousStatus, $newStatus) {
+    if ($previousStatus === null) {
+        return 'initial_check';
+    } elseif ($previousStatus == 0 && $newStatus == 1) {
+        return 'activation';
+    } elseif ($previousStatus == 1 && $newStatus == 0) {
+        return 'deactivation';
+    } else {
+        return 'no_change';
+    }
+}
+
+/**
+ * Analyze trends in activity changes
+ */
+function analyzeTrends($dailyStats) {
+    if (count($dailyStats) < 2) {
+        return ['trend' => 'insufficient_data'];
+    }
+    
+    $recent = array_slice($dailyStats, 0, 7); // Последние 7 дней
+    $older = array_slice($dailyStats, 7, 7);  // Предыдущие 7 дней
+    
+    if (empty($older)) {
+        return ['trend' => 'insufficient_data'];
+    }
+    
+    $recent_avg = array_sum(array_column($recent, 'total_changes')) / count($recent);
+    $older_avg = array_sum(array_column($older, 'total_changes')) / count($older);
+    
+    $change_percentage = $older_avg > 0 ? (($recent_avg - $older_avg) / $older_avg) * 100 : 0;
+    
+    if ($change_percentage > 20) {
+        $trend = 'increasing';
+    } elseif ($change_percentage < -20) {
+        $trend = 'decreasing';
+    } else {
+        $trend = 'stable';
+    }
+    
+    return [
+        'trend' => $trend,
+        'change_percentage' => round($change_percentage, 2),
+        'recent_avg' => round($recent_avg, 2),
+        'older_avg' => round($older_avg, 2)
     ];
 }
 ?>

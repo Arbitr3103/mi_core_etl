@@ -4,28 +4,53 @@ namespace MDM\Migrations;
 
 use PDO;
 use PDOException;
-use InvalidArgumentException;
 
 /**
- * Base Migration Class
+ * BaseMigration - Abstract base class for all database migrations
  * 
- * Provides common functionality for database migrations.
+ * Provides common functionality for database migrations including
+ * logging, error handling, and utility methods.
  */
-abstract class BaseMigration implements MigrationInterface
+abstract class BaseMigration
 {
     protected string $version;
     protected string $description;
-    protected array $dependencies;
+    protected array $logs = [];
 
-    public function __construct(string $version, string $description, array $dependencies = [])
+    public function __construct(string $version, string $description)
     {
         $this->version = $version;
         $this->description = $description;
-        $this->dependencies = $dependencies;
     }
 
     /**
-     * Get migration version/identifier
+     * Execute the migration (up)
+     */
+    abstract public function up(PDO $pdo): bool;
+
+    /**
+     * Rollback the migration (down)
+     */
+    abstract public function down(PDO $pdo): bool;
+
+    /**
+     * Check if migration can be executed
+     */
+    public function canExecute(PDO $pdo): bool
+    {
+        return true;
+    }
+
+    /**
+     * Check if migration can be rolled back
+     */
+    public function canRollback(PDO $pdo): bool
+    {
+        return true;
+    }
+
+    /**
+     * Get migration version
      */
     public function getVersion(): string
     {
@@ -41,49 +66,50 @@ abstract class BaseMigration implements MigrationInterface
     }
 
     /**
-     * Get migration dependencies
+     * Get migration logs
      */
-    public function getDependencies(): array
+    public function getLogs(): array
     {
-        return $this->dependencies;
+        return $this->logs;
     }
 
     /**
-     * Execute SQL statements safely
+     * Log a message
      */
-    protected function executeSql(PDO $pdo, string $sql): bool
+    protected function log(string $message, string $level = 'info'): void
+    {
+        $timestamp = date('Y-m-d H:i:s');
+        $logEntry = "[{$timestamp}] [{$level}] {$message}";
+        
+        $this->logs[] = $logEntry;
+        
+        // Also output to console if running in CLI
+        if (php_sapi_name() === 'cli') {
+            echo $logEntry . "\n";
+        }
+    }
+
+    /**
+     * Execute SQL with error handling and logging
+     */
+    protected function executeSql(PDO $pdo, string $sql, array $params = []): bool
     {
         try {
-            // Split SQL into individual statements
-            $statements = $this->splitSqlStatements($sql);
-            
-            foreach ($statements as $statement) {
-                if (!empty(trim($statement))) {
-                    $pdo->exec($statement);
-                }
+            if (empty($params)) {
+                $result = $pdo->exec($sql);
+                $this->log("Executed SQL: " . $this->truncateSql($sql));
+                return $result !== false;
+            } else {
+                $stmt = $pdo->prepare($sql);
+                $result = $stmt->execute($params);
+                $this->log("Executed prepared SQL: " . $this->truncateSql($sql));
+                return $result;
             }
-            
-            return true;
         } catch (PDOException $e) {
-            throw new PDOException("Migration SQL execution failed: " . $e->getMessage());
+            $this->log("SQL Error: " . $e->getMessage(), 'error');
+            $this->log("Failed SQL: " . $this->truncateSql($sql), 'error');
+            throw $e;
         }
-    }
-
-    /**
-     * Execute SQL from file
-     */
-    protected function executeSqlFile(PDO $pdo, string $filePath): bool
-    {
-        if (!file_exists($filePath)) {
-            throw new InvalidArgumentException("SQL file not found: {$filePath}");
-        }
-
-        $sql = file_get_contents($filePath);
-        if ($sql === false) {
-            throw new InvalidArgumentException("Failed to read SQL file: {$filePath}");
-        }
-
-        return $this->executeSql($pdo, $sql);
     }
 
     /**
@@ -92,9 +118,8 @@ abstract class BaseMigration implements MigrationInterface
     protected function tableExists(PDO $pdo, string $tableName): bool
     {
         try {
-            $stmt = $pdo->prepare("SHOW TABLES LIKE ?");
-            $stmt->execute([$tableName]);
-            return $stmt->rowCount() > 0;
+            $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+            return true;
         } catch (PDOException $e) {
             return false;
         }
@@ -106,40 +131,47 @@ abstract class BaseMigration implements MigrationInterface
     protected function columnExists(PDO $pdo, string $tableName, string $columnName): bool
     {
         try {
-            $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$tableName}` LIKE ?");
-            $stmt->execute([$columnName]);
-            return $stmt->rowCount() > 0;
+            $sql = "SELECT COUNT(*) FROM information_schema.columns 
+                    WHERE table_schema = DATABASE() 
+                    AND table_name = :table_name 
+                    AND column_name = :column_name";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindValue(':table_name', $tableName);
+            $stmt->bindValue(':column_name', $columnName);
+            $stmt->execute();
+            
+            return $stmt->fetchColumn() > 0;
         } catch (PDOException $e) {
-            return false;
+            // Fallback method for databases that don't support information_schema
+            try {
+                $pdo->query("SELECT {$columnName} FROM {$tableName} LIMIT 1");
+                return true;
+            } catch (PDOException $e) {
+                return false;
+            }
         }
     }
 
     /**
-     * Check if index exists
+     * Check if index exists on table
      */
     protected function indexExists(PDO $pdo, string $tableName, string $indexName): bool
     {
         try {
-            $stmt = $pdo->prepare("SHOW INDEX FROM `{$tableName}` WHERE Key_name = ?");
-            $stmt->execute([$indexName]);
-            return $stmt->rowCount() > 0;
-        } catch (PDOException $e) {
-            return false;
-        }
-    }
-
-    /**
-     * Check if foreign key constraint exists
-     */
-    protected function foreignKeyExists(PDO $pdo, string $tableName, string $constraintName): bool
-    {
-        try {
-            $sql = "SELECT COUNT(*) FROM information_schema.table_constraints 
-                    WHERE table_name = ? AND constraint_name = ? AND constraint_type = 'FOREIGN KEY'";
+            $sql = "SELECT COUNT(*) FROM information_schema.statistics 
+                    WHERE table_schema = DATABASE() 
+                    AND table_name = :table_name 
+                    AND index_name = :index_name";
+            
             $stmt = $pdo->prepare($sql);
-            $stmt->execute([$tableName, $constraintName]);
+            $stmt->bindValue(':table_name', $tableName);
+            $stmt->bindValue(':index_name', $indexName);
+            $stmt->execute();
+            
             return $stmt->fetchColumn() > 0;
         } catch (PDOException $e) {
+            // For databases that don't support information_schema, assume false
             return false;
         }
     }
@@ -150,124 +182,221 @@ abstract class BaseMigration implements MigrationInterface
     protected function getTableRowCount(PDO $pdo, string $tableName): int
     {
         try {
-            $stmt = $pdo->query("SELECT COUNT(*) FROM `{$tableName}`");
-            return (int) $stmt->fetchColumn();
+            $sql = "SELECT COUNT(*) FROM {$tableName}";
+            $stmt = $pdo->query($sql);
+            return (int)$stmt->fetchColumn();
         } catch (PDOException $e) {
+            $this->log("Could not get row count for table {$tableName}: " . $e->getMessage(), 'warning');
             return 0;
         }
     }
 
     /**
-     * Backup table data
+     * Create table backup
      */
-    protected function backupTable(PDO $pdo, string $tableName, string $backupTableName = null): bool
+    protected function createTableBackup(PDO $pdo, string $tableName): string
     {
-        if ($backupTableName === null) {
-            $backupTableName = $tableName . '_backup_' . date('Y_m_d_H_i_s');
-        }
-
+        $backupTableName = $tableName . '_backup_' . date('Ymd_His');
+        
         try {
-            $sql = "CREATE TABLE `{$backupTableName}` AS SELECT * FROM `{$tableName}`";
-            $pdo->exec($sql);
-            return true;
+            $sql = "CREATE TABLE {$backupTableName} AS SELECT * FROM {$tableName}";
+            $this->executeSql($pdo, $sql);
+            $this->log("Created backup table: {$backupTableName}");
+            return $backupTableName;
         } catch (PDOException $e) {
-            throw new PDOException("Failed to backup table {$tableName}: " . $e->getMessage());
+            $this->log("Failed to create backup for table {$tableName}: " . $e->getMessage(), 'error');
+            throw $e;
         }
     }
 
     /**
-     * Restore table from backup
+     * Drop table backup
      */
-    protected function restoreTable(PDO $pdo, string $tableName, string $backupTableName): bool
+    protected function dropTableBackup(PDO $pdo, string $backupTableName): bool
+    {
+        try {
+            $sql = "DROP TABLE IF EXISTS {$backupTableName}";
+            $this->executeSql($pdo, $sql);
+            $this->log("Dropped backup table: {$backupTableName}");
+            return true;
+        } catch (PDOException $e) {
+            $this->log("Failed to drop backup table {$backupTableName}: " . $e->getMessage(), 'warning');
+            return false;
+        }
+    }
+
+    /**
+     * Restore from table backup
+     */
+    protected function restoreFromBackup(PDO $pdo, string $tableName, string $backupTableName): bool
     {
         try {
             // Drop current table
-            $pdo->exec("DROP TABLE IF EXISTS `{$tableName}`");
+            $this->executeSql($pdo, "DROP TABLE IF EXISTS {$tableName}");
             
-            // Rename backup table
-            $pdo->exec("RENAME TABLE `{$backupTableName}` TO `{$tableName}`");
+            // Rename backup to original name
+            $this->executeSql($pdo, "RENAME TABLE {$backupTableName} TO {$tableName}");
             
+            $this->log("Restored table {$tableName} from backup {$backupTableName}");
             return true;
         } catch (PDOException $e) {
-            throw new PDOException("Failed to restore table {$tableName}: " . $e->getMessage());
+            $this->log("Failed to restore table {$tableName} from backup: " . $e->getMessage(), 'error');
+            return false;
         }
     }
 
     /**
-     * Split SQL into individual statements
+     * Add column to table if it doesn't exist
      */
-    private function splitSqlStatements(string $sql): array
+    protected function addColumnIfNotExists(PDO $pdo, string $tableName, string $columnName, string $columnDefinition): bool
     {
-        // Remove comments and empty lines
-        $lines = explode("\n", $sql);
-        $cleanLines = [];
+        if (!$this->columnExists($pdo, $tableName, $columnName)) {
+            $sql = "ALTER TABLE {$tableName} ADD COLUMN {$columnName} {$columnDefinition}";
+            return $this->executeSql($pdo, $sql);
+        } else {
+            $this->log("Column {$columnName} already exists in table {$tableName}");
+            return true;
+        }
+    }
+
+    /**
+     * Drop column from table if it exists
+     */
+    protected function dropColumnIfExists(PDO $pdo, string $tableName, string $columnName): bool
+    {
+        if ($this->columnExists($pdo, $tableName, $columnName)) {
+            $sql = "ALTER TABLE {$tableName} DROP COLUMN {$columnName}";
+            return $this->executeSql($pdo, $sql);
+        } else {
+            $this->log("Column {$columnName} does not exist in table {$tableName}");
+            return true;
+        }
+    }
+
+    /**
+     * Add index to table if it doesn't exist
+     */
+    protected function addIndexIfNotExists(PDO $pdo, string $tableName, string $indexName, string $columns): bool
+    {
+        if (!$this->indexExists($pdo, $tableName, $indexName)) {
+            $sql = "CREATE INDEX {$indexName} ON {$tableName} ({$columns})";
+            return $this->executeSql($pdo, $sql);
+        } else {
+            $this->log("Index {$indexName} already exists on table {$tableName}");
+            return true;
+        }
+    }
+
+    /**
+     * Drop index from table if it exists
+     */
+    protected function dropIndexIfExists(PDO $pdo, string $tableName, string $indexName): bool
+    {
+        if ($this->indexExists($pdo, $tableName, $indexName)) {
+            $sql = "DROP INDEX {$indexName} ON {$tableName}";
+            return $this->executeSql($pdo, $sql);
+        } else {
+            $this->log("Index {$indexName} does not exist on table {$tableName}");
+            return true;
+        }
+    }
+
+    /**
+     * Get database version
+     */
+    protected function getDatabaseVersion(PDO $pdo): string
+    {
+        try {
+            $stmt = $pdo->query("SELECT VERSION()");
+            return $stmt->fetchColumn();
+        } catch (PDOException $e) {
+            return 'unknown';
+        }
+    }
+
+    /**
+     * Get database name
+     */
+    protected function getDatabaseName(PDO $pdo): string
+    {
+        try {
+            $stmt = $pdo->query("SELECT DATABASE()");
+            return $stmt->fetchColumn();
+        } catch (PDOException $e) {
+            return 'unknown';
+        }
+    }
+
+    /**
+     * Truncate SQL for logging (to avoid very long log entries)
+     */
+    private function truncateSql(string $sql, int $maxLength = 200): string
+    {
+        $sql = preg_replace('/\s+/', ' ', trim($sql));
         
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (!empty($line) && !preg_match('/^--/', $line) && !preg_match('/^\/\*/', $line)) {
-                $cleanLines[] = $line;
-            }
+        if (strlen($sql) <= $maxLength) {
+            return $sql;
         }
         
-        $cleanSql = implode("\n", $cleanLines);
+        return substr($sql, 0, $maxLength) . '...';
+    }
+
+    /**
+     * Validate migration prerequisites
+     */
+    protected function validatePrerequisites(PDO $pdo): array
+    {
+        $errors = [];
         
-        // Split by semicolon, but be careful with stored procedures
-        $statements = [];
-        $currentStatement = '';
-        $inDelimiter = false;
-        
-        $tokens = preg_split('/(\bDELIMITER\b|;)/i', $cleanSql, -1, PREG_SPLIT_DELIM_CAPTURE);
-        
-        foreach ($tokens as $token) {
-            if (preg_match('/^\s*DELIMITER\s*$/i', $token)) {
-                $inDelimiter = !$inDelimiter;
-                $currentStatement .= $token;
-            } elseif ($token === ';' && !$inDelimiter) {
-                if (!empty(trim($currentStatement))) {
-                    $statements[] = trim($currentStatement);
-                }
-                $currentStatement = '';
-            } else {
-                $currentStatement .= $token;
-            }
+        // Check database connection
+        try {
+            $pdo->query("SELECT 1");
+        } catch (PDOException $e) {
+            $errors[] = "Database connection failed: " . $e->getMessage();
         }
         
-        // Add the last statement if it exists
-        if (!empty(trim($currentStatement))) {
-            $statements[] = trim($currentStatement);
+        // Check if we have necessary privileges
+        try {
+            $pdo->query("SHOW GRANTS");
+        } catch (PDOException $e) {
+            // This is not critical, just log it
+            $this->log("Could not check database privileges: " . $e->getMessage(), 'warning');
         }
         
-        return array_filter($statements, fn($stmt) => !empty(trim($stmt)));
+        return $errors;
     }
 
     /**
-     * Log migration activity
+     * Get migration summary
      */
-    protected function log(string $message): void
+    public function getSummary(): array
     {
-        $timestamp = date('Y-m-d H:i:s');
-        echo "[{$timestamp}] Migration {$this->version}: {$message}\n";
+        return [
+            'version' => $this->version,
+            'description' => $this->description,
+            'log_count' => count($this->logs),
+            'class' => get_class($this)
+        ];
     }
 
     /**
-     * Default validation - can be overridden by specific migrations
+     * Clear logs
      */
-    public function canExecute(PDO $pdo): bool
+    public function clearLogs(): void
     {
-        return true;
+        $this->logs = [];
     }
 
     /**
-     * Default rollback validation - can be overridden by specific migrations
+     * Export logs to file
      */
-    public function canRollback(PDO $pdo): bool
+    public function exportLogs(string $filename): bool
     {
-        return true;
+        try {
+            $content = implode("\n", $this->logs);
+            return file_put_contents($filename, $content) !== false;
+        } catch (Exception $e) {
+            return false;
+        }
     }
-
-    /**
-     * Abstract methods that must be implemented by concrete migrations
-     */
-    abstract public function up(PDO $pdo): bool;
-    abstract public function down(PDO $pdo): bool;
 }

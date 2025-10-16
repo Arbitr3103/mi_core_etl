@@ -7,6 +7,7 @@ use MDM\Migrations\MigrationManager;
 use MDM\Migrations\Migrations\Migration_001_CreateInitialSchema;
 use MDM\Migrations\Migrations\Migration_002_CreateAuditTables;
 use MDM\Migrations\Migrations\Migration_003_CreateViewsAndTriggers;
+use MDM\Migrations\Migrations\Migration_004_CreateProductActivityTables;
 
 /**
  * MDM System Migration Runner
@@ -49,7 +50,8 @@ try {
     $migrationManager->addMigrations([
         new Migration_001_CreateInitialSchema(),
         new Migration_002_CreateAuditTables(),
-        new Migration_003_CreateViewsAndTriggers()
+        new Migration_003_CreateViewsAndTriggers(),
+        new Migration_004_CreateProductActivityTables()
     ]);
     
     // Execute command
