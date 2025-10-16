@@ -90,7 +90,7 @@ function getActiveProductsFilter($params = []) {
     $activeOnly = $params['active_only'] ?? 'true';
     
     if (in_array($activeOnly, ['true', '1'])) {
-        return " AND dp.is_active = 1 ";
+        return " AND dp.is_active = 1 AND dp.is_active IS NOT NULL ";
     }
     
     return " "; // Возвращаем пустую строку если фильтрация отключена
