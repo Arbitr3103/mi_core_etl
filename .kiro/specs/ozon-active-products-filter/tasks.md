@@ -81,7 +81,7 @@
     - Test database performance with new indexes
     - _Requirements: 3.2, 4.1_
 
-- [ ] 5. Update Inventory Analytics API for active product filtering
+- [x] 5. Update Inventory Analytics API for active product filtering
 
   - [x] 5.1 Modify existing dashboard endpoints to filter active products
 
