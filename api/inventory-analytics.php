@@ -384,7 +384,7 @@ function getInventoryDashboardData($pdo, $params = []) {
                 END as stock_status
             FROM inventory_data i
             LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL {$activeFilter}
+            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
             GROUP BY i.sku, i.warehouse_name
             ORDER BY 
                 CASE 
@@ -660,7 +660,7 @@ function getCriticalProducts($pdo, $params = []) {
                 MAX(i.last_sync_at) as last_updated
             FROM inventory_data i
             LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL {$activeFilter}
+            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
             GROUP BY i.sku, i.warehouse_name
             HAVING SUM(i.current_stock) <= 5
             ORDER BY SUM(i.current_stock) ASC, i.sku
@@ -784,7 +784,7 @@ function getOverstockProducts($pdo, $params = []) {
                 (SUM(i.current_stock) - 100) as excess_stock
             FROM inventory_data i
             LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL {$activeFilter}
+            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
             GROUP BY i.sku, i.warehouse_name
             HAVING SUM(i.current_stock) > 100
             ORDER BY SUM(i.current_stock) DESC, i.sku
@@ -902,7 +902,7 @@ function getWarehouseSummary($pdo, $params = []) {
                 MAX(i.current_stock) as max_stock
             FROM inventory_data i
             LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL {$activeFilter}
+            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
             GROUP BY i.warehouse_name
             ORDER BY total_stock DESC, i.warehouse_name
         ");
@@ -931,7 +931,7 @@ function getWarehouseSummary($pdo, $params = []) {
             SUM(i.current_stock) as total_system_stock
         FROM inventory_data i
         LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-        WHERE i.current_stock IS NOT NULL {$activeFilter}
+        WHERE i.current_stock IS NOT NULL " . $activeFilter . "
     ");
     $total_stmt->execute();
     $totals = $total_stmt->fetch();
@@ -998,7 +998,7 @@ function getWarehouseDetails($pdo, $warehouse_name, $params = []) {
             END as stock_status
         FROM inventory_data i
         LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-        WHERE i.warehouse_name = ? AND i.current_stock IS NOT NULL {$activeFilter}
+        WHERE i.warehouse_name = ? AND i.current_stock IS NOT NULL " . $activeFilter . "
         ORDER BY 
             CASE 
                 WHEN i.current_stock <= 5 THEN 1
@@ -1124,7 +1124,7 @@ function getProductsByWarehouse($pdo, $params = []) {
             MAX(i.last_sync_at) as last_updated
         FROM inventory_data i
         LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-        WHERE i.current_stock IS NOT NULL {$activeFilter}
+        WHERE i.current_stock IS NOT NULL " . $activeFilter . "
         GROUP BY i.sku, i.warehouse_name
         ORDER BY i.sku, total_stock DESC
     ");
@@ -1232,7 +1232,7 @@ function getDetailedRecommendations($pdo, $params = []) {
             COUNT(DISTINCT i.sku) as total_products
         FROM inventory_data i
         LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-        WHERE i.current_stock IS NOT NULL {$activeFilter}
+        WHERE i.current_stock IS NOT NULL " . $activeFilter . "
         GROUP BY i.sku
     ");
     
@@ -1492,7 +1492,7 @@ function analyzeWarehouseDistribution($pdo, $params = []) {
             COUNT(CASE WHEN i.current_stock > 100 THEN 1 END) as overstock_count
         FROM inventory_data i
         LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-        WHERE i.current_stock IS NOT NULL {$activeFilter}
+        WHERE i.current_stock IS NOT NULL " . $activeFilter . "
         GROUP BY i.warehouse_name
         ORDER BY total_stock DESC
     ");
