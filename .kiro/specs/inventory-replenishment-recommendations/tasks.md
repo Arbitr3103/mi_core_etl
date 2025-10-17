@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Database schema setup for replenishment system
+- [x] 1. Database schema setup for replenishment system
 
   - Create replenishment_recommendations table with proper indexes
   - Create replenishment_config table with default parameters
@@ -10,7 +10,7 @@
 
 - [ ] 2. Core SalesAnalyzer implementation
 
-  - [ ] 2.1 Create SalesAnalyzer class with ADS calculation logic
+  - [x] 2.1 Create SalesAnalyzer class with ADS calculation logic
 
     - Implement calculateADS() method using 30-day sales data
     - Add getValidSalesDays() method to exclude zero-stock days
