@@ -1,0 +1,353 @@
+<!-- 
+ИНТЕГРАЦИЯ СИСТЕМЫ ПОПОЛНЕНИЯ В СУЩЕСТВУЮЩИЙ ДАШБОРД
+Добавьте этот код в ваш файл test_dashboard.html на сервере
+-->
+
+<!-- 1. ДОБАВЬТЕ КНОПКУ В НАВИГАЦИЮ ИЛИ ПАНЕЛЬ УПРАВЛЕНИЯ -->
+<div class="replenishment-integration" style="margin: 10px 0">
+  <button
+    id="replenishmentBtn"
+    class="btn btn-primary"
+    style="
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      transition: all 0.3s ease;
+    "
+    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)'"
+    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.3)'"
+  >
+    📦 Рекомендации по пополнению
+  </button>
+</div>
+
+<!-- 2. МОДАЛЬНОЕ ОКНО ДЛЯ ОТОБРАЖЕНИЯ ДАШБОРДА ПОПОЛНЕНИЯ -->
+<div
+  id="replenishmentModal"
+  style="
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+  "
+>
+  <div
+    style="
+      position: relative;
+      margin: 2% auto;
+      width: 95%;
+      height: 90%;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    "
+  >
+    <!-- Заголовок модального окна -->
+    <div
+      style="
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      "
+    >
+      <h2 style="margin: 0; font-size: 24px">
+        📦 Система рекомендаций по пополнению склада
+      </h2>
+      <button
+        id="closeReplenishmentModal"
+        style="
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: white;
+          font-size: 24px;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        "
+        onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+        onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+      >
+        ×
+      </button>
+    </div>
+
+    <!-- Контент - iframe с дашбордом пополнения -->
+    <iframe
+      id="replenishmentFrame"
+      src="/html/replenishment_dashboard.php"
+      style="
+        width: 100%;
+        height: calc(100% - 80px);
+        border: none;
+        background: white;
+      "
+    >
+    </iframe>
+
+    <!-- Панель быстрых действий -->
+    <div
+      style="
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        gap: 10px;
+      "
+    >
+      <button
+        onclick="refreshReplenishmentData()"
+        style="
+          background: #28a745;
+          color: white;
+          border: none;
+          padding: 10px 15px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        "
+      >
+        🔄 Обновить
+      </button>
+
+      <button
+        onclick="exportReplenishmentData()"
+        style="
+          background: #17a2b8;
+          color: white;
+          border: none;
+          padding: 10px 15px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        "
+      >
+        📊 Экспорт CSV
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 3. JAVASCRIPT ДЛЯ УПРАВЛЕНИЯ МОДАЛЬНЫМ ОКНОМ -->
+<script>
+  // Функции для управления модальным окном пополнения
+  (function () {
+    const modal = document.getElementById("replenishmentModal");
+    const btn = document.getElementById("replenishmentBtn");
+    const closeBtn = document.getElementById("closeReplenishmentModal");
+    const iframe = document.getElementById("replenishmentFrame");
+
+    // Открытие модального окна
+    btn.onclick = function () {
+      modal.style.display = "block";
+      document.body.style.overflow = "hidden"; // Блокируем прокрутку фона
+
+      // Загружаем статистику в реальном времени
+      loadReplenishmentStats();
+    };
+
+    // Закрытие модального окна
+    closeBtn.onclick = function () {
+      modal.style.display = "none";
+      document.body.style.overflow = "auto"; // Восстанавливаем прокрутку
+    };
+
+    // Закрытие по клику вне модального окна
+    window.onclick = function (event) {
+      if (event.target == modal) {
+        modal.style.display = "none";
+        document.body.style.overflow = "auto";
+      }
+    };
+
+    // Закрытие по ESC
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && modal.style.display === "block") {
+        modal.style.display = "none";
+        document.body.style.overflow = "auto";
+      }
+    });
+
+    // Функция загрузки статистики
+    window.loadReplenishmentStats = function () {
+      fetch("/api/replenishment.php?action=status")
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            console.log("Статистика пополнения загружена:", data.data);
+
+            // Можно добавить индикатор статуса на кнопку
+            const recommendationsCount =
+              data.data.tables.replenishment_recommendations.record_count;
+            if (recommendationsCount > 0) {
+              btn.innerHTML = `📦 Рекомендации по пополнению (${recommendationsCount})`;
+              btn.style.background =
+                "linear-gradient(135deg, #28a745 0%, #20c997 100%)";
+            }
+          }
+        })
+        .catch((error) => {
+          console.error("Ошибка загрузки статистики пополнения:", error);
+        });
+    };
+
+    // Функция обновления данных
+    window.refreshReplenishmentData = function () {
+      iframe.src = iframe.src; // Перезагружаем iframe
+      loadReplenishmentStats();
+
+      // Показываем уведомление
+      showNotification("Данные обновлены", "success");
+    };
+
+    // Функция экспорта данных
+    window.exportReplenishmentData = function () {
+      // Открываем экспорт в новом окне
+      window.open("/export_recommendations.php", "_blank");
+      showNotification("Экспорт запущен", "info");
+    };
+
+    // Функция показа уведомлений
+    function showNotification(message, type = "info") {
+      const notification = document.createElement("div");
+      notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10001;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            transform: translateX(100%);
+        `;
+
+      // Цвета в зависимости от типа
+      const colors = {
+        success: "linear-gradient(135deg, #28a745 0%, #20c997 100%)",
+        info: "linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%)",
+        warning: "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)",
+        error: "linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)",
+      };
+
+      notification.style.background = colors[type] || colors.info;
+      notification.textContent = message;
+
+      document.body.appendChild(notification);
+
+      // Анимация появления
+      setTimeout(() => {
+        notification.style.transform = "translateX(0)";
+      }, 100);
+
+      // Автоматическое скрытие через 3 секунды
+      setTimeout(() => {
+        notification.style.transform = "translateX(100%)";
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300);
+      }, 3000);
+    }
+
+    // Загружаем статистику при загрузке страницы
+    document.addEventListener("DOMContentLoaded", function () {
+      loadReplenishmentStats();
+
+      // Обновляем статистику каждые 24 часа (синхронно с основным дашбордом)
+      setInterval(loadReplenishmentStats, 24 * 60 * 60 * 1000);
+    });
+  })();
+</script>
+
+<!-- 4. ДОПОЛНИТЕЛЬНЫЕ СТИЛИ ДЛЯ ИНТЕГРАЦИИ -->
+<style>
+  /* Стили для адаптивности модального окна */
+  @media (max-width: 768px) {
+    #replenishmentModal > div {
+      margin: 1% auto;
+      width: 98%;
+      height: 95%;
+    }
+
+    #replenishmentBtn {
+      width: 100%;
+      margin: 5px 0;
+    }
+  }
+
+  /* Анимации для модального окна */
+  #replenishmentModal {
+    animation: fadeIn 0.3s ease;
+  }
+
+  #replenishmentModal > div {
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-50px) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Стили для кнопки в разных состояниях */
+  #replenishmentBtn:active {
+    transform: translateY(1px);
+  }
+
+  #replenishmentBtn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+  }
+</style>
+
+<!-- 
+ИНСТРУКЦИИ ПО ИНТЕГРАЦИИ:
+
+1. Скопируйте весь этот код
+2. Вставьте его в ваш файл test_dashboard.html на сервере
+3. Разместите кнопку там, где хотите (в навигации, панели управления и т.д.)
+4. Убедитесь, что система пополнения развернута на сервере
+5. Протестируйте работу кнопки
+
+ВОЗМОЖНОСТИ:
+- Модальное окно с полнофункциональным дашбордом пополнения
+- Автоматическое обновление статистики каждые 5 минут
+- Кнопки быстрых действий (обновить, экспорт)
+- Адаптивный дизайн для мобильных устройств
+- Красивые анимации и уведомления
+- Интеграция с существующим дизайном
+-->

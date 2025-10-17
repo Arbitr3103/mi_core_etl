@@ -46,37 +46,61 @@ class SalesAnalyzer
         
         $this->log("Calculating ADS for product $productId over $days days");
         
+        // Analyze boundary conditions first
+        $boundaryAnalysis = $this->analyzeBoundaryConditions($productId, $days);
+        
+        if (!$boundaryAnalysis['has_sales_data']) {
+            $this->logDataQuality("Cannot calculate ADS: no sales data available", $productId, 'warning');
+            return 0.0;
+        }
+        
+        if (!$boundaryAnalysis['has_stock_data']) {
+            $this->logDataQuality("Cannot calculate ADS: no stock data available", $productId, 'warning');
+            return 0.0;
+        }
+        
         // Get sales data for the period
         $salesData = $this->getSalesData($productId, $days);
         
-        if (empty($salesData)) {
-            $this->log("No sales data found for product $productId");
+        // Validate sales data quality
+        $validation = $this->validateSalesData($salesData, $productId);
+        
+        if (!$validation['is_valid']) {
+            $errors = implode(', ', $validation['errors']);
+            throw new Exception("Sales data validation failed: $errors");
+        }
+        
+        // Filter sales data to exclude zero-stock days
+        $filteredSalesData = $this->filterSalesDataByStock($salesData, $productId, $days);
+        
+        if (empty($filteredSalesData)) {
+            $this->logDataQuality("No valid sales data after filtering zero-stock days", $productId, 'warning');
             return 0.0;
         }
         
-        // Get valid sales days (excluding zero stock days)
-        $validDays = $this->getValidSalesDays($productId, $days);
-        
-        if (empty($validDays)) {
-            $this->log("No valid sales days found for product $productId");
-            return 0.0;
+        // Check if we have sufficient data after filtering
+        if (!$boundaryAnalysis['sufficient_data']) {
+            $this->logDataQuality("Insufficient data for reliable ADS calculation", $productId, 'warning');
+            // Continue with calculation but log the warning
         }
         
-        // Calculate total sales
+        // Calculate total sales from filtered data
         $totalSales = 0;
-        foreach ($salesData as $sale) {
-            $saleDate = $sale['sale_date'];
-            
-            // Only count sales on days when stock was available
-            if (in_array($saleDate, $validDays)) {
-                $totalSales += (int)$sale['quantity_sold'];
-            }
+        foreach ($filteredSalesData as $sale) {
+            $quantity = max(0, (int)$sale['quantity_sold']); // Ensure non-negative
+            $totalSales += $quantity;
         }
         
-        $validDaysCount = count($validDays);
+        $validDaysCount = count($filteredSalesData);
         $ads = $validDaysCount > 0 ? $totalSales / $validDaysCount : 0.0;
         
         $this->log("Product $productId: Total sales = $totalSales, Valid days = $validDaysCount, ADS = $ads");
+        
+        // Log data quality summary
+        $warningCount = count($validation['warnings']);
+        if ($warningCount > 0) {
+            $this->logDataQuality("ADS calculated with $warningCount data quality warnings", $productId, 'info');
+        }
         
         return round($ads, 2);
     }
@@ -181,9 +205,10 @@ class SalesAnalyzer
      * Validate sales data quality
      * 
      * @param array $salesData Sales data to validate
+     * @param int|null $productId Product ID for additional validation
      * @return array Validation results
      */
-    public function validateSalesData(array $salesData): array
+    public function validateSalesData(array $salesData, ?int $productId = null): array
     {
         $validation = [
             'is_valid' => true,
@@ -193,39 +218,65 @@ class SalesAnalyzer
                 'total_records' => count($salesData),
                 'total_quantity' => 0,
                 'date_range' => null,
-                'avg_daily_sales' => 0
+                'avg_daily_sales' => 0,
+                'zero_sales_days' => 0,
+                'negative_sales_days' => 0,
+                'data_gaps' => []
             ]
         ];
         
+        // Log validation start
+        $this->logDataQuality("Starting sales data validation", $productId, 'info');
+        
+        // Handle empty data - boundary condition
         if (empty($salesData)) {
             $validation['is_valid'] = false;
             $validation['errors'][] = 'No sales data provided';
+            $this->logDataQuality("No sales data provided for validation", $productId, 'error');
             return $validation;
         }
         
         $totalQuantity = 0;
         $dates = [];
+        $zeroSalesDays = 0;
+        $negativeSalesDays = 0;
         
         foreach ($salesData as $index => $sale) {
             // Check required fields
             if (!isset($sale['sale_date']) || !isset($sale['quantity_sold'])) {
-                $validation['errors'][] = "Missing required fields in record $index";
+                $validation['errors'][] = "Missing required fields in record $index (sale_date or quantity_sold)";
                 $validation['is_valid'] = false;
+                $this->logDataQuality("Missing required fields in sales record $index", $productId, 'error');
+                continue;
+            }
+            
+            // Validate date format
+            if (!$this->isValidDate($sale['sale_date'])) {
+                $validation['errors'][] = "Invalid date format in record $index: {$sale['sale_date']}";
+                $validation['is_valid'] = false;
+                $this->logDataQuality("Invalid date format in record $index: {$sale['sale_date']}", $productId, 'error');
                 continue;
             }
             
             // Validate quantity
             $quantity = (int)$sale['quantity_sold'];
+            
             if ($quantity < 0) {
                 $validation['warnings'][] = "Negative quantity in record $index: $quantity";
+                $negativeSalesDays++;
+                $this->logDataQuality("Negative sales quantity detected: $quantity on {$sale['sale_date']}", $productId, 'warning');
+            } elseif ($quantity === 0) {
+                $zeroSalesDays++;
             }
             
-            $totalQuantity += $quantity;
+            $totalQuantity += max(0, $quantity); // Only count positive quantities in total
             $dates[] = $sale['sale_date'];
         }
         
         // Calculate stats
         $validation['stats']['total_quantity'] = $totalQuantity;
+        $validation['stats']['zero_sales_days'] = $zeroSalesDays;
+        $validation['stats']['negative_sales_days'] = $negativeSalesDays;
         
         if (!empty($dates)) {
             sort($dates);
@@ -234,19 +285,56 @@ class SalesAnalyzer
                 'end' => end($dates)
             ];
             
-            $validation['stats']['avg_daily_sales'] = count($salesData) > 0 
-                ? $totalQuantity / count($salesData) 
+            // Calculate average excluding zero and negative sales days
+            $validSalesDays = count($salesData) - $zeroSalesDays - $negativeSalesDays;
+            $validation['stats']['avg_daily_sales'] = $validSalesDays > 0 
+                ? $totalQuantity / $validSalesDays 
                 : 0;
+                
+            // Check for data gaps
+            $validation['stats']['data_gaps'] = $this->detectDataGaps($dates);
         }
         
-        // Quality checks
+        // Boundary condition checks
         if ($totalQuantity === 0) {
-            $validation['warnings'][] = 'Total sales quantity is zero';
+            $validation['warnings'][] = 'Total sales quantity is zero - no demand detected';
+            $this->logDataQuality("Zero total sales detected - no demand for product", $productId, 'warning');
         }
         
+        // Insufficient data boundary condition
         if (count($salesData) < 7) {
-            $validation['warnings'][] = 'Less than 7 days of sales data available';
+            $validation['warnings'][] = 'Less than 7 days of sales data available - results may be unreliable';
+            $this->logDataQuality("Insufficient sales data: only " . count($salesData) . " days available", $productId, 'warning');
         }
+        
+        // Check for excessive zero sales days
+        $zeroSalesPercentage = count($salesData) > 0 ? ($zeroSalesDays / count($salesData)) * 100 : 0;
+        if ($zeroSalesPercentage > 50) {
+            $validation['warnings'][] = "High percentage of zero sales days: {$zeroSalesPercentage}%";
+            $this->logDataQuality("High zero sales percentage: {$zeroSalesPercentage}%", $productId, 'warning');
+        }
+        
+        // Check for data consistency
+        if ($negativeSalesDays > 0) {
+            $validation['warnings'][] = "Found $negativeSalesDays days with negative sales - data quality issue";
+            $this->logDataQuality("Data quality issue: $negativeSalesDays negative sales days", $productId, 'warning');
+        }
+        
+        // Check for recent data availability
+        if (!empty($dates)) {
+            $latestDate = end($dates);
+            $daysSinceLatest = (new DateTime())->diff(new DateTime($latestDate))->days;
+            if ($daysSinceLatest > 7) {
+                $validation['warnings'][] = "Latest sales data is $daysSinceLatest days old - may not reflect current demand";
+                $this->logDataQuality("Stale sales data: latest record is $daysSinceLatest days old", $productId, 'warning');
+            }
+        }
+        
+        // Log validation completion
+        $validationStatus = $validation['is_valid'] ? 'passed' : 'failed';
+        $warningCount = count($validation['warnings']);
+        $errorCount = count($validation['errors']);
+        $this->logDataQuality("Sales data validation $validationStatus: $errorCount errors, $warningCount warnings", $productId, 'info');
         
         return $validation;
     }
@@ -368,6 +456,185 @@ class SalesAnalyzer
         $this->log("Batch ADS calculation completed. " . count($results) . " results generated");
         
         return $results;
+    }
+    
+    /**
+     * Filter sales data to exclude zero-stock days
+     * 
+     * @param array $salesData Raw sales data
+     * @param int $productId Product ID
+     * @param int $days Analysis period in days
+     * @return array Filtered sales data
+     */
+    public function filterSalesDataByStock(array $salesData, int $productId, int $days): array
+    {
+        if (empty($salesData)) {
+            $this->logDataQuality("No sales data to filter for product $productId", $productId, 'info');
+            return [];
+        }
+        
+        $validStockDays = $this->getValidSalesDays($productId, $days);
+        
+        if (empty($validStockDays)) {
+            $this->logDataQuality("No valid stock days found for product $productId", $productId, 'warning');
+            return [];
+        }
+        
+        $filteredData = [];
+        $excludedDays = 0;
+        
+        foreach ($salesData as $sale) {
+            if (in_array($sale['sale_date'], $validStockDays)) {
+                $filteredData[] = $sale;
+            } else {
+                $excludedDays++;
+            }
+        }
+        
+        $this->logDataQuality("Filtered sales data: kept " . count($filteredData) . " days, excluded $excludedDays zero-stock days", $productId, 'info');
+        
+        return $filteredData;
+    }
+    
+    /**
+     * Handle boundary conditions for sales analysis
+     * 
+     * @param int $productId Product ID
+     * @param int $days Analysis period
+     * @return array Boundary condition analysis
+     */
+    public function analyzeBoundaryConditions(int $productId, int $days): array
+    {
+        $analysis = [
+            'has_sales_data' => false,
+            'has_stock_data' => false,
+            'sufficient_data' => false,
+            'recommendations' => [],
+            'issues' => []
+        ];
+        
+        // Check for sales data existence
+        $salesData = $this->getSalesData($productId, $days);
+        $analysis['has_sales_data'] = !empty($salesData);
+        
+        if (!$analysis['has_sales_data']) {
+            $analysis['issues'][] = 'No sales data available';
+            $analysis['recommendations'][] = 'Consider extending analysis period or checking product activity';
+            $this->logDataQuality("No sales data found for boundary analysis", $productId, 'warning');
+        }
+        
+        // Check for stock data existence
+        $validStockDays = $this->getValidSalesDays($productId, $days);
+        $analysis['has_stock_data'] = !empty($validStockDays);
+        
+        if (!$analysis['has_stock_data']) {
+            $analysis['issues'][] = 'No stock availability data';
+            $analysis['recommendations'][] = 'Check inventory tracking for this product';
+            $this->logDataQuality("No stock data found for boundary analysis", $productId, 'warning');
+        }
+        
+        // Check data sufficiency
+        $minRequiredDays = max(7, $days * 0.2); // At least 7 days or 20% of analysis period
+        $availableDays = count($validStockDays);
+        $analysis['sufficient_data'] = $availableDays >= $minRequiredDays;
+        
+        if (!$analysis['sufficient_data']) {
+            $analysis['issues'][] = "Insufficient data: only $availableDays days available (minimum $minRequiredDays required)";
+            $analysis['recommendations'][] = 'Extend analysis period or use alternative calculation method';
+            $this->logDataQuality("Insufficient data for reliable analysis: $availableDays/$minRequiredDays days", $productId, 'warning');
+        }
+        
+        // Check for recent activity
+        if ($analysis['has_sales_data']) {
+            $latestSale = max(array_column($salesData, 'sale_date'));
+            $daysSinceLatest = (new DateTime())->diff(new DateTime($latestSale))->days;
+            
+            if ($daysSinceLatest > 14) {
+                $analysis['issues'][] = "No recent sales activity (last sale: $daysSinceLatest days ago)";
+                $analysis['recommendations'][] = 'Consider product discontinuation or marketing review';
+                $this->logDataQuality("No recent sales activity: $daysSinceLatest days since last sale", $productId, 'warning');
+            }
+        }
+        
+        return $analysis;
+    }
+    
+    /**
+     * Detect gaps in sales data
+     * 
+     * @param array $dates Array of dates
+     * @return array Detected gaps
+     */
+    private function detectDataGaps(array $dates): array
+    {
+        if (count($dates) < 2) {
+            return [];
+        }
+        
+        sort($dates);
+        $gaps = [];
+        
+        for ($i = 1; $i < count($dates); $i++) {
+            $prevDate = new DateTime($dates[$i - 1]);
+            $currDate = new DateTime($dates[$i]);
+            $daysDiff = $currDate->diff($prevDate)->days;
+            
+            // Consider gaps of more than 3 days as significant
+            if ($daysDiff > 3) {
+                $gaps[] = [
+                    'start' => $dates[$i - 1],
+                    'end' => $dates[$i],
+                    'days' => $daysDiff
+                ];
+            }
+        }
+        
+        return $gaps;
+    }
+    
+    /**
+     * Validate date format
+     * 
+     * @param string $date Date string to validate
+     * @return bool True if valid date format
+     */
+    private function isValidDate(string $date): bool
+    {
+        $formats = ['Y-m-d', 'Y-m-d H:i:s'];
+        
+        foreach ($formats as $format) {
+            $dateTime = DateTime::createFromFormat($format, $date);
+            if ($dateTime && $dateTime->format($format) === $date) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Log data quality issues
+     * 
+     * @param string $message Log message
+     * @param int|null $productId Product ID (optional)
+     * @param string $level Log level (info, warning, error)
+     */
+    private function logDataQuality(string $message, ?int $productId = null, string $level = 'info'): void
+    {
+        $timestamp = date('Y-m-d H:i:s');
+        $productInfo = $productId ? " [Product: $productId]" : "";
+        $logMessage = "[$level] $timestamp$productInfo - $message";
+        
+        // Always log data quality issues regardless of debug setting
+        if (in_array($level, ['warning', 'error']) || $this->config['debug']) {
+            echo "[SalesAnalyzer:DataQuality] $logMessage\n";
+        }
+        
+        // TODO: In production, this should write to a proper log file
+        // For now, we'll use error_log for warnings and errors
+        if (in_array($level, ['warning', 'error'])) {
+            error_log("[SalesAnalyzer:DataQuality] $logMessage");
+        }
     }
     
     /**
