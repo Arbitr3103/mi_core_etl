@@ -191,6 +191,19 @@
         }
       }
 
+      async function replenishmentApiCall(action) {
+        try {
+          const response = await fetch(
+            `replenishment_adapter_fixed.php?action=${action}`
+          );
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error("Replenishment API Error:", error);
+          return { status: "error", message: error.message };
+        }
+      }
+
       async function loadDashboard() {
         document.getElementById("content").innerHTML =
           '<div class="loading">Загрузка данных...</div>';
@@ -242,7 +255,7 @@
         document.getElementById("content").innerHTML =
           '<div class="loading">Загрузка рекомендаций...</div>';
 
-        const result = await apiCall("recommendations");
+        const result = await replenishmentApiCall("recommendations");
 
         if (result.status === "success") {
           renderRecommendations(result.data);
