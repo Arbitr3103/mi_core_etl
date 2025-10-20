@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🔄 Восстановление дашборда</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .container {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        max-width: 600px;
+        width: 100%;
+      }
+      h1 {
+        color: #333;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .step {
+        background: #f8f9fa;
+        padding: 20px;
+        margin: 15px 0;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+      }
+      .btn {
+        background: #007bff;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+        font-size: 16px;
+        font-weight: bold;
+      }
+      .btn:hover {
+        background: #0056b3;
+      }
+      .btn-danger {
+        background: #dc3545;
+      }
+      .btn-danger:hover {
+        background: #c82333;
+      }
+      .btn-success {
+        background: #28a745;
+      }
+      .btn-success:hover {
+        background: #218838;
+      }
+      .result {
+        margin: 10px 0;
+        padding: 15px;
+        border-radius: 5px;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .loading {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+      .problem {
+        background: #fff3cd;
+        color: #856404;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+        border: 1px solid #ffeaa7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔄 Восстановление дашборда</h1>
+
+      <div class="problem">
+        <strong>❌ Проблемы:</strong><br />
+        1. В таблице inventory_data нет данных с остатками<br />
+        2. Таблица replenishment_recommendations не существует
+      </div>
+
+      <div class="step">
+        <h3>Шаг 1: Восстановление данных остатков</h3>
+        <p>
+          Добавит тестовые данные в inventory_data (13 товаров с разными
+          остатками)
+        </p>
+        <button class="btn btn-danger" onclick="restoreInventory()">
+          🔄 Восстановить данные остатков
+        </button>
+        <div id="inventory-result"></div>
+      </div>
+
+      <div class="step">
+        <h3>Шаг 2: Создание таблицы рекомендаций</h3>
+        <p>
+          Создаст таблицу replenishment_recommendations и добавит тестовые
+          рекомендации
+        </p>
+        <button class="btn btn-danger" onclick="createRecommendationsTable()">
+          🔧 Создать таблицу рекомендаций
+        </button>
+        <div id="recommendations-result"></div>
+      </div>
+
+      <div class="step">
+        <h3>Шаг 3: Проверка дашборда</h3>
+        <p>Протестируем работу дашборда после восстановления</p>
+        <button class="btn" onclick="testDashboard()">
+          🧪 Тестировать дашборд
+        </button>
+        <button
+          class="btn btn-success"
+          onclick="window.open('test_dashboard.html', '_blank')"
+        >
+          🚀 Открыть дашборд
+        </button>
+        <div id="test-result"></div>
+      </div>
+
+      <div id="status" class="result loading" style="display: none">
+        Выполняется операция...
+      </div>
+    </div>
+
+    <script>
+      function showStatus(message, type = "loading") {
+        const status = document.getElementById("status");
+        status.innerHTML = message;
+        status.className = "result " + type;
+        status.style.display = "block";
+      }
+
+      async function restoreInventory() {
+        showStatus("🔄 Восстанавливаем данные остатков...", "loading");
+
+        try {
+          const response = await fetch(
+            "api/restore_data.php?action=restore_inventory"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            document.getElementById("inventory-result").innerHTML =
+              '<div class="result success">✅ Данные восстановлены! Добавлено записей: ' +
+              data.inserted +
+              "</div>";
+            showStatus("✅ Данные остатков восстановлены!", "success");
+          } else {
+            document.getElementById("inventory-result").innerHTML =
+              '<div class="result error">❌ Ошибка: ' + data.message + "</div>";
+            showStatus("❌ Ошибка восстановления данных", "error");
+          }
+        } catch (error) {
+          document.getElementById("inventory-result").innerHTML =
+            '<div class="result error">❌ Ошибка: ' + error.message + "</div>";
+          showStatus("❌ Ошибка подключения", "error");
+        }
+      }
+
+      async function createRecommendationsTable() {
+        showStatus("🔧 Создаем таблицу рекомендаций...", "loading");
+
+        try {
+          const response = await fetch(
+            "api/restore_data.php?action=create_recommendations_table"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            document.getElementById("recommendations-result").innerHTML =
+              '<div class="result success">✅ Таблица создана! Добавлено рекомендаций: ' +
+              data.inserted_recommendations +
+              "</div>";
+            showStatus("✅ Таблица рекомендаций создана!", "success");
+          } else {
+            document.getElementById("recommendations-result").innerHTML =
+              '<div class="result error">❌ Ошибка: ' + data.message + "</div>";
+            showStatus("❌ Ошибка создания таблицы", "error");
+          }
+        } catch (error) {
+          document.getElementById("recommendations-result").innerHTML =
+            '<div class="result error">❌ Ошибка: ' + error.message + "</div>";
+          showStatus("❌ Ошибка подключения", "error");
+        }
+      }
+
+      async function testDashboard() {
+        showStatus("🧪 Тестируем дашборд...", "loading");
+
+        try {
+          const response = await fetch(
+            "api/inventory-analytics.php?action=dashboard"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            const stats = data.data;
+            let html =
+              '<div class="result success"><h4>✅ Дашборд работает!</h4>';
+            html +=
+              "<p>Критические остатки: <strong>" +
+              (stats.critical_stock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>Низкие остатки: <strong>" +
+              (stats.low_stock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>Избыток товаров: <strong>" +
+              (stats.overstock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>Нормальные остатки: <strong>" +
+              (stats.normal_count || 0) +
+              "</strong></p>";
+            html += "</div>";
+
+            document.getElementById("test-result").innerHTML = html;
+            showStatus("✅ Дашборд полностью восстановлен!", "success");
+          } else {
+            document.getElementById("test-result").innerHTML =
+              '<div class="result error">❌ Дашборд все еще не работает: ' +
+              data.message +
+              "</div>";
+            showStatus("❌ Дашборд не работает", "error");
+          }
+        } catch (error) {
+          document.getElementById("test-result").innerHTML =
+            '<div class="result error">❌ Ошибка тестирования: ' +
+            error.message +
+            "</div>";
+          showStatus("❌ Ошибка тестирования", "error");
+        }
+      }
+    </script>
+  </body>
+</html>

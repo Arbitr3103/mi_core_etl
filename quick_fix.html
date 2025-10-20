@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🔧 Быстрое исправление дашборда</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .container {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        max-width: 500px;
+      }
+      h1 {
+        color: #333;
+        margin-bottom: 30px;
+      }
+      .btn {
+        display: inline-block;
+        background: #007bff;
+        color: white;
+        padding: 15px 30px;
+        text-decoration: none;
+        border-radius: 8px;
+        margin: 10px;
+        font-size: 16px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+      }
+      .btn:hover {
+        background: #0056b3;
+        transform: translateY(-2px);
+      }
+      .btn-danger {
+        background: #dc3545;
+      }
+      .btn-danger:hover {
+        background: #c82333;
+      }
+      .btn-success {
+        background: #28a745;
+      }
+      .btn-success:hover {
+        background: #218838;
+      }
+      .problem {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+        border: 1px solid #f5c6cb;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔧 Быстрое исправление дашборда</h1>
+
+      <div class="problem">
+        <strong>❌ Проблема:</strong> Дашборд показывает "Нет данных о складских
+        остатках" или ошибки с таблицами
+      </div>
+
+      <p><strong>Выберите действие:</strong></p>
+
+      <a href="db_diagnosis.php" class="btn"> 🔍 Диагностика базы данных </a>
+
+      <a href="test_dashboard.html" class="btn btn-success">
+        📊 Открыть дашборд
+      </a>
+
+      <a
+        href="api/inventory-analytics.php?action=dashboard"
+        class="btn"
+        target="_blank"
+      >
+        🔧 Тест API напрямую
+      </a>
+
+      <br /><br />
+
+      <p style="color: #666; font-size: 14px">
+        <strong>Инструкция:</strong><br />
+        1. Нажмите "Диагностика базы данных"<br />
+        2. Если есть проблемы - нажмите кнопки исправления<br />
+        3. Откройте дашборд
+      </p>
+    </div>
+  </body>
+</html>

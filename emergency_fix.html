@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🚨 Экстренное восстановление</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+      }
+      .container {
+        background: white;
+        color: #333;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        max-width: 600px;
+        width: 100%;
+        text-align: center;
+      }
+      h1 {
+        color: #dc3545;
+        margin-bottom: 30px;
+      }
+      .btn {
+        display: inline-block;
+        background: #dc3545;
+        color: white;
+        padding: 20px 40px;
+        text-decoration: none;
+        border-radius: 8px;
+        margin: 10px;
+        font-size: 18px;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .btn:hover {
+        background: #c82333;
+        transform: translateY(-2px);
+      }
+      .btn-success {
+        background: #28a745;
+      }
+      .btn-success:hover {
+        background: #218838;
+      }
+      .result {
+        margin: 20px 0;
+        padding: 15px;
+        border-radius: 5px;
+        text-align: left;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .loading {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      .problem {
+        background: #fff3cd;
+        color: #856404;
+        padding: 20px;
+        border-radius: 5px;
+        margin: 20px 0;
+        border: 1px solid #ffeaa7;
+        text-align: left;
+      }
+      .step {
+        margin: 20px 0;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚨 Экстренное восстановление дашборда</h1>
+
+      <div class="problem">
+        <strong>❌ Проблема:</strong><br />
+        Дашборд показывает "Нет данных о складских остатках" и ошибки с
+        таблицами
+      </div>
+
+      <div class="step">
+        <h3>🔄 Автоматическое восстановление</h3>
+        <p>Этот скрипт восстановит:</p>
+        <ul>
+          <li>✅ Данные в inventory_data (13 тестовых товаров)</li>
+          <li>🔧 Таблицу replenishment_recommendations</li>
+          <li>📊 Тестовые рекомендации</li>
+        </ul>
+
+        <button class="btn" onclick="restoreData()">
+          🔄 ВОССТАНОВИТЬ ВСЕ ДАННЫЕ
+        </button>
+
+        <div id="restore-result"></div>
+      </div>
+
+      <div class="step">
+        <h3>🧪 Проверка результата</h3>
+        <button class="btn" onclick="testDashboard()">
+          🧪 Тестировать дашборд
+        </button>
+        <button
+          class="btn btn-success"
+          onclick="window.open('test_dashboard.html', '_blank')"
+        >
+          🚀 Открыть дашборд
+        </button>
+
+        <div id="test-result"></div>
+      </div>
+
+      <div class="step">
+        <h3>🔗 Прямые ссылки</h3>
+        <a
+          href="api/inventory-analytics.php?action=dashboard"
+          target="_blank"
+          class="btn"
+          >📊 API дашборда</a
+        >
+        <a
+          href="replenishment_adapter_fixed.php?action=recommendations"
+          target="_blank"
+          class="btn"
+          >💡 API рекомендаций</a
+        >
+      </div>
+    </div>
+
+    <script>
+      async function restoreData() {
+        const resultDiv = document.getElementById("restore-result");
+        resultDiv.innerHTML =
+          '<div class="result loading">🔄 Восстанавливаем все данные...</div>';
+
+        try {
+          const response = await fetch(
+            "api/inventory-analytics.php?action=restore_data"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            let html = '<div class="result success">';
+            html += "<h4>✅ Данные успешно восстановлены!</h4>";
+            html +=
+              "<p>📦 Записей в inventory_data: <strong>" +
+              data.data.inventory_records_inserted +
+              "</strong></p>";
+            html += "<p>🔧 Таблица рекомендаций: <strong>создана</strong></p>";
+            html +=
+              "<p>💡 Рекомендаций добавлено: <strong>" +
+              data.data.recommendations_inserted +
+              "</strong></p>";
+            html += "</div>";
+            resultDiv.innerHTML = html;
+          } else {
+            resultDiv.innerHTML =
+              '<div class="result error">❌ Ошибка: ' + data.message + "</div>";
+          }
+        } catch (error) {
+          resultDiv.innerHTML =
+            '<div class="result error">❌ Ошибка подключения: ' +
+            error.message +
+            "</div>";
+        }
+      }
+
+      async function testDashboard() {
+        const resultDiv = document.getElementById("test-result");
+        resultDiv.innerHTML =
+          '<div class="result loading">🧪 Тестируем дашборд...</div>';
+
+        try {
+          const response = await fetch(
+            "api/inventory-analytics.php?action=dashboard"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            const stats = data.data;
+            let html = '<div class="result success">';
+            html += "<h4>✅ Дашборд работает!</h4>";
+            html +=
+              "<p>🚨 Критические остатки: <strong>" +
+              (stats.critical_stock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>⚠️ Низкие остатки: <strong>" +
+              (stats.low_stock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>📈 Избыток товаров: <strong>" +
+              (stats.overstock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>✅ Нормальные остатки: <strong>" +
+              (stats.normal_count || 0) +
+              "</strong></p>";
+            html += "</div>";
+            resultDiv.innerHTML = html;
+          } else {
+            resultDiv.innerHTML =
+              '<div class="result error">❌ Дашборд не работает: ' +
+              data.message +
+              "</div>";
+          }
+        } catch (error) {
+          resultDiv.innerHTML =
+            '<div class="result error">❌ Ошибка тестирования: ' +
+            error.message +
+            "</div>";
+        }
+      }
+    </script>
+  </body>
+</html>
