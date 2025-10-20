@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Региональная аналитика продаж - ЭТОНОВО</title>
+
+    <!-- CSS Dependencies -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link href="css/dashboard.css" rel="stylesheet" />
+
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+  </head>
+  <body>
+    <!-- Navigation Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">
+          <i class="fas fa-chart-line me-2"></i>
+          Региональная аналитика ЭТОНОВО
+        </a>
+
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="http://www.market-mi.ru">
+                <i class="fas fa-home me-1"></i>
+                Главная панель
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" href="#">
+                <i class="fas fa-map-marked-alt me-1"></i>
+                Региональная аналитика
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Dashboard Container -->
+    <div class="container-fluid mt-4">
+      <!-- Date Range Filter -->
+      <div class="row mb-4">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-md-3">
+                  <label for="dateFrom" class="form-label">Дата с:</label>
+                  <input type="date" class="form-control" id="dateFrom" />
+                </div>
+                <div class="col-md-3">
+                  <label for="dateTo" class="form-label">Дата по:</label>
+                  <input type="date" class="form-control" id="dateTo" />
+                </div>
+                <div class="col-md-3">
+                  <label for="marketplaceFilter" class="form-label"
+                    >Маркетплейс:</label
+                  >
+                  <select class="form-select" id="marketplaceFilter">
+                    <option value="all">Все маркетплейсы</option>
+                    <option value="ozon">Ozon</option>
+                    <option value="wildberries">Wildberries</option>
+                  </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                  <button
+                    type="button"
+                    class="btn btn-primary me-2"
+                    id="applyFilters"
+                  >
+                    <i class="fas fa-filter me-1"></i>
+                    Применить
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary"
+                    id="resetFilters"
+                  >
+                    <i class="fas fa-undo me-1"></i>
+                    Сбросить
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Cards Row -->
+      <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="card bg-primary text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h6 class="card-title">Общая выручка</h6>
+                  <h3 class="mb-0" id="totalRevenue">-</h3>
+                  <small class="text-light" id="revenueChange">-</small>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-ruble-sign fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="card bg-success text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h6 class="card-title">Общие продажи</h6>
+                  <h3 class="mb-0" id="totalSales">-</h3>
+                  <small class="text-light" id="salesChange">-</small>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-shopping-cart fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="card bg-info text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h6 class="card-title">Активные регионы</h6>
+                  <h3 class="mb-0" id="activeRegions">-</h3>
+                  <small class="text-light" id="regionsChange">-</small>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-map-marked-alt fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+          <div class="card bg-warning text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h6 class="card-title">Средний чек</h6>
+                  <h3 class="mb-0" id="averageOrder">-</h3>
+                  <small class="text-light" id="orderChange">-</small>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-receipt fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="row mb-4">
+        <!-- Marketplace Comparison Chart -->
+        <div class="col-lg-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="card-title mb-0">
+                <i class="fas fa-chart-pie me-2"></i>
+                Сравнение маркетплейсов
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="marketplaceChart" height="300"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sales Dynamics Chart -->
+        <div class="col-lg-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="card-title mb-0">
+                <i class="fas fa-chart-line me-2"></i>
+                Динамика продаж
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="salesDynamicsChart" height="300"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Tables Row -->
+      <div class="row">
+        <!-- Top Products Table -->
+        <div class="col-lg-8 mb-4">
+          <div class="card">
+            <div
+              class="card-header d-flex justify-content-between align-items-center"
+            >
+              <h5 class="card-title mb-0">
+                <i class="fas fa-trophy me-2"></i>
+                Топ товары по продажам
+              </h5>
+              <div class="btn-group btn-group-sm" role="group">
+                <input
+                  type="radio"
+                  class="btn-check"
+                  name="productSort"
+                  id="sortByRevenue"
+                  autocomplete="off"
+                  checked
+                />
+                <label class="btn btn-outline-primary" for="sortByRevenue"
+                  >По выручке</label
+                >
+
+                <input
+                  type="radio"
+                  class="btn-check"
+                  name="productSort"
+                  id="sortByQuantity"
+                  autocomplete="off"
+                />
+                <label class="btn btn-outline-primary" for="sortByQuantity"
+                  >По количеству</label
+                >
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table table-hover" id="topProductsTable">
+                  <thead>
+                    <tr>
+                      <th>Товар</th>
+                      <th>Ozon</th>
+                      <th>Wildberries</th>
+                      <th>Общая выручка</th>
+                      <th>Общие продажи</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colspan="5" class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin me-2"></i>
+                        Загрузка данных...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Regional Performance -->
+        <div class="col-lg-4 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="card-title mb-0">
+                <i class="fas fa-map-marked-alt me-2"></i>
+                Топ регионы
+              </h5>
+            </div>
+            <div class="card-body">
+              <div id="topRegionsList">
+                <div class="text-center text-muted">
+                  <i class="fas fa-spinner fa-spin me-2"></i>
+                  Загрузка данных...
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay d-none">
+      <div class="loading-spinner">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Загрузка...</span>
+        </div>
+        <div class="mt-2">Загрузка данных...</div>
+      </div>
+    </div>
+
+    <!-- JavaScript Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Dashboard JavaScript -->
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/dashboard.js"></script>
+  </body>
+</html>
