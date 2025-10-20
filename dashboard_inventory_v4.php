@@ -19,6 +19,45 @@
             background: #f5f7fa;
             color: #2d3748;
             line-height: 1.6;
+            position: relative;
+        }
+        
+        .logo-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .logo-container:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        .logo-image {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .logo-text {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #2d3748;
+        }
+        
+        .logo-container a {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: inherit;
         }
         
         .container {
@@ -299,6 +338,12 @@
     </style>
 </head>
 <body>
+    <div class="logo-container">
+        <a href="/">
+            <img src="/images/market_mi_logo.jpeg" alt="Market-MIRu" class="logo-image">
+            <span class="logo-text">Market-MIRu</span>
+        </a>
+    </div>
     <div class="container">
         <div class="header">
             <h1>🚀 Ozon v4 API - Активные товары</h1>

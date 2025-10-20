@@ -1,0 +1,17 @@
+# Разрешаем доступ к каталогу с изображениями
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Разрешаем непосредственный доступ к файлам изображений
+    RewriteRule ^images/ - [L]
+    
+    # Настройки MIME-типов для изображений
+    AddType image/jpeg .jpg .jpeg
+    AddType image/png .png
+    AddType image/gif .gif
+    
+    # Включаем кэширование статических файлов
+    <FilesMatch "\.(jpg|jpeg|png|gif)$">
+        Header set Cache-Control "max-age=86400, public"
+    </FilesMatch>
+</IfModule>
