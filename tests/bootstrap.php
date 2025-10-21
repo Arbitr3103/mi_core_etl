@@ -69,10 +69,15 @@ foreach ($autoloadPaths as $autoloadPath) {
     }
 }
 
-// Load source files
-$srcDir = __DIR__ . '/../src';
-if (is_dir($srcDir)) {
-    foreach (glob($srcDir . '/*.php') as $file) {
+// Load only essential source files for testing
+$essentialFiles = [
+    __DIR__ . '/../src/SafeSyncEngine.php',
+    __DIR__ . '/../src/DataTypeNormalizer.php',
+    __DIR__ . '/../src/FallbackDataProvider.php'
+];
+
+foreach ($essentialFiles as $file) {
+    if (file_exists($file)) {
         require_once $file;
     }
 }

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🚨 Экстренное восстановление дашборда</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background: #f5f5f7;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .status {
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 5px;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .warning {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+      }
+      .loading {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      .btn {
+        background: #dc3545;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+        font-size: 16px;
+      }
+      .btn:hover {
+        background: #c82333;
+      }
+      .btn-success {
+        background: #28a745;
+      }
+      .btn-success:hover {
+        background: #218838;
+      }
+      pre {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        font-size: 12px;
+      }
+      .step {
+        background: #e9ecef;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 5px;
+        border-left: 4px solid #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚨 Экстренное восстановление дашборда</h1>
+
+      <div class="warning">
+        <strong>⚠️ ВНИМАНИЕ!</strong> Эта страница для экстренного
+        восстановления данных. Используйте только если дашборд полностью не
+        работает.
+      </div>
+
+      <div class="step">
+        <h3>Шаг 1: Диагностика базы данных</h3>
+        <button class="btn btn-success" onclick="checkDatabase()">
+          🔍 Проверить базу данных
+        </button>
+        <div id="db-check-result"></div>
+      </div>
+
+      <div class="step">
+        <h3>Шаг 2: Восстановление данных</h3>
+        <p>Это восстановит тестовые данные как они были вчера (19.10.2025)</p>
+        <button class="btn" onclick="restoreData()">
+          🔄 ВОССТАНОВИТЬ ДАННЫЕ
+        </button>
+        <div id="restore-result"></div>
+      </div>
+
+      <div class="step">
+        <h3>Шаг 3: Проверка дашборда</h3>
+        <button class="btn btn-success" onclick="testDashboard()">
+          ✅ Тестировать дашборд
+        </button>
+        <button class="btn btn-success" onclick="openDashboard()">
+          🚀 Открыть дашборд
+        </button>
+        <div id="test-result"></div>
+      </div>
+
+      <div id="status" class="status loading" style="display: none">
+        Выполняется операция...
+      </div>
+    </div>
+
+    <script>
+      function showStatus(message, type = "loading") {
+        const status = document.getElementById("status");
+        status.innerHTML = message;
+        status.className = "status " + type;
+        status.style.display = "block";
+      }
+
+      async function checkDatabase() {
+        showStatus("🔍 Проверяем состояние базы данных...", "loading");
+
+        try {
+          const response = await fetch("emergency_db_check.php");
+          const data = await response.json();
+
+          if (data.status === "success") {
+            let html =
+              '<div class="status success"><h4>📊 Результат диагностики:</h4>';
+            html += "<pre>" + JSON.stringify(data.results, null, 2) + "</pre>";
+            html += "</div>";
+
+            document.getElementById("db-check-result").innerHTML = html;
+
+            // Анализируем результат
+            if (data.results.inventory_data_with_stock === 0) {
+              showStatus(
+                "❌ ПРОБЛЕМА: В inventory_data нет данных с остатками!",
+                "error"
+              );
+            } else {
+              showStatus(
+                "✅ База данных содержит " +
+                  data.results.inventory_data_with_stock +
+                  " записей с остатками",
+                "success"
+              );
+            }
+          } else {
+            document.getElementById("db-check-result").innerHTML =
+              '<div class="status error">❌ Ошибка: ' + data.message + "</div>";
+            showStatus("❌ Ошибка подключения к базе данных", "error");
+          }
+        } catch (error) {
+          document.getElementById("db-check-result").innerHTML =
+            '<div class="status error">❌ Ошибка: ' + error.message + "</div>";
+          showStatus("❌ Ошибка подключения", "error");
+        }
+      }
+
+      async function restoreData() {
+        if (
+          !confirm(
+            "⚠️ ВНИМАНИЕ! Это удалит все текущие данные в inventory_data и восстановит тестовые данные. Продолжить?"
+          )
+        ) {
+          return;
+        }
+
+        showStatus("🔄 Восстанавливаем данные...", "loading");
+
+        try {
+          const response = await fetch("restore_data.php?action=restore");
+          const data = await response.json();
+
+          if (data.status === "success") {
+            document.getElementById("restore-result").innerHTML =
+              '<div class="status success">✅ Данные восстановлены! Добавлено записей: ' +
+              data.inserted_records +
+              "</div>";
+            showStatus("✅ Данные успешно восстановлены!", "success");
+          } else {
+            document.getElementById("restore-result").innerHTML =
+              '<div class="status error">❌ Ошибка восстановления: ' +
+              data.message +
+              "</div>";
+            showStatus("❌ Ошибка восстановления данных", "error");
+          }
+        } catch (error) {
+          document.getElementById("restore-result").innerHTML =
+            '<div class="status error">❌ Ошибка: ' + error.message + "</div>";
+          showStatus("❌ Ошибка восстановления", "error");
+        }
+      }
+
+      async function testDashboard() {
+        showStatus("🧪 Тестируем дашборд...", "loading");
+
+        try {
+          const response = await fetch(
+            "api/inventory-analytics.php?action=dashboard"
+          );
+          const data = await response.json();
+
+          if (data.status === "success") {
+            const stats = data.data;
+            let html =
+              '<div class="status success"><h4>✅ Дашборд работает!</h4>';
+            html +=
+              "<p>Критические остатки: <strong>" +
+              (stats.critical_stock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>Низкие остатки: <strong>" +
+              (stats.low_stock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>Избыток товаров: <strong>" +
+              (stats.overstock_count || 0) +
+              "</strong></p>";
+            html +=
+              "<p>Нормальные остатки: <strong>" +
+              (stats.normal_count || 0) +
+              "</strong></p>";
+            html += "</div>";
+
+            document.getElementById("test-result").innerHTML = html;
+            showStatus("✅ Дашборд полностью восстановлен!", "success");
+          } else {
+            document.getElementById("test-result").innerHTML =
+              '<div class="status error">❌ Дашборд все еще не работает: ' +
+              data.message +
+              "</div>";
+            showStatus("❌ Дашборд не работает", "error");
+          }
+        } catch (error) {
+          document.getElementById("test-result").innerHTML =
+            '<div class="status error">❌ Ошибка тестирования: ' +
+            error.message +
+            "</div>";
+          showStatus("❌ Ошибка тестирования", "error");
+        }
+      }
+
+      function openDashboard() {
+        window.open("test_dashboard.html", "_blank");
+      }
+
+      // Автоматически проверяем базу данных при загрузке
+      window.onload = checkDatabase;
+    </script>
+  </body>
+</html>

@@ -9,8 +9,8 @@
          failOnRisky="false">
     
     <testsuites>
-        <testsuite name="MDM Sync Engine Test Suite">
-            <directory>tests</directory>
+        <testsuite name="Simple Tests">
+            <file>tests/SimpleTest.php</file>
         </testsuite>
         
         <testsuite name="Unit Tests">

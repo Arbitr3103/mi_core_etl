@@ -62,7 +62,7 @@ function validateInput($action, $params = []) {
     $errors = [];
     
     // Валидация action
-    $allowedActions = ['dashboard', 'critical-products', 'overstock-products', 'warehouse-summary', 'warehouse-details', 'products-by-warehouse', 'recommendations', 'activity_stats', 'inactive_products', 'activity_changes'];
+    $allowedActions = ['dashboard', 'critical-products', 'low-stock-products', 'overstock-products', 'warehouse-summary', 'warehouse-details', 'products-by-warehouse', 'recommendations', 'activity_stats', 'inactive_products', 'activity_changes'];
     if (!in_array($action, $allowedActions)) {
         $errors[] = "Недопустимое действие: $action";
     }
@@ -79,6 +79,17 @@ function validateInput($action, $params = []) {
     // Валидация параметра active_only
     if (isset($params['active_only']) && !in_array($params['active_only'], ['true', 'false', '1', '0'])) {
         $errors[] = "Параметр active_only должен быть true/false или 1/0";
+    }
+    
+    // Валидация параметра limit (только 'all' или числовые значения)
+    if (isset($params['limit'])) {
+        if ($params['limit'] !== 'all' && !is_numeric($params['limit'])) {
+            $errors[] = "Параметр limit должен быть 'all' или числовым значением";
+        } elseif (is_numeric($params['limit']) && (int)$params['limit'] < 1) {
+            $errors[] = "Параметр limit должен быть положительным числом";
+        } elseif (is_numeric($params['limit']) && (int)$params['limit'] > 1000) {
+            $errors[] = "Параметр limit не может превышать 1000";
+        }
     }
     
     return $errors;
@@ -149,7 +160,8 @@ try {
         case 'dashboard':
             $performance_monitor->startTimer('dashboard_request');
             
-            $cache_key = InventoryCacheKeys::getDashboardKey() . '_' . ($params['active_only'] ?? 'true');
+            $limit = $params['limit'] ?? '10';
+            $cache_key = InventoryCacheKeys::getDashboardKey() . '_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
             $result = $cache->remember($cache_key, function() use ($pdo, $params, $performance_monitor) {
                 $performance_monitor->startTimer('dashboard_data_generation');
                 $data = getInventoryDashboardData($pdo, $params);
@@ -160,6 +172,7 @@ try {
             $dashboard_metrics = $performance_monitor->endTimer('dashboard_request', [
                 'cache_hit' => $cache->get($cache_key) !== null,
                 'active_only' => $params['active_only'] ?? 'true',
+                'limit' => $limit,
                 'result_count' => count($result['data']['critical_products'] ?? [])
             ]);
             
@@ -170,6 +183,7 @@ try {
                     'cached' => $cache->get($cache_key) !== null,
                     'cache_key' => $cache_key,
                     'active_only' => $params['active_only'] ?? 'true',
+                    'limit' => $limit,
                     'performance' => [
                         'execution_time_ms' => $dashboard_metrics['execution_time_ms'] ?? null,
                         'memory_used_mb' => $dashboard_metrics['memory_used_mb'] ?? null
@@ -179,7 +193,8 @@ try {
             break;
             
         case 'critical-products':
-            $cache_key = InventoryCacheKeys::getCriticalProductsKey() . '_' . ($params['active_only'] ?? 'true');
+            $limit = $params['limit'] ?? '10';
+            $cache_key = InventoryCacheKeys::getCriticalProductsKey() . '_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
             $result = $cache->remember($cache_key, function() use ($pdo, $params) {
                 return getCriticalProducts($pdo, $params);
             }, 180); // 3 минуты кэш для критических товаров
@@ -189,13 +204,15 @@ try {
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
-                    'active_only' => $params['active_only'] ?? 'true'
+                    'active_only' => $params['active_only'] ?? 'true',
+                    'limit' => $limit
                 ])
             ]);
             break;
             
         case 'overstock-products':
-            $cache_key = InventoryCacheKeys::getOverstockProductsKey() . '_' . ($params['active_only'] ?? 'true');
+            $limit = $params['limit'] ?? '10';
+            $cache_key = InventoryCacheKeys::getOverstockProductsKey() . '_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
             $result = $cache->remember($cache_key, function() use ($pdo, $params) {
                 return getOverstockProducts($pdo, $params);
             }, 600); // 10 минут кэш для товаров с избытком
@@ -205,7 +222,26 @@ try {
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
-                    'active_only' => $params['active_only'] ?? 'true'
+                    'active_only' => $params['active_only'] ?? 'true',
+                    'limit' => $limit
+                ])
+            ]);
+            break;
+            
+        case 'low-stock-products':
+            $limit = $params['limit'] ?? '10';
+            $cache_key = 'low_stock_products_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
+            $result = $cache->remember($cache_key, function() use ($pdo, $params) {
+                return getLowStockProducts($pdo, $params);
+            }, 300); // 5 минут кэш для товаров с низкими остатками
+            
+            echo json_encode([
+                'status' => 'success',
+                'data' => $result['data'],
+                'metadata' => array_merge($result['metadata'] ?? [], [
+                    'cached' => $cache->get($cache_key) !== null,
+                    'active_only' => $params['active_only'] ?? 'true',
+                    'limit' => $limit
                 ])
             ]);
             break;
@@ -564,10 +600,21 @@ function getInventoryDashboardData($pdo, $params = []) {
         }
     }
     
-    // Ограничиваем количество товаров для отображения
-    $critical_products = array_slice($critical_products, 0, 10);
-    $low_stock_products = array_slice($low_stock_products, 0, 10);
-    $overstock_products = array_slice($overstock_products, 0, 10);
+    // Сохраняем полные счетчики до применения лимита
+    $full_critical_count = count($critical_products);
+    $full_low_stock_count = count($low_stock_products);
+    $full_overstock_count = count($overstock_products);
+    $full_normal_count = count($normal_products);
+    
+    // Применяем лимит для отображения товаров
+    $limit = $params['limit'] ?? '10';
+    if ($limit !== 'all') {
+        $limit_num = (int)$limit;
+        $critical_products = array_slice($critical_products, 0, $limit_num);
+        $low_stock_products = array_slice($low_stock_products, 0, $limit_num);
+        $overstock_products = array_slice($overstock_products, 0, $limit_num);
+    }
+    // Если limit='all', показываем все товары без ограничений
     
     // Генерируем рекомендации согласно требованиям
     $recommendations = [];
@@ -601,20 +648,29 @@ function getInventoryDashboardData($pdo, $params = []) {
     
         return [
             'data' => [
-                'critical_stock_count' => count($critical_products),
-                'low_stock_count' => count($low_stock_products),
-                'overstock_count' => count($overstock_products),
-                'normal_count' => count($normal_products),
+                'critical_stock_count' => $full_critical_count,
+                'low_stock_count' => $full_low_stock_count,
+                'overstock_count' => $full_overstock_count,
+                'normal_count' => $full_normal_count,
                 'total_inventory_value' => $total_inventory_value,
-                'critical_products' => $critical_products,
-                'low_stock_products' => $low_stock_products,
-                'overstock_products' => $overstock_products,
+                'critical_products' => [
+                    'count' => $full_critical_count,
+                    'items' => $critical_products
+                ],
+                'low_stock_products' => [
+                    'count' => $full_low_stock_count,
+                    'items' => $low_stock_products
+                ],
+                'overstock_products' => [
+                    'count' => $full_overstock_count,
+                    'items' => $overstock_products
+                ],
                 'warehouses_summary' => array_values($warehouses_summary),
                 'recommendations' => $recommendations,
                 'summary' => [
                     'total_products' => count($products),
-                    'needs_attention' => count($critical_products) + count($low_stock_products),
-                    'optimization_opportunity' => count($overstock_products),
+                    'needs_attention' => $full_critical_count + $full_low_stock_count,
+                    'optimization_opportunity' => $full_overstock_count,
                     'last_updated' => date('Y-m-d H:i:s')
                 ]
             ],
@@ -743,11 +799,26 @@ function getCriticalProducts($pdo, $params = []) {
             ];
         }
         
+        // Сохраняем полный счетчик до применения лимита
+        $total_critical_products = count($result);
+        
+        // Применяем лимит для отображения товаров
+        $limit = $params['limit'] ?? '10';
+        if ($limit !== 'all') {
+            $limit_num = (int)$limit;
+            $result = array_slice($result, 0, $limit_num);
+        }
+        
         return [
-            'data' => $result,
+            'data' => [
+                'count' => $total_critical_products,
+                'items' => $result
+            ],
             'metadata' => [
                 'data_status' => 'success',
-                'total_critical_products' => count($result),
+                'total_critical_products' => $total_critical_products,
+                'displayed_products' => count($result),
+                'limit' => $limit,
                 'data_quality' => [
                     'missing_names_count' => $missing_names_count,
                     'missing_names_percentage' => count($skus ?? []) > 0 ? round(($missing_names_count / count($skus)) * 100, 1) : 0
@@ -862,11 +933,26 @@ function getOverstockProducts($pdo, $params = []) {
         ];
     }
     
+    // Сохраняем полный счетчик до применения лимита
+    $total_overstock_products = count($result);
+    
+    // Применяем лимит для отображения товаров
+    $limit = $params['limit'] ?? '10';
+    if ($limit !== 'all') {
+        $limit_num = (int)$limit;
+        $result = array_slice($result, 0, $limit_num);
+    }
+    
     return [
-        'data' => $result,
+        'data' => [
+            'count' => $total_overstock_products,
+            'items' => $result
+        ],
         'metadata' => [
             'data_status' => 'success',
-            'total_overstock_products' => count($result),
+            'total_overstock_products' => $total_overstock_products,
+            'displayed_products' => count($result),
+            'limit' => $limit,
             'last_updated' => date('Y-m-d H:i:s')
         ]
     ];
@@ -876,6 +962,147 @@ function getOverstockProducts($pdo, $params = []) {
         throw $e;
     } catch (Exception $e) {
         logError("General error in getOverstockProducts", ['error' => $e->getMessage()]);
+        throw $e;
+    }
+}
+
+function getLowStockProducts($pdo, $params = []) {
+    try {
+        // Получаем условие фильтрации активных товаров
+        $activeFilter = getActiveProductsFilter($params);
+        
+        // Получаем товары с низкими остатками (6-20 единиц) согласно требованиям
+        $stmt = $pdo->prepare("
+            SELECT 
+                i.sku,
+                i.warehouse_name,
+                SUM(i.current_stock) as total_stock,
+                SUM(i.available_stock) as available_stock,
+                SUM(i.reserved_stock) as reserved_stock,
+                MAX(i.last_sync_at) as last_updated
+            FROM inventory_data i
+            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
+            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
+            GROUP BY i.sku, i.warehouse_name
+            HAVING SUM(i.current_stock) > 5 AND SUM(i.current_stock) <= 20
+            ORDER BY SUM(i.current_stock) ASC, i.sku
+        ");
+        
+        $stmt->execute();
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (empty($products)) {
+            return [
+                'data' => [
+                    'count' => 0,
+                    'items' => []
+                ],
+                'metadata' => [
+                    'data_status' => 'empty',
+                    'message' => 'Нет товаров с низкими остатками',
+                    'info' => 'Все товары имеют достаточные остатки или находятся в критическом состоянии'
+                ]
+            ];
+        }
+    
+        // Получаем названия товаров с улучшенной обработкой ошибок
+        $product_info = [];
+        $missing_names_count = 0;
+        
+        if (!empty($products)) {
+            $skus = array_unique(array_column($products, 'sku'));
+            
+            foreach ($skus as $sku) {
+                $product_name = null;
+                $unit_cost = 0;
+                
+                try {
+                    // Ищем в dim_products
+                    $info_stmt = $pdo->prepare("
+                        SELECT 
+                            COALESCE(product_name, name) as product_name,
+                            COALESCE(cost_price, 0) as unit_cost
+                        FROM dim_products 
+                        WHERE sku_ozon = ? OR sku_wb = ? OR name = ?
+                        LIMIT 1
+                    ");
+                    $info_stmt->execute([$sku, $sku, $sku]);
+                    $info = $info_stmt->fetch();
+                    
+                    if ($info && !empty($info['product_name'])) {
+                        $product_name = $info['product_name'];
+                        $unit_cost = (float)$info['unit_cost'];
+                    }
+                } catch (PDOException $e) {
+                    logError("Error fetching product info for low stock SKU: $sku", ['error' => $e->getMessage()]);
+                }
+                
+                // Fallback для отсутствующих названий товаров
+                if (empty($product_name)) {
+                    $product_name = 'Товар ' . $sku;
+                    $missing_names_count++;
+                }
+                
+                $product_info[$sku] = [
+                    'name' => $product_name,
+                    'unit_cost' => $unit_cost
+                ];
+            }
+        }
+        
+        $result = [];
+        foreach ($products as $product) {
+            $product_name = $product_info[$product['sku']]['name'] ?? 'Товар ' . $product['sku'];
+            $unit_cost = $product_info[$product['sku']]['unit_cost'] ?? 0;
+                
+            $result[] = [
+                'name' => $product_name,
+                'sku' => $product['sku'],
+                'stock' => (int)$product['total_stock'],
+                'available_stock' => (int)$product['available_stock'],
+                'reserved_stock' => (int)$product['reserved_stock'],
+                'warehouse' => $product['warehouse_name'],
+                'unit_cost' => $unit_cost,
+                'last_updated' => $product['last_updated'],
+                'status' => 'low_stock'
+            ];
+        }
+        
+        // Сохраняем полный счетчик до применения лимита
+        $total_low_stock_products = count($result);
+        
+        // Применяем лимит для отображения товаров
+        $limit = $params['limit'] ?? '10';
+        if ($limit !== 'all') {
+            $limit_num = (int)$limit;
+            $result = array_slice($result, 0, $limit_num);
+        }
+        
+        return [
+            'data' => [
+                'count' => $total_low_stock_products,
+                'items' => $result
+            ],
+            'metadata' => [
+                'data_status' => 'success',
+                'total_low_stock_products' => $total_low_stock_products,
+                'displayed_products' => count($result),
+                'limit' => $limit,
+                'data_quality' => [
+                    'missing_names_count' => $missing_names_count,
+                    'missing_names_percentage' => count($skus ?? []) > 0 ? round(($missing_names_count / count($skus)) * 100, 1) : 0
+                ],
+                'warnings' => $missing_names_count > 0 ? [
+                    "Для $missing_names_count товаров с низкими остатками отсутствуют названия"
+                ] : []
+            ]
+        ];
+        
+    } catch (PDOException $e) {
+        logError("Database error in getLowStockProducts", ['error' => $e->getMessage()]);
+        throw $e;
+    } catch (Exception $e) {
+        logError("General error in getLowStockProducts", ['error' => $e->getMessage()]);
         throw $e;
     }
 }

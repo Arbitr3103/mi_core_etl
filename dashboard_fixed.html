@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Дашборд складских остатков</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f5f5f7;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #1d1d1f;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+      .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+      }
+      .stat-card.critical {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+      }
+      .stat-card.warning {
+        background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+      }
+      .stat-card.success {
+        background: linear-gradient(135deg, #48dbfb 0%, #0abde3 100%);
+      }
+      .stat-number {
+        font-size: 2em;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+      .stat-label {
+        font-size: 0.9em;
+        opacity: 0.9;
+      }
+      .section {
+        margin-bottom: 30px;
+      }
+      .section h2 {
+        color: #1d1d1f;
+        border-bottom: 2px solid #007aff;
+        padding-bottom: 10px;
+      }
+      .product-list {
+        display: grid;
+        gap: 10px;
+      }
+      .product-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #007aff;
+      }
+      .product-item.critical {
+        border-left-color: #ff3b30;
+        background: #fff5f5;
+      }
+      .product-item.warning {
+        border-left-color: #ff9500;
+        background: #fffbf0;
+      }
+      .product-name {
+        font-weight: 600;
+        margin-bottom: 5px;
+      }
+      .product-details {
+        font-size: 0.9em;
+        color: #666;
+      }
+      .recommendations {
+        background: #e3f2fd;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #2196f3;
+      }
+      .recommendation {
+        margin-bottom: 15px;
+        padding: 10px;
+        background: white;
+        border-radius: 6px;
+      }
+      .recommendation:last-child {
+        margin-bottom: 0;
+      }
+      .recommendation-title {
+        font-weight: 600;
+        margin-bottom: 5px;
+      }
+      .loading {
+        text-align: center;
+        padding: 50px;
+        color: #666;
+      }
+      .error {
+        background: #ffebee;
+        color: #c62828;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #f44336;
+      }
+      .test-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+      .btn-primary {
+        background: #007aff;
+        color: white;
+      }
+      .btn-primary:hover {
+        background: #0056b3;
+      }
+      .btn-secondary {
+        background: #6c757d;
+        color: white;
+      }
+      .btn-secondary:hover {
+        background: #545b62;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🏪 Дашборд складских остатков</h1>
+
+      <div class="test-buttons">
+        <button class="btn btn-primary" onclick="loadDashboard()">
+          📊 Загрузить дашборд
+        </button>
+        <button class="btn btn-secondary" onclick="loadCriticalProducts()">
+          🚨 Критические товары
+        </button>
+        <button class="btn btn-secondary" onclick="loadOverstockProducts()">
+          📈 Избыток товаров
+        </button>
+        <button class="btn btn-secondary" onclick="loadRecommendations()">
+          💡 Рекомендации
+        </button>
+      </div>
+
+      <div id="content">
+        <div class="loading">
+          Нажмите кнопку "Загрузить дашборд" для начала работы
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function apiCall(action) {
+        try {
+          const response = await fetch(
+            `api/inventory-analytics.php?action=${action}`
+          );
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error("API Error:", error);
+          return { status: "error", message: error.message };
+        }
+      }
+
+      async function replenishmentApiCall(action) {
+        try {
+          const response = await fetch(
+            `replenishment_adapter_fixed.php?action=${action}`
+          );
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error("Replenishment API Error:", error);
+          return { status: "error", message: error.message };
+        }
+      }
+
+      async function loadDashboard() {
+        document.getElementById("content").innerHTML =
+          '<div class="loading">Загрузка данных...</div>';
+
+        const result = await apiCall("dashboard");
+
+        if (result.status === "success") {
+          renderDashboard(result.data);
+        } else {
+          renderError(result);
+        }
+      }
+
+      async function loadCriticalProducts() {
+        document.getElementById("content").innerHTML =
+          '<div class="loading">Загрузка критических товаров...</div>';
+
+        const result = await apiCall("critical-products");
+
+        if (result.status === "success") {
+          renderProductList(
+            result.data,
+            "Критические товары (≤5 единиц)",
+            "critical"
+          );
+        } else {
+          renderError(result);
+        }
+      }
+
+      async function loadOverstockProducts() {
+        document.getElementById("content").innerHTML =
+          '<div class="loading">Загрузка товаров с избытком...</div>';
+
+        const result = await apiCall("overstock-products");
+
+        if (result.status === "success") {
+          renderProductList(
+            result.data,
+            "Товары с избытком (>100 единиц)",
+            "warning"
+          );
+        } else {
+          renderError(result);
+        }
+      }
+
+      async function loadRecommendations() {
+        document.getElementById("content").innerHTML =
+          '<div class="loading">Загрузка рекомендаций...</div>';
+
+        const result = await replenishmentApiCall("recommendations");
+
+        if (result.status === "success") {
+          renderRecommendations(result.data);
+        } else {
+          renderError(result);
+        }
+      }
+
+      function renderDashboard(data) {
+        // Проверяем наличие всех необходимых данных
+        const criticalCount = data.critical_stock_count || 0;
+        const lowCount = data.low_stock_count || 0;
+        const overstockCount = data.overstock_count || 0;
+        const normalCount = data.normal_count || 0;
+        const totalValue = data.total_inventory_value || 0;
+        const criticalProducts = data.critical_products || [];
+        const recommendations = data.recommendations || [];
+        const warehousesSummary = data.warehouses_summary || [];
+
+        const html = `
+                <div class="stats-grid">
+                    <div class="stat-card critical">
+                        <div class="stat-number">${criticalCount}</div>
+                        <div class="stat-label">Критические остатки</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-number">${lowCount}</div>
+                        <div class="stat-label">Низкие остатки</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-number">${overstockCount}</div>
+                        <div class="stat-label">Избыток товаров</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${normalCount}</div>
+                        <div class="stat-label">Нормальные остатки</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${new Intl.NumberFormat(
+                          "ru-RU"
+                        ).format(totalValue)} ₽</div>
+                        <div class="stat-label">Общая стоимость</div>
+                    </div>
+                </div>
+
+                ${
+                  criticalProducts.length > 0
+                    ? `
+                <div class="section">
+                    <h2>🚨 Критические товары</h2>
+                    <div class="product-list">
+                        ${criticalProducts
+                          .slice(0, 5)
+                          .map(
+                            (product) => `
+                            <div class="product-item critical">
+                                <div class="product-name">${
+                                  product.name || "Товар без названия"
+                                }</div>
+                                <div class="product-details">
+                                    SKU: ${product.sku || "N/A"} | Остаток: ${
+                              product.stock || 0
+                            } шт. | Склад: ${product.warehouse || "N/A"}
+                                </div>
+                            </div>
+                        `
+                          )
+                          .join("")}
+                    </div>
+                </div>
+                `
+                    : ""
+                }
+
+                ${
+                  recommendations.length > 0
+                    ? `
+                <div class="section">
+                    <h2>💡 Рекомендации</h2>
+                    <div class="recommendations">
+                        ${recommendations
+                          .map(
+                            (rec) => `
+                            <div class="recommendation">
+                                <div class="recommendation-title">${
+                                  rec.title || "Рекомендация"
+                                }</div>
+                                <div>${
+                                  rec.message ||
+                                  rec.description ||
+                                  "Нет описания"
+                                }</div>
+                            </div>
+                        `
+                          )
+                          .join("")}
+                    </div>
+                </div>
+                `
+                    : ""
+                }
+
+                <div class="section">
+                    <h2>🏪 Сводка по складам (топ-5)</h2>
+                    <div class="product-list">
+                        ${warehousesSummary
+                          .slice(0, 5)
+                          .map(
+                            (warehouse) => `
+                            <div class="product-item">
+                                <div class="product-name">${
+                                  warehouse.warehouse_name ||
+                                  "Неизвестный склад"
+                                }</div>
+                                <div class="product-details">
+                                    Товаров: ${
+                                      warehouse.total_products || 0
+                                    } | Остатков: ${
+                              warehouse.total_stock || 0
+                            } шт.
+                                    ${
+                                      (warehouse.critical_count || 0) > 0
+                                        ? ` | ⚠️ Критических: ${warehouse.critical_count}`
+                                        : ""
+                                    }
+                                </div>
+                            </div>
+                        `
+                          )
+                          .join("")}
+                    </div>
+                </div>
+            `;
+
+        document.getElementById("content").innerHTML = html;
+      }
+
+      function renderProductList(products, title, type) {
+        if (!Array.isArray(products)) {
+          products = [];
+        }
+
+        const html = `
+                <div class="section">
+                    <h2>${title}</h2>
+                    <div class="product-list">
+                        ${products
+                          .map(
+                            (product) => `
+                            <div class="product-item ${type}">
+                                <div class="product-name">${
+                                  product.name || "Товар без названия"
+                                }</div>
+                                <div class="product-details">
+                                    SKU: ${product.sku || "N/A"} | Остаток: ${
+                              product.stock || 0
+                            } шт. | Склад: ${product.warehouse || "N/A"}
+                                    ${
+                                      (product.unit_cost || 0) > 0
+                                        ? ` | Цена: ${product.unit_cost} ₽`
+                                        : ""
+                                    }
+                                </div>
+                            </div>
+                        `
+                          )
+                          .join("")}
+                    </div>
+                </div>
+            `;
+
+        document.getElementById("content").innerHTML = html;
+      }
+
+      function renderRecommendations(recommendations) {
+        if (!Array.isArray(recommendations)) {
+          recommendations = [];
+        }
+
+        const html = `
+                <div class="section">
+                    <h2>💡 Рекомендации по управлению складом</h2>
+                    <div class="recommendations">
+                        ${recommendations
+                          .map(
+                            (rec) => `
+                            <div class="recommendation">
+                                <div class="recommendation-title">
+                                    ${
+                                      rec.type === "urgent"
+                                        ? "🚨"
+                                        : rec.type === "optimization"
+                                        ? "📈"
+                                        : "📋"
+                                    } 
+                                    ${rec.title || "Рекомендация"}
+                                </div>
+                                <div>${
+                                  rec.message ||
+                                  rec.description ||
+                                  "Нет описания"
+                                }</div>
+                            </div>
+                        `
+                          )
+                          .join("")}
+                    </div>
+                </div>
+            `;
+
+        document.getElementById("content").innerHTML = html;
+      }
+
+      function renderError(error) {
+        const html = `
+                <div class="error">
+                    <h3>❌ Ошибка загрузки данных</h3>
+                    <p><strong>Сообщение:</strong> ${
+                      error.message || "Неизвестная ошибка"
+                    }</p>
+                    ${
+                      error.details
+                        ? `<p><strong>Детали:</strong> ${error.details}</p>`
+                        : ""
+                    }
+                    ${
+                      error.suggestions && Array.isArray(error.suggestions)
+                        ? `
+                        <p><strong>Рекомендации:</strong></p>
+                        <ul>
+                            ${error.suggestions
+                              .map((suggestion) => `<li>${suggestion}</li>`)
+                              .join("")}
+                        </ul>
+                    `
+                        : ""
+                    }
+                </div>
+            `;
+
+        document.getElementById("content").innerHTML = html;
+      }
+
+      // Автоматически загружаем дашборд при загрузке страницы
+      window.addEventListener("load", loadDashboard);
+    </script>
+  </body>
+</html>

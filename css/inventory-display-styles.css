@@ -1,0 +1,412 @@
+/**
+ * CSS стили для компактного отображения полных списков товаров
+ * Поддерживает переключение между обычным и компактным режимами
+ */
+
+/* Контейнер для элементов управления отображением */
+.display-controls {
+  margin-bottom: 15px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.controls-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Счетчик товаров */
+.item-counter {
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+  min-width: 200px;
+}
+
+/* Переключатель режимов отображения */
+.toggle-switch {
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 2px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-btn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #666;
+  white-space: nowrap;
+}
+
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #333;
+}
+
+.toggle-btn.active {
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+/* Компактный режим отображения товаров */
+.products-container.compact-mode {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+/* Скроллбар для компактного режима */
+.products-container.compact-mode::-webkit-scrollbar {
+  width: 8px;
+}
+
+.products-container.compact-mode::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.products-container.compact-mode::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.products-container.compact-mode::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Товары в компактном режиме */
+.products-container.compact-mode .product-item {
+  display: grid;
+  grid-template-columns: 120px 1fr 80px 120px;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.3;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+  background: white;
+  margin-bottom: 0;
+  border-radius: 0;
+  border-left: none;
+}
+
+.products-container.compact-mode .product-item:first-child {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.products-container.compact-mode .product-item:last-child {
+  border-bottom: none;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.products-container.compact-mode .product-item:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.products-container.compact-mode .product-item:hover {
+  background-color: #e8f4f8;
+  transform: none;
+}
+
+/* Элементы товара в компактном режиме */
+.products-container.compact-mode .product-sku {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 11px;
+}
+
+.products-container.compact-mode .product-name {
+  color: #34495e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.products-container.compact-mode .product-stock {
+  font-weight: 600;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.products-container.compact-mode .product-warehouse {
+  color: #666;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Цвета для статусов товаров в компактном режиме */
+.products-container.compact-mode .product-stock.critical {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.products-container.compact-mode .product-stock.low {
+  background-color: #fff3e0;
+  color: #ef6c00;
+}
+
+.products-container.compact-mode .product-stock.overstock {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.products-container.compact-mode .product-stock.normal {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+}
+
+/* Обычный режим отображения (по умолчанию) */
+.products-container:not(.compact-mode) .product-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  margin-bottom: 10px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border-left: 4px solid;
+  transition: all 0.3s ease;
+}
+
+.products-container:not(.compact-mode) .product-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.products-container:not(.compact-mode) .product-item.critical {
+  border-color: #e74c3c;
+}
+
+.products-container:not(.compact-mode) .product-item.low {
+  border-color: #f39c12;
+}
+
+.products-container:not(.compact-mode) .product-item.overstock {
+  border-color: #3498db;
+}
+
+.products-container:not(.compact-mode) .product-item.normal {
+  border-color: #27ae60;
+}
+
+/* Информация о товаре в обычном режиме */
+.products-container:not(.compact-mode) .product-info {
+  flex: 1;
+}
+
+.products-container:not(.compact-mode) .product-name {
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.products-container:not(.compact-mode) .product-details {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.products-container:not(.compact-mode) .product-stock {
+  text-align: right;
+}
+
+.products-container:not(.compact-mode) .stock-value {
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.products-container:not(.compact-mode) .stock-value.critical {
+  color: #e74c3c;
+}
+
+.products-container:not(.compact-mode) .stock-value.low {
+  color: #f39c12;
+}
+
+.products-container:not(.compact-mode) .stock-value.overstock {
+  color: #3498db;
+}
+
+.products-container:not(.compact-mode) .stock-value.normal {
+  color: #27ae60;
+}
+
+.products-container:not(.compact-mode) .stock-label {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+/* Заголовки с компактным отображением */
+.products-card h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+/* Индикатор загрузки */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #666;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 10px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Сообщение об отсутствии данных */
+.no-data {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px dashed #dee2e6;
+}
+
+/* Уведомления об ошибках */
+.error-notification {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .controls-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .item-counter {
+    text-align: center;
+    min-width: auto;
+  }
+
+  .toggle-switch {
+    justify-content: center;
+  }
+
+  .products-container.compact-mode .product-item {
+    grid-template-columns: 100px 1fr 60px 100px;
+    gap: 6px;
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .products-container.compact-mode .product-name {
+    font-size: 11px;
+  }
+
+  .products-container.compact-mode .product-warehouse {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .products-container.compact-mode .product-item {
+    grid-template-columns: 80px 1fr 50px;
+    gap: 4px;
+  }
+
+  .products-container.compact-mode .product-warehouse {
+    display: none;
+  }
+
+  .toggle-btn {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+}
+
+/* Улучшения для доступности */
+.toggle-btn:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+
+.products-container.compact-mode .product-item:focus-within {
+  background-color: #e3f2fd;
+  outline: 2px solid #3498db;
+  outline-offset: -2px;
+}
+
+/* Анимации переходов */
+.products-container {
+  transition: all 0.3s ease;
+}
+
+.product-item {
+  transition: all 0.2s ease;
+}
+
+/* Печать */
+@media print {
+  .display-controls {
+    display: none;
+  }
+
+  .products-container.compact-mode {
+    max-height: none;
+    overflow: visible;
+    border: none;
+  }
+
+  .products-container.compact-mode .product-item {
+    break-inside: avoid;
+    border-bottom: 1px solid #ccc;
+  }
+}

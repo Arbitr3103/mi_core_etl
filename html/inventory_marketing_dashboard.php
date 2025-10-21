@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📦 Маркетинговый Дашборд Склада - Принятие Решений</title>
+    <link rel="stylesheet" href="../css/inventory-display-styles.css">
     <style>
         * {
             margin: 0;
@@ -371,14 +372,21 @@
     </div>
     
     <script>
+        // Глобальный контроллер отображения
+        let displayController = null;
+
         async function loadDashboard() {
             try {
                 // Показываем индикатор загрузки
                 showLoadingIndicator();
                 
+                // Определяем лимит на основе текущего режима контроллера
+                const limit = displayController ? 
+                    (displayController.getCurrentMode() === 'all' ? 'all' : '10') : '10';
+                
                 // Загружаем данные о товарах и остатках из обновленного API
                 const [dashboardResponse, warehouseResponse] = await Promise.all([
-                    fetch('../api/inventory-analytics.php?action=dashboard'),
+                    fetch(`../api/inventory-analytics.php?action=dashboard&limit=${limit}`),
                     fetch('../api/inventory-analytics.php?action=warehouse-summary')
                 ]);
                 
@@ -637,10 +645,14 @@
             
             document.getElementById('dashboard-content').innerHTML = html;
             
-            // Загружаем детальные рекомендации
+            // Создаем контролы отображения после рендеринга
             setTimeout(() => {
+                if (displayController) {
+                    displayController.createDisplayControls();
+                    displayController.updateAllCounters(data);
+                }
                 loadDetailedRecommendations();
-            }, 500);
+            }, 100);
         }
         
         function renderKPISection(data) {
@@ -729,76 +741,71 @@
         }
         
         function renderProductsSection(data) {
-            const criticalProducts = data.critical_products || [];
-            const lowStockProducts = data.low_stock_products || [];
-            const overstockProducts = data.overstock_products || [];
+            const criticalProducts = data.critical_products || {};
+            const lowStockProducts = data.low_stock_products || {};
+            const overstockProducts = data.overstock_products || {};
             
             return \`
                 <div class="products-grid">
-                    <div class="products-card">
+                    <div class="products-card" data-section="critical-products">
                         <h3>🚨 Критический остаток (≤5 шт)</h3>
-                        \${criticalProducts.length > 0 ? criticalProducts.map(product => \`
-                            <div class="product-item critical">
-                                <div class="product-info">
-                                    <div class="product-name">\${product.name || 'Товар ' + product.sku}</div>
-                                    <div class="product-details">
-                                        SKU: \${product.sku} | Склад: \${product.warehouse || 'Не указан'}
-                                        \${product.available_stock !== undefined ? ' | Доступно: ' + product.available_stock : ''}
-                                        \${product.reserved_stock !== undefined ? ' | Резерв: ' + product.reserved_stock : ''}
-                                    </div>
-                                </div>
-                                <div class="product-stock">
-                                    <div class="stock-value critical">\${product.stock}</div>
-                                    <div class="stock-label">шт.</div>
-                                    \${product.last_updated ? '<div class="stock-label">Обновлено: ' + formatDate(product.last_updated) + '</div>' : ''}
-                                </div>
-                            </div>
-                        \`).join('') : '<div class="no-data">Нет товаров с критическим остатком</div>'}
+                        <div class="products-container" data-category="critical">
+                            \${renderProductItems(criticalProducts, 'critical')}
+                        </div>
                     </div>
                     
-                    <div class="products-card">
+                    <div class="products-card" data-section="low-stock-products">
                         <h3>⚠️ Низкий остаток (6-20 шт)</h3>
-                        \${lowStockProducts.length > 0 ? lowStockProducts.map(product => \`
-                            <div class="product-item warning">
-                                <div class="product-info">
-                                    <div class="product-name">\${product.name || 'Товар ' + product.sku}</div>
-                                    <div class="product-details">
-                                        SKU: \${product.sku} | Склад: \${product.warehouse || 'Не указан'}
-                                        \${product.available_stock !== undefined ? ' | Доступно: ' + product.available_stock : ''}
-                                        \${product.reserved_stock !== undefined ? ' | Резерв: ' + product.reserved_stock : ''}
-                                    </div>
-                                </div>
-                                <div class="product-stock">
-                                    <div class="stock-value warning">\${product.stock}</div>
-                                    <div class="stock-label">шт.</div>
-                                    \${product.last_updated ? '<div class="stock-label">Обновлено: ' + formatDate(product.last_updated) + '</div>' : ''}
-                                </div>
-                            </div>
-                        \`).join('') : '<div class="no-data">Нет товаров с низким остатком</div>'}
+                        <div class="products-container" data-category="low_stock">
+                            \${renderProductItems(lowStockProducts, 'low_stock')}
+                        </div>
                     </div>
                     
-                    <div class="products-card">
+                    <div class="products-card" data-section="overstock-products">
                         <h3>📈 Избыток товара (>100 шт)</h3>
-                        \${overstockProducts.length > 0 ? overstockProducts.map(product => \`
-                            <div class="product-item success">
-                                <div class="product-info">
-                                    <div class="product-name">\${product.name || 'Товар ' + product.sku}</div>
-                                    <div class="product-details">
-                                        SKU: \${product.sku} | Склад: \${product.warehouse || 'Не указан'}
-                                        \${product.available_stock !== undefined ? ' | Доступно: ' + product.available_stock : ''}
-                                        \${product.excess_stock !== undefined ? ' | Избыток: ' + product.excess_stock : ''}
-                                    </div>
-                                </div>
-                                <div class="product-stock">
-                                    <div class="stock-value success">\${product.stock}</div>
-                                    <div class="stock-label">шт.</div>
-                                    \${product.last_updated ? '<div class="stock-label">Обновлено: ' + formatDate(product.last_updated) + '</div>' : ''}
-                                </div>
-                            </div>
-                        \`).join('') : '<div class="no-data">Нет товаров с избытком</div>'}
+                        <div class="products-container" data-category="overstock">
+                            \${renderProductItems(overstockProducts, 'overstock')}
+                        </div>
                     </div>
                 </div>
             \`;
+        }
+        
+        function renderProductItems(products, category) {
+            const items = products.items || products || [];
+            
+            if (items.length === 0) {
+                return '<div class="no-data">Товары не найдены</div>';
+            }
+            
+            const statusClass = getProductStatusClass(category);
+            
+            return items.map(product => \`
+                <div class="product-item \${statusClass}">
+                    <div class="product-sku">\${product.sku}</div>
+                    <div class="product-name" title="\${product.name || 'Товар ' + product.sku}">
+                        \${product.name || 'Товар ' + product.sku}
+                    </div>
+                    <div class="product-stock \${statusClass}">\${product.stock} шт</div>
+                    <div class="product-warehouse">\${product.warehouse || 'Не указан'}</div>
+                    <div class="product-details">
+                        \${product.available_stock !== undefined ? 'Доступно: ' + product.available_stock + ' | ' : ''}
+                        \${product.reserved_stock !== undefined ? 'Резерв: ' + product.reserved_stock : ''}
+                        \${product.excess_stock !== undefined ? 'Избыток: ' + product.excess_stock : ''}
+                        \${product.last_updated ? ' | Обновлено: ' + formatDate(product.last_updated) : ''}
+                    </div>
+                </div>
+            \`).join('');
+        }
+        
+        function getProductStatusClass(category) {
+            switch (category) {
+                case 'critical': return 'critical';
+                case 'low_stock': return 'warning';
+                case 'overstock': return 'success';
+                default: return 'normal';
+            }
+        }
         }
         
         function renderWarehousesSection(warehouses) {
@@ -1497,11 +1504,17 @@
             alert('Функция прогнозирования спроса будет добавлена в следующей версии');
         }
         
+        // Инициализация контроллера отображения
+        document.addEventListener('DOMContentLoaded', function() {
+            displayController = new InventoryDisplayController();
+        });
+        
         // Загрузка при старте
         loadDashboard();
         
         // Автообновление каждые 5 минут
         setInterval(loadDashboard, 300000);
     </script>
+    <script src="../js/inventory-display-controller.js"></script>
 </body>
 </html>
