@@ -50,7 +50,7 @@ function getInventoryDashboardData($pdo) {
                 MAX(i.last_sync_at) as last_updated,
                 CASE
                     WHEN SUM(i.current_stock) <= 5 THEN 'critical'
-                    WHEN SUM(i.current_stock) <= 20 THEN 'low'
+                    WHEN SUM(i.current_stock) > 5 AND SUM(i.current_stock) <= 20 THEN 'low'
                     WHEN SUM(i.current_stock) > 100 THEN 'overstock'
                     ELSE 'normal'
                 END as stock_status
