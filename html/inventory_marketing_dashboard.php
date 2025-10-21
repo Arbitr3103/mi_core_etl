@@ -1515,6 +1515,13 @@
         // Автообновление каждые 5 минут
         setInterval(loadDashboard, 300000);
     </script>
-    <script src="../js/inventory-display-controller.js"></script>
+    <script src="/js/inventory-display-controller-simple.js"></script>
+    <script>
+        // Инициализация контроллера после загрузки
+        let displayController = null;
+        document.addEventListener('DOMContentLoaded', function() {
+            displayController = new InventoryDisplayController();
+        });
+    </script>
 </body>
 </html>
