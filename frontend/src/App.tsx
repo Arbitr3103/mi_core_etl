@@ -13,7 +13,7 @@ function App() {
   return (
     <QueryProvider>
       <BrowserRouter>
-        <Layout title="Дашборд складов Ozon">
+        <Layout title="Дашборд складских остатков">
           <Suspense
             fallback={
               <div className="flex items-center justify-center min-h-[400px]">
