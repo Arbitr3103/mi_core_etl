@@ -21,24 +21,20 @@ function App() {
               </div>
             }
           >
-            {/* @ts-expect-error - React Router 6 type compatibility issue with React 18 types */}
             <Routes>
               {/* Warehouse Dashboard - main route */}
-              {/* @ts-expect-error - React Router 6 type compatibility issue with React 18 types */}
               <Route
                 path="/warehouse-dashboard"
                 element={<WarehouseDashboardPage />}
               />
 
               {/* Default route - redirect to warehouse dashboard */}
-              {/* @ts-expect-error - React Router 6 type compatibility issue with React 18 types */}
               <Route
                 path="/"
                 element={<Navigate to="/warehouse-dashboard" replace />}
               />
 
               {/* Catch-all route - redirect to warehouse dashboard */}
-              {/* @ts-expect-error - React Router 6 type compatibility issue with React 18 types */}
               <Route
                 path="*"
                 element={<Navigate to="/warehouse-dashboard" replace />}

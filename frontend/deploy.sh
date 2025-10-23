@@ -19,9 +19,9 @@ NC='\033[0m' # No Color
 
 # Configuration
 SERVER_USER="${DEPLOY_USER:-root}"
-SERVER_HOST="${DEPLOY_HOST:-178.72.129.61}"
-SERVER_PATH="${DEPLOY_PATH:-/var/www/mi_core_etl/public/dashboard}"
-BACKUP_DIR="${BACKUP_DIR:-/var/www/mi_core_etl/backups/frontend}"
+SERVER_HOST="${DEPLOY_HOST:-market-mi.ru}"
+SERVER_PATH="${DEPLOY_PATH:-/var/www/market-mi.ru/warehouse-dashboard}"
+BACKUP_DIR="${BACKUP_DIR:-/var/www/market-mi.ru/backups/frontend}"
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -120,6 +120,6 @@ echo ""
 print_status "Deployment completed successfully!"
 echo ""
 echo "Access your application at:"
-echo "  http://$SERVER_HOST/dashboard/"
+echo "  https://www.$SERVER_HOST/warehouse-dashboard/"
 echo ""
 echo "=========================================="

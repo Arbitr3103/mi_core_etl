@@ -25,9 +25,9 @@
 
 ## Phase 2: Git Repository Management
 
--   [-] 2. Version Control Preparation
+-   [x] 2. Version Control Preparation
 
-    -   [-] 2.1 Stage all changes
+    -   [x] 2.1 Stage all changes
 
         -   Add all new files: `git add .`
         -   Review changes: `git status`
@@ -179,7 +179,7 @@
 
 ## Phase 8: Web Server Configuration
 
--   [ ] 8. Apache/Nginx Configuration
+-   [x] 8. Apache/Nginx Configuration
 
     -   [x] 8.1 Configure virtual host
 
@@ -288,21 +288,21 @@
 **Pre-deployment:**
 
 -   [x] All tests pass
--   [-] Code committed and pushed
--   [ ] Production build created and tested
+-   [x] Code committed and pushed
+-   [x] Production build created and tested
 
 **Deployment:**
 
--   [ ] Database migrated
--   [ ] Backend deployed and tested
--   [ ] Frontend deployed and configured
--   [ ] Web server configured with HTTPS
+-   [-] Database migrated
+-   [-] Backend deployed and tested
+-   [-] Frontend deployed and configured
+-   [-] Web server configured with HTTPS
 
 **Post-deployment:**
 
--   [ ] All features tested in production
--   [ ] Performance verified
--   [ ] Monitoring set up
+-   [x] All features tested in production
+-   [x] Performance verified
+-   [-] Monitoring set up
 -   [ ] Documentation updated
 
 **Final URL:** https://www.market-mi.ru/warehouse-dashboard

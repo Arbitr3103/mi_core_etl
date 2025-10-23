@@ -10,7 +10,7 @@ export interface UseVirtualizationOptions<T> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface UseVirtualizationReturn<T> {
-  parentRef: React.RefObject<HTMLDivElement>;
+  parentRef: React.RefObject<HTMLDivElement | null>;
   virtualizer: any;
   virtualItems: any;
   totalSize: number;

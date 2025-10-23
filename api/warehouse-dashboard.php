@@ -15,6 +15,31 @@
  */
 
 
+// Force production environment for this API
+$_ENV['APP_ENV'] = 'production';
+$_SERVER['APP_ENV'] = 'production';
+putenv('APP_ENV=production');
+
+// Force load .env file
+$env_file = __DIR__ . '/../.env';
+if (file_exists($env_file)) {
+    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        if (strpos($line, '=') === false) continue;
+        
+        list($name, $value) = explode('=', $line, 2);
+        $name = trim($name);
+        $value = trim($value);
+        
+        if (!array_key_exists($name, $_ENV)) {
+            putenv("$name=$value");
+            $_ENV[$name] = $value;
+            $_SERVER[$name] = $value;
+        }
+    }
+}
+
 // Load production database configuration override
 require_once __DIR__ . '/../config/production_db_override.php';
 
@@ -42,11 +67,29 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 // Load production configuration if in production environment
 if (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') {
-    require_once __DIR__ . '/../config/production.php';
-    require_once __DIR__ . '/../config/error_logging_production.php';
-    $pdo = getProductionPgConnection();
-    $logger->info('Warehouse Dashboard API accessed in production mode');
-    $error_logger = $GLOBALS['error_logger'];
+    try {
+        require_once __DIR__ . '/../config/production.php';
+        require_once __DIR__ . '/../config/error_logging_production.php';
+        $pdo = getProductionPgConnection();
+        $logger->info('Warehouse Dashboard API accessed in production mode');
+        $error_logger = $GLOBALS['error_logger'];
+    } catch (Exception $e) {
+        // Fallback to basic configuration if production files are missing
+        error_log("Production config failed, falling back to basic config: " . $e->getMessage());
+        
+        // Try direct connection with hardcoded credentials
+        try {
+            $dsn = "pgsql:host=localhost;port=5432;dbname=mi_core_db";
+            $pdo = new PDO($dsn, 'mi_core_user', 'PostgreSQL_MDM_2025_SecurePass!', [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+            $error_logger = null;
+        } catch (PDOException $pdo_e) {
+            die('PostgreSQL connection error: ' . $pdo_e->getMessage());
+        }
+    }
 } else {
     // Load database configuration for development
     require_once __DIR__ . '/../config/database_postgresql.php';

@@ -17,7 +17,6 @@ export const Navigation: React.FC<NavigationProps> = ({ items }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-8">
           {items.map((item) => (
-            // @ts-expect-error - React Router 6 type compatibility issue with React 18 types
             <Link
               key={item.href}
               to={item.href}

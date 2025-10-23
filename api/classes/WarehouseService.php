@@ -112,7 +112,7 @@ class WarehouseService {
                 LEFT JOIN warehouse_sales_metrics wsm ON 
                     wsm.product_id = i.product_id 
                     AND wsm.warehouse_name = i.warehouse_name
-                    AND wsm.source = i.source
+                    AND wsm.source::text = i.source::text
                 $whereClause
             ";
             
@@ -170,7 +170,7 @@ class WarehouseService {
                 LEFT JOIN warehouse_sales_metrics wsm ON 
                     wsm.product_id = i.product_id 
                     AND wsm.warehouse_name = i.warehouse_name
-                    AND wsm.source = i.source
+                    AND wsm.source::text = i.source::text
                 $whereClause
                 $orderByClause
                 LIMIT :limit OFFSET :offset
@@ -528,7 +528,7 @@ class WarehouseService {
                 LEFT JOIN warehouse_sales_metrics wsm ON 
                     wsm.product_id = i.product_id 
                     AND wsm.warehouse_name = i.warehouse_name
-                    AND wsm.source = i.source
+                    AND wsm.source::text = i.source::text
                 $whereClause
             ";
             

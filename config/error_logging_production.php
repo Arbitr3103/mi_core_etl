@@ -251,6 +251,7 @@ class ProductionErrorLogger {
 $error_logger = new ProductionErrorLogger();
 
 // Custom error handler
+if (!function_exists('productionErrorHandler')) {
 function productionErrorHandler($errno, $errstr, $errfile, $errline) {
     global $error_logger;
     
@@ -278,8 +279,10 @@ function productionErrorHandler($errno, $errstr, $errfile, $errline) {
     // Don't show errors to users in production
     return true;
 }
+}
 
 // Custom exception handler
+if (!function_exists('productionExceptionHandler')) {
 function productionExceptionHandler($exception) {
     global $error_logger;
     
@@ -299,6 +302,7 @@ function productionExceptionHandler($exception) {
         ]);
         exit;
     }
+}
 }
 
 // Set error handlers

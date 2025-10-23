@@ -6,6 +6,8 @@
  */
 
 require_once __DIR__ . '/../config/error_logging_production.php';
+require_once __DIR__ . '/../config/monitoring.php';
+require_once __DIR__ . '/../scripts/alert_manager.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -21,10 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 class SystemMonitor {
     private $error_logger;
     private $metrics_file;
+    private $alert_manager;
+    private $config;
     
     public function __construct($error_logger) {
         $this->error_logger = $error_logger;
         $this->metrics_file = $_ENV['LOG_PATH'] . '/metrics.json';
+        $this->alert_manager = new AlertManager($error_logger);
+        $this->config = $GLOBALS['monitoring_config'];
     }
     
     /**
@@ -60,6 +66,18 @@ class SystemMonitor {
         
         if (count($failed_checks) > 0) {
             $health['status'] = count($failed_checks) > 2 ? 'critical' : 'warning';
+            
+            // Send alerts for failed checks
+            foreach ($failed_checks as $check_name => $check_result) {
+                if ($check_result['status'] === 'error') {
+                    $this->alert_manager->sendAlert(
+                        'health_check_failed',
+                        'error',
+                        "Health check failed: {$check_name}",
+                        ['check' => $check_name, 'result' => $check_result]
+                    );
+                }
+            }
         }
         
         $health['response_time_ms'] = round((microtime(true) - $start_time) * 1000, 2);
