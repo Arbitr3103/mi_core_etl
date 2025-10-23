@@ -93,7 +93,9 @@ keys/
 secrets/
 .secrets
 
-# Production system information (contains passwords and API keys)
+# Production configuration files (contain passwords and API keys)
+config/production.php
+config/production_db_override.php
 PRODUCTION_SYSTEM_INFO.md
 QUICK_REFERENCE.md
 

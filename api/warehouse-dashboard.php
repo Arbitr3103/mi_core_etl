@@ -14,6 +14,10 @@
  * - GET /api/warehouse-dashboard.php?action=clusters - Get cluster list
  */
 
+
+// Load production database configuration override
+require_once __DIR__ . '/../config/production_db_override.php';
+
 // Set headers
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -36,15 +40,24 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit();
 }
 
-// Load database configuration
-require_once __DIR__ . '/../config/database_postgresql.php';
+// Load production configuration if in production environment
+if (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') {
+    require_once __DIR__ . '/../config/production.php';
+    require_once __DIR__ . '/../config/error_logging_production.php';
+    $pdo = getProductionPgConnection();
+    $logger->info('Warehouse Dashboard API accessed in production mode');
+    $error_logger = $GLOBALS['error_logger'];
+} else {
+    // Load database configuration for development
+    require_once __DIR__ . '/../config/database_postgresql.php';
+    $pdo = getDatabaseConnection();
+    $error_logger = null;
+}
 
 // Load controller
 require_once __DIR__ . '/classes/WarehouseController.php';
 
 try {
-    // Get database connection
-    $pdo = getDatabaseConnection();
     
     // Create controller instance
     $controller = new WarehouseController($pdo);
@@ -89,16 +102,25 @@ try {
     }
     
 } catch (Exception $e) {
-    // Log error
-    error_log("Warehouse Dashboard API Error: " . $e->getMessage());
-    error_log("Stack trace: " . $e->getTraceAsString());
+    // Log error with production error logger if available
+    if ($error_logger) {
+        $error_logger->logError('error', 'Warehouse Dashboard API Error: ' . $e->getMessage(), [
+            'action' => $action ?? 'unknown',
+            'trace' => $e->getTraceAsString(),
+            'request_params' => $_GET
+        ], $e->getFile(), $e->getLine());
+    } else {
+        // Fallback to standard error logging
+        error_log("Warehouse Dashboard API Error: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+    }
     
     // Return error response
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'error' => 'Internal server error',
-        'message' => $e->getMessage()
+        'message' => isset($_ENV['APP_DEBUG']) && $_ENV['APP_DEBUG'] ? $e->getMessage() : 'An error occurred'
     ]);
 }
 
