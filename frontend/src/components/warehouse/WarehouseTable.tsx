@@ -128,7 +128,106 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
     );
   };
 
-  // Render row component
+  // Render row content for virtualization (returns td elements)
+  const renderRowContent = (row: TableRow) => {
+    if (row.type === "warehouse-header") {
+      return (
+        <td
+          colSpan={7}
+          className="px-6 py-3 text-sm text-gray-900 border-t-2 border-gray-300 bg-gray-100 font-semibold"
+        >
+          <div className="flex items-center justify-between">
+            <span>
+              {row.warehouse.warehouse_name}
+              <span className="ml-2 text-xs font-normal text-gray-600">
+                ({row.warehouse.cluster})
+              </span>
+            </span>
+            <span className="text-xs font-normal text-gray-600">
+              {row.warehouse.totals.total_items} товаров
+            </span>
+          </div>
+        </td>
+      );
+    }
+
+    if (row.type === "warehouse-footer") {
+      return (
+        <>
+          <td
+            colSpan={2}
+            className="px-6 py-3 text-sm text-gray-900 text-right bg-gray-50 font-semibold border-b-2 border-gray-300"
+          >
+            Итого по складу:
+          </td>
+          <td className="px-6 py-3 text-sm text-gray-900 text-right bg-gray-50 font-semibold border-b-2 border-gray-300">
+            {row.warehouse.totals.total_available.toLocaleString("ru-RU")}
+          </td>
+          <td className="px-6 py-3 bg-gray-50 font-semibold border-b-2 border-gray-300"></td>
+          <td className="px-6 py-3 bg-gray-50 font-semibold border-b-2 border-gray-300"></td>
+          <td className="px-6 py-3 text-sm text-gray-900 text-right bg-gray-50 font-semibold border-b-2 border-gray-300">
+            {row.warehouse.totals.total_replenishment_need.toLocaleString(
+              "ru-RU"
+            )}{" "}
+            шт.
+          </td>
+          <td className="px-6 py-3 bg-gray-50 font-semibold border-b-2 border-gray-300"></td>
+        </>
+      );
+    }
+
+    // Item row content
+    const { item, warehouse } = row;
+    return (
+      <>
+        <td className="px-6 py-4">
+          <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
+            {item.name}
+          </div>
+          <div className="text-xs text-gray-500 truncate">{item.sku}</div>
+        </td>
+        <td className="px-6 py-4 text-sm text-gray-700">
+          <div className="truncate max-w-xs">{warehouse.warehouse_name}</div>
+        </td>
+        <td className="px-6 py-4 text-right">
+          <MetricsTooltip item={item}>
+            <span className="text-sm font-semibold text-gray-900 cursor-help border-b border-dashed border-gray-400 whitespace-nowrap">
+              {item.available.toLocaleString("ru-RU")}
+            </span>
+          </MetricsTooltip>
+        </td>
+        <td className="px-6 py-4 text-right">
+          <span className="text-sm text-gray-700 whitespace-nowrap">
+            {item.daily_sales_avg.toFixed(2)}
+          </span>
+        </td>
+        <td className="px-6 py-4 text-right">
+          <span className="text-sm text-gray-700 whitespace-nowrap">
+            {item.days_of_stock}
+          </span>
+        </td>
+        <td className="px-6 py-4 text-right">
+          <span
+            className={`text-sm font-semibold whitespace-nowrap ${
+              item.replenishment_need > 0 ? "text-red-600" : "text-gray-700"
+            }`}
+          >
+            {item.replenishment_need > 0
+              ? `${item.replenishment_need.toLocaleString("ru-RU")} шт. 🔥`
+              : "—"}
+          </span>
+        </td>
+        <td className="px-6 py-4">
+          <LiquidityBadge
+            status={item.liquidity_status}
+            daysOfStock={item.days_of_stock}
+          />
+        </td>
+      </>
+    );
+  };
+
+  // Render row component (returns full tr element)
   const renderRow = (row: TableRow) => {
     if (row.type === "warehouse-header") {
       return (
@@ -323,12 +422,13 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
                           width: "100%",
                           transform: `translateY(${virtualRow.start}px)`,
                         }}
+                        className={
+                          row.type === "item"
+                            ? "hover:bg-gray-50 transition-colors"
+                            : ""
+                        }
                       >
-                        <td colSpan={7} style={{ padding: 0 }}>
-                          <table className="min-w-full">
-                            <tbody>{renderRow(row)}</tbody>
-                          </table>
-                        </td>
+                        {renderRowContent(row)}
                       </tr>
                     </React.Fragment>
                   );
