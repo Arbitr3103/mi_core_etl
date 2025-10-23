@@ -13,15 +13,15 @@ interface NavigationProps {
 
 export const Navigation: React.FC<NavigationProps> = ({ items }) => {
   return (
-    <nav className="bg-white border-b border-gray-200">
+    <nav className="sticky top-16 z-40 bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex space-x-8">
+        <div className="flex space-x-8 h-12">
           {items.map((item) => (
             <Link
               key={item.href}
               to={item.href}
               className={`
-                inline-flex items-center px-1 pt-1 pb-4 border-b-2 text-sm font-medium transition-colors
+                inline-flex items-center px-1 border-b-2 text-sm font-medium transition-colors
                 ${
                   item.active
                     ? "border-blue-500 text-gray-900"

@@ -183,35 +183,37 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
     return (
       <tr
         key={`${item.product_id}-${item.warehouse_name}`}
-        className="hover:bg-gray-50"
+        className="hover:bg-gray-50 transition-colors"
       >
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="text-sm font-medium text-gray-900">{item.name}</div>
-          <div className="text-xs text-gray-500">{item.sku}</div>
+        <td className="px-6 py-4">
+          <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
+            {item.name}
+          </div>
+          <div className="text-xs text-gray-500 truncate">{item.sku}</div>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-          {warehouse.warehouse_name}
+        <td className="px-6 py-4 text-sm text-gray-700">
+          <div className="truncate max-w-xs">{warehouse.warehouse_name}</div>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-right">
+        <td className="px-6 py-4 text-right">
           <MetricsTooltip item={item}>
-            <span className="text-sm font-semibold text-gray-900 cursor-help border-b border-dashed border-gray-400">
+            <span className="text-sm font-semibold text-gray-900 cursor-help border-b border-dashed border-gray-400 whitespace-nowrap">
               {item.available.toLocaleString("ru-RU")}
             </span>
           </MetricsTooltip>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-700">
+        <td className="px-6 py-4 text-right text-sm text-gray-700 whitespace-nowrap">
           {item.daily_sales_avg.toFixed(2)}
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-700">
+        <td className="px-6 py-4 text-right text-sm text-gray-700 whitespace-nowrap">
           {item.days_of_stock !== null ? Math.round(item.days_of_stock) : "∞"}
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-right">
+        <td className="px-6 py-4 text-right">
           <ReplenishmentIndicator
             need={item.replenishment_need}
             targetStock={item.target_stock}
           />
         </td>
-        <td className="px-6 py-4 whitespace-nowrap">
+        <td className="px-6 py-4">
           <LiquidityBadge
             status={item.liquidity_status}
             daysOfStock={item.days_of_stock}
@@ -230,7 +232,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="bg-white rounded-lg shadow overflow-hidden">
       <div
         ref={parentRef}
         className="overflow-x-auto"
@@ -240,11 +242,11 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
         }}
       >
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50 sticky top-0 z-10">
+          <thead className="bg-gray-50 sticky top-28 z-10">
             <tr>
               <th
                 onClick={() => handleSort("name")}
-                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
               >
                 <div className="flex items-center">
                   Товар
@@ -253,7 +255,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               </th>
               <th
                 onClick={() => handleSort("warehouse_name")}
-                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
               >
                 <div className="flex items-center">
                   Склад
@@ -262,7 +264,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               </th>
               <th
                 onClick={() => handleSort("available")}
-                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
               >
                 <div className="flex items-center justify-end">
                   Доступно
@@ -271,7 +273,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               </th>
               <th
                 onClick={() => handleSort("daily_sales_avg")}
-                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
               >
                 <div className="flex items-center justify-end">
                   Продажи/день
@@ -280,7 +282,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               </th>
               <th
                 onClick={() => handleSort("days_of_stock")}
-                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
               >
                 <div className="flex items-center justify-end">
                   Дней запаса
@@ -289,14 +291,14 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               </th>
               <th
                 onClick={() => handleSort("replenishment_need")}
-                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
               >
                 <div className="flex items-center justify-end">
                   Нужно заказать
                   {getSortIcon("replenishment_need")}
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">
                 Статус
               </th>
             </tr>

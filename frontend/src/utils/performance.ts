@@ -41,53 +41,26 @@ export function clearPerformance(name?: string): void {
   }
 }
 
-// Log performance metrics
-export function logPerformanceMetrics(): void {
+// Get performance metrics
+export function getPerformanceMetrics(): Record<string, number> | null {
   if (typeof window !== "undefined" && window.performance) {
     const navigation = performance.getEntriesByType(
       "navigation"
     )[0] as PerformanceNavigationTiming;
 
     if (navigation) {
-      console.group("Performance Metrics");
-      console.log(
-        "DNS Lookup:",
-        navigation.domainLookupEnd - navigation.domainLookupStart,
-        "ms"
-      );
-      console.log(
-        "TCP Connection:",
-        navigation.connectEnd - navigation.connectStart,
-        "ms"
-      );
-      console.log(
-        "Request Time:",
-        navigation.responseStart - navigation.requestStart,
-        "ms"
-      );
-      console.log(
-        "Response Time:",
-        navigation.responseEnd - navigation.responseStart,
-        "ms"
-      );
-      console.log(
-        "DOM Processing:",
-        navigation.domComplete - navigation.domInteractive,
-        "ms"
-      );
-      console.log(
-        "Load Complete:",
-        navigation.loadEventEnd - navigation.loadEventStart,
-        "ms"
-      );
-      console.log(
-        "Total Load Time:",
-        navigation.loadEventEnd - navigation.fetchStart,
-        "ms"
-      );
-      console.groupEnd();
+      return {
+        dnsLookup: navigation.domainLookupEnd - navigation.domainLookupStart,
+        tcpConnection: navigation.connectEnd - navigation.connectStart,
+        requestTime: navigation.responseStart - navigation.requestStart,
+        responseTime: navigation.responseEnd - navigation.responseStart,
+        domProcessing: navigation.domComplete - navigation.domInteractive,
+        loadComplete: navigation.loadEventEnd - navigation.loadEventStart,
+        totalLoadTime: navigation.loadEventEnd - navigation.fetchStart,
+      };
     }
   }
+  return null;
 }
 
 // Monitor component render time

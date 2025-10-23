@@ -76,133 +76,135 @@ export const Pagination: React.FC<PaginationProps> = ({
   }
 
   return (
-    <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-b-lg">
-      {/* Mobile view */}
-      <div className="flex-1 flex justify-between sm:hidden">
-        <button
-          onClick={() => onPageChange(current_page - 1)}
-          disabled={!has_prev}
-          className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-            has_prev
-              ? "text-gray-700 bg-white hover:bg-gray-50"
-              : "text-gray-400 bg-gray-100 cursor-not-allowed"
-          }`}
-        >
-          Назад
-        </button>
-        <button
-          onClick={() => onPageChange(current_page + 1)}
-          disabled={!has_next}
-          className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-            has_next
-              ? "text-gray-700 bg-white hover:bg-gray-50"
-              : "text-gray-400 bg-gray-100 cursor-not-allowed"
-          }`}
-        >
-          Вперед
-        </button>
-      </div>
-
-      {/* Desktop view */}
-      <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-gray-700">
-            Показано <span className="font-medium">{startItem}</span>
-            {" - "}
-            <span className="font-medium">{endItem}</span>
-            {" из "}
-            <span className="font-medium">{total}</span>
-            {" товаров"}
-          </p>
-        </div>
-        <div>
-          <nav
-            className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
-            aria-label="Pagination"
+    <div className="bg-white rounded-lg shadow p-4">
+      <div className="flex items-center justify-between">
+        {/* Mobile view */}
+        <div className="flex-1 flex justify-between sm:hidden">
+          <button
+            onClick={() => onPageChange(current_page - 1)}
+            disabled={!has_prev}
+            className={`px-4 py-2 border border-gray-300 rounded-md text-sm font-medium ${
+              has_prev
+                ? "text-gray-700 bg-white hover:bg-gray-50"
+                : "text-gray-400 bg-gray-100 cursor-not-allowed opacity-50"
+            }`}
           >
-            {/* Previous button */}
-            <button
-              onClick={() => onPageChange(current_page - 1)}
-              disabled={!has_prev}
-              className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
-                has_prev
-                  ? "text-gray-500 bg-white hover:bg-gray-50"
-                  : "text-gray-300 bg-gray-100 cursor-not-allowed"
-              }`}
+            Назад
+          </button>
+          <button
+            onClick={() => onPageChange(current_page + 1)}
+            disabled={!has_next}
+            className={`px-4 py-2 border border-gray-300 rounded-md text-sm font-medium ${
+              has_next
+                ? "text-gray-700 bg-white hover:bg-gray-50"
+                : "text-gray-400 bg-gray-100 cursor-not-allowed opacity-50"
+            }`}
+          >
+            Вперед
+          </button>
+        </div>
+
+        {/* Desktop view */}
+        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-gray-700">
+              Показано <span className="font-medium">{startItem}</span>
+              {" - "}
+              <span className="font-medium">{endItem}</span>
+              {" из "}
+              <span className="font-medium">{total}</span>
+              {" товаров"}
+            </p>
+          </div>
+          <div>
+            <nav
+              className="relative z-0 inline-flex rounded-md shadow-sm space-x-2"
+              aria-label="Pagination"
             >
-              <span className="sr-only">Предыдущая</span>
-              <svg
-                className="h-5 w-5"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
+              {/* Previous button */}
+              <button
+                onClick={() => onPageChange(current_page - 1)}
+                disabled={!has_prev}
+                className={`px-4 py-2 border border-gray-300 rounded-md text-sm font-medium ${
+                  has_prev
+                    ? "text-gray-700 bg-white hover:bg-gray-50"
+                    : "text-gray-400 bg-gray-100 cursor-not-allowed opacity-50"
+                }`}
               >
-                <path
-                  fillRule="evenodd"
-                  d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-
-            {/* Page numbers */}
-            {getPageNumbers().map((page, index) => {
-              if (page === "...") {
-                return (
-                  <span
-                    key={`ellipsis-${index}`}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
-                  >
-                    ...
-                  </span>
-                );
-              }
-
-              const pageNum = page as number;
-              const isCurrentPage = pageNum === current_page;
-
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => onPageChange(pageNum)}
-                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                    isCurrentPage
-                      ? "z-10 bg-primary-50 border-primary-500 text-primary-600"
-                      : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
-                  }`}
+                <span className="sr-only">Предыдущая</span>
+                <svg
+                  className="h-5 w-5"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
                 >
-                  {pageNum}
-                </button>
-              );
-            })}
+                  <path
+                    fillRule="evenodd"
+                    d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
 
-            {/* Next button */}
-            <button
-              onClick={() => onPageChange(current_page + 1)}
-              disabled={!has_next}
-              className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
-                has_next
-                  ? "text-gray-500 bg-white hover:bg-gray-50"
-                  : "text-gray-300 bg-gray-100 cursor-not-allowed"
-              }`}
-            >
-              <span className="sr-only">Следующая</span>
-              <svg
-                className="h-5 w-5"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
+              {/* Page numbers */}
+              {getPageNumbers().map((page, index) => {
+                if (page === "...") {
+                  return (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700"
+                    >
+                      ...
+                    </span>
+                  );
+                }
+
+                const pageNum = page as number;
+                const isCurrentPage = pageNum === current_page;
+
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => onPageChange(pageNum)}
+                    className={`px-4 py-2 border rounded-md text-sm font-medium ${
+                      isCurrentPage
+                        ? "bg-primary-50 border-primary-500 text-primary-600"
+                        : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              {/* Next button */}
+              <button
+                onClick={() => onPageChange(current_page + 1)}
+                disabled={!has_next}
+                className={`px-4 py-2 border border-gray-300 rounded-md text-sm font-medium ${
+                  has_next
+                    ? "text-gray-700 bg-white hover:bg-gray-50"
+                    : "text-gray-400 bg-gray-100 cursor-not-allowed opacity-50"
+                }`}
               >
-                <path
-                  fillRule="evenodd"
-                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          </nav>
+                <span className="sr-only">Следующая</span>
+                <svg
+                  className="h-5 w-5"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </nav>
+          </div>
         </div>
       </div>
     </div>

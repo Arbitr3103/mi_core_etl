@@ -62,15 +62,15 @@ export const WarehouseFilters: React.FC<WarehouseFiltersProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div className="bg-white rounded-lg shadow p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Фильтры</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Warehouse filter */}
-        <div>
+        <div className="flex flex-col">
           <label
             htmlFor="warehouse-filter"
-            className="block text-sm font-medium text-gray-700 mb-1"
+            className="text-sm font-medium text-gray-700 mb-2"
           >
             Склад
           </label>
@@ -78,7 +78,7 @@ export const WarehouseFilters: React.FC<WarehouseFiltersProps> = ({
             id="warehouse-filter"
             value={filters.warehouse || ""}
             onChange={(e) => handleWarehouseChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Все склады</option>
             {warehouses.map((warehouse) => (
@@ -93,10 +93,10 @@ export const WarehouseFilters: React.FC<WarehouseFiltersProps> = ({
         </div>
 
         {/* Cluster filter */}
-        <div>
+        <div className="flex flex-col">
           <label
             htmlFor="cluster-filter"
-            className="block text-sm font-medium text-gray-700 mb-1"
+            className="text-sm font-medium text-gray-700 mb-2"
           >
             Кластер
           </label>
@@ -104,7 +104,7 @@ export const WarehouseFilters: React.FC<WarehouseFiltersProps> = ({
             id="cluster-filter"
             value={filters.cluster || ""}
             onChange={(e) => handleClusterChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Все кластеры</option>
             {clusters.map((cluster) => (
@@ -116,10 +116,10 @@ export const WarehouseFilters: React.FC<WarehouseFiltersProps> = ({
         </div>
 
         {/* Liquidity status filter */}
-        <div>
+        <div className="flex flex-col">
           <label
             htmlFor="liquidity-filter"
-            className="block text-sm font-medium text-gray-700 mb-1"
+            className="text-sm font-medium text-gray-700 mb-2"
           >
             Статус ликвидности
           </label>
@@ -127,7 +127,7 @@ export const WarehouseFilters: React.FC<WarehouseFiltersProps> = ({
             id="liquidity-filter"
             value={filters.liquidity_status || ""}
             onChange={(e) => handleLiquidityStatusChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Все статусы</option>
             {liquidityOptions.map((option) => (
@@ -137,33 +137,38 @@ export const WarehouseFilters: React.FC<WarehouseFiltersProps> = ({
             ))}
           </select>
         </div>
-      </div>
 
-      {/* Checkboxes */}
-      <div className="flex flex-wrap gap-6">
-        <label className="inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filters.active_only}
-            onChange={(e) => handleActiveOnlyChange(e.target.checked)}
-            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
-          />
-          <span className="ml-2 text-sm font-medium text-gray-700">
-            Только активные товары
-          </span>
-        </label>
-
-        <label className="inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filters.has_replenishment_need || false}
-            onChange={(e) => handleReplenishmentNeedChange(e.target.checked)}
-            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
-          />
-          <span className="ml-2 text-sm font-medium text-gray-700">
-            Только с потребностью в пополнении
-          </span>
-        </label>
+        {/* Checkboxes - moved into grid */}
+        <div className="flex flex-col justify-end gap-2">
+          <div className="flex items-center">
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filters.active_only}
+                onChange={(e) => handleActiveOnlyChange(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-700">
+                Только активные
+              </span>
+            </label>
+          </div>
+          <div className="flex items-center">
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filters.has_replenishment_need || false}
+                onChange={(e) =>
+                  handleReplenishmentNeedChange(e.target.checked)
+                }
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-700">
+                Нужно пополнение
+              </span>
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   );

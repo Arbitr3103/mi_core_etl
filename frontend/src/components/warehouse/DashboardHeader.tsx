@@ -35,7 +35,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
@@ -46,7 +46,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </p>
         </div>
 
-        <div className="flex gap-3 mt-4 lg:mt-0">
+        <div className="flex items-center gap-3 mt-4 lg:mt-0">
           <Button
             variant="secondary"
             onClick={onRefresh}
@@ -89,64 +89,70 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Total products */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="text-xs font-medium text-gray-600 uppercase mb-1">
-              Всего товаров
-            </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {summary.total_products.toLocaleString("ru-RU")}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-500">
+                Всего товаров
+              </span>
+              <span className="mt-2 text-3xl font-bold text-gray-900">
+                {summary.total_products.toLocaleString("ru-RU")}
+              </span>
             </div>
           </div>
 
           {/* Active products */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <div className="text-xs font-medium text-blue-600 uppercase mb-1">
-              Активных
-            </div>
-            <div className="text-2xl font-bold text-blue-900">
-              {summary.active_products.toLocaleString("ru-RU")}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-500">
+                Активных
+              </span>
+              <span className="mt-2 text-3xl font-bold text-blue-600">
+                {summary.active_products.toLocaleString("ru-RU")}
+              </span>
             </div>
           </div>
 
           {/* Critical status */}
-          <div className="bg-red-50 rounded-lg p-4">
-            <div className="text-xs font-medium text-red-600 uppercase mb-1">
-              Дефицит
-            </div>
-            <div className="text-2xl font-bold text-red-900">
-              {summary.by_liquidity.critical.toLocaleString("ru-RU")}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-500">Дефицит</span>
+              <span className="mt-2 text-3xl font-bold text-red-600">
+                {summary.by_liquidity.critical.toLocaleString("ru-RU")}
+              </span>
             </div>
           </div>
 
           {/* Low status */}
-          <div className="bg-yellow-50 rounded-lg p-4">
-            <div className="text-xs font-medium text-yellow-600 uppercase mb-1">
-              Низкий запас
-            </div>
-            <div className="text-2xl font-bold text-yellow-900">
-              {summary.by_liquidity.low.toLocaleString("ru-RU")}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-500">
+                Низкий запас
+              </span>
+              <span className="mt-2 text-3xl font-bold text-yellow-600">
+                {summary.by_liquidity.low.toLocaleString("ru-RU")}
+              </span>
             </div>
           </div>
 
           {/* Normal status */}
-          <div className="bg-green-50 rounded-lg p-4">
-            <div className="text-xs font-medium text-green-600 uppercase mb-1">
-              Норма
-            </div>
-            <div className="text-2xl font-bold text-green-900">
-              {summary.by_liquidity.normal.toLocaleString("ru-RU")}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-500">Норма</span>
+              <span className="mt-2 text-3xl font-bold text-green-600">
+                {summary.by_liquidity.normal.toLocaleString("ru-RU")}
+              </span>
             </div>
           </div>
 
           {/* Excess status */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <div className="text-xs font-medium text-blue-600 uppercase mb-1">
-              Избыток
-            </div>
-            <div className="text-2xl font-bold text-blue-900">
-              {summary.by_liquidity.excess.toLocaleString("ru-RU")}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-500">Избыток</span>
+              <span className="mt-2 text-3xl font-bold text-blue-600">
+                {summary.by_liquidity.excess.toLocaleString("ru-RU")}
+              </span>
             </div>
           </div>
         </div>
