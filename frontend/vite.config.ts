@@ -74,10 +74,15 @@ export default defineConfig({
             return "ui";
           }
         },
-        // Optimize chunk file names
-        chunkFileNames: "assets/js/[name]-[hash].js",
-        entryFileNames: "assets/js/[name]-[hash].js",
-        assetFileNames: "assets/[ext]/[name]-[hash].[ext]",
+        // Force new file names with timestamp to break cache
+        chunkFileNames: `assets/js/[name]-[hash]-${Date.now()}.js`,
+        entryFileNames: `assets/js/[name]-[hash]-${Date.now()}.js`,
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name?.endsWith(".css")) {
+            return `assets/css/[name]-[hash]-${Date.now()}[extname]`;
+          }
+          return `assets/[name]-[hash]-${Date.now()}[extname]`;
+        },
       },
     },
     // Optimize chunk size
