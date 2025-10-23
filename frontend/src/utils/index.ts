@@ -23,7 +23,7 @@ export {
   markPerformance,
   measurePerformance,
   clearPerformance,
-  logPerformanceMetrics,
+  getPerformanceMetrics,
   useRenderTime,
   debounce,
   throttle,
