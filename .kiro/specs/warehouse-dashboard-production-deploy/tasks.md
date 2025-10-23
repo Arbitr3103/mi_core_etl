@@ -78,7 +78,7 @@
 
 -   [ ] 4. Production Server Setup
 
-    -   [ ] 4.1 Access production server
+    -   [-] 4.1 Access production server
 
         -   SSH into server: `ssh user@market-mi.ru`
         -   Verify server access and permissions
