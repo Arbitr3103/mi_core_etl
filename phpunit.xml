@@ -13,10 +13,18 @@
             <file>tests/SimpleTest.php</file>
         </testsuite>
         
-        <testsuite name="Unit Tests">
+        <testsuite name="Legacy Unit Tests">
             <file>tests/SafeSyncEngineTest.php</file>
             <file>tests/FallbackDataProviderTest.php</file>
             <file>tests/DataTypeNormalizerTest.php</file>
+        </testsuite>
+        
+        <testsuite name="Backend Unit Tests">
+            <file>tests/Unit/LoggerTest.php</file>
+            <file>tests/Unit/DatabaseTest.php</file>
+            <file>tests/Unit/CacheServiceTest.php</file>
+            <file>tests/Unit/ProductModelTest.php</file>
+            <file>tests/Unit/InventoryControllerTest.php</file>
         </testsuite>
         
         <testsuite name="Integration Tests">

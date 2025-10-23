@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run lint-staged for staged files
+npx lint-staged
+
+# Run PHP CS Fixer on staged PHP files
+git diff --cached --name-only --diff-filter=ACM | grep '\.php$' | xargs -r vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php
+
+# Add fixed files back to staging
+git diff --cached --name-only --diff-filter=ACM | grep '\.php$' | xargs -r git add

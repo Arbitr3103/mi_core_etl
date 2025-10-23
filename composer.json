@@ -1,0 +1,122 @@
+{
+  "name": "mi-core/etl-system",
+  "description": "MI Core ETL System with React Dashboard - Modern inventory management and analytics platform",
+  "type": "project",
+  "version": "1.0.0",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "MI Core Development Team",
+      "email": "dev@mi-core.com"
+    }
+  ],
+  "require": {
+    "php": ">=8.1",
+    "ext-pdo": "*",
+    "ext-json": "*",
+    "ext-curl": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
+    "ext-pgsql": "*",
+    "monolog/monolog": "^3.0",
+    "vlucas/phpdotenv": "^5.5",
+    "guzzlehttp/guzzle": "^7.8",
+    "predis/predis": "^2.2",
+    "ramsey/uuid": "^4.7",
+    "symfony/console": "^6.4",
+    "symfony/http-foundation": "^6.4",
+    "league/csv": "^9.11",
+    "nesbot/carbon": "^2.72"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0",
+    "squizlabs/php_codesniffer": "^3.7",
+    "phpstan/phpstan": "^1.10",
+    "psalm/plugin-phpunit": "^0.18",
+    "friendsofphp/php-cs-fixer": "^3.40",
+    "mockery/mockery": "^1.6"
+  },
+  "autoload": {
+    "psr-4": {
+      "MiCore\\": "src/",
+      "MiCore\\Api\\": "src/api/",
+      "MiCore\\Etl\\": "src/etl/",
+      "MiCore\\Models\\": "src/models/",
+      "MiCore\\Services\\": "src/services/",
+      "MiCore\\Utils\\": "src/utils/"
+    },
+    "files": [
+      "config/app.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "MiCore\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit --configuration phpunit.xml",
+    "test-coverage": "phpunit --configuration phpunit.xml --coverage-html coverage/",
+    "cs-check": "phpcs --standard=PSR12 src/ tests/",
+    "cs-fix": "phpcbf --standard=PSR12 src/ tests/",
+    "cs-fixer": "php-cs-fixer fix --config=.php-cs-fixer.php",
+    "stan": "phpstan analyse src/ tests/ --level=8",
+    "psalm": "psalm --config=psalm.xml",
+    "quality": [
+      "@cs-check",
+      "@stan",
+      "@test"
+    ],
+    "setup": [
+      "@post-install-cmd",
+      "php -r \"copy('.env.example', '.env');\""
+    ],
+    "post-install-cmd": [
+      "mkdir -p storage/logs storage/cache storage/backups storage/temp",
+      "mkdir -p public/build frontend/dist",
+      "chmod -R 755 storage/",
+      "chmod -R 755 public/build",
+      "touch storage/logs/.gitkeep storage/cache/.gitkeep storage/backups/.gitkeep"
+    ],
+    "post-update-cmd": [
+      "@post-install-cmd"
+    ],
+    "deploy": [
+      "@quality",
+      "php deployment/scripts/deploy.php"
+    ],
+    "backup": "php deployment/scripts/backup.php",
+    "migrate": "php src/etl/migrate.php",
+    "etl:ozon": "php src/etl/ozon_sync.php",
+    "etl:wb": "php src/etl/wb_sync.php",
+    "etl:cleanup": "php src/etl/cleanup.php"
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true,
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    },
+    "platform": {
+      "php": "8.1"
+    }
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-main": "1.0-dev"
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "archive": {
+    "exclude": [
+      "tests/",
+      "docs/",
+      ".github/",
+      ".gitignore",
+      ".php-cs-fixer.php",
+      "phpunit.xml",
+      "psalm.xml"
+    ]
+  }
+}

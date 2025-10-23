@@ -1,0 +1,115 @@
+{
+  "name": "mi-core-etl",
+  "version": "1.0.0",
+  "description": "MI Core ETL System with React Dashboard - Modern inventory management and analytics platform",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:api\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:api": "php -S localhost:8080 -t public/",
+    "build": "npm run build:frontend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:analyze": "cd frontend && npm run build:analyze",
+    "build:prod": "npm run build:frontend && npm run copy:assets",
+    "copy:assets": "mkdir -p public/dashboard && cp -r frontend/dist/* public/dashboard/",
+    "deploy:frontend": "cd frontend && bash build.sh && bash deploy.sh",
+    "setup:nginx": "sudo bash deployment/scripts/setup_nginx.sh",
+    "test": "npm run test:frontend && npm run test:php",
+    "test:frontend": "cd frontend && npm run test",
+    "test:php": "vendor/bin/phpunit tests/",
+    "test:coverage": "npm run test:frontend -- --coverage && composer run test-coverage",
+    "lint": "npm run lint:frontend && npm run lint:php",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:php": "composer run cs-check",
+    "lint:fix": "npm run lint:frontend -- --fix && composer run cs-fix",
+    "type-check": "cd frontend && npm run type-check",
+    "quality": "npm run lint && npm run type-check && npm run test",
+    "deploy": "npm run quality && bash deployment/scripts/deploy.sh",
+    "deploy:prod": "npm run build:prod && npm run deploy",
+    "backup": "bash deployment/scripts/backup.sh",
+    "rollback": "bash deployment/scripts/rollback.sh",
+    "setup": "npm run install:all && npm run setup:env && npm run build:prod",
+    "setup:env": "cp .env.example .env",
+    "install:all": "npm install && cd frontend && npm install && cd .. && composer install",
+    "update:all": "npm update && cd frontend && npm update && cd .. && composer update",
+    "clean": "npm run clean:deps && npm run clean:build && npm run clean:cache",
+    "clean:deps": "rm -rf node_modules frontend/node_modules vendor",
+    "clean:build": "rm -rf public/build frontend/dist",
+    "clean:cache": "rm -rf storage/cache/* .vite frontend/.vite",
+    "clean:logs": "rm -rf storage/logs/*.log",
+    "logs": "tail -f storage/logs/*.log",
+    "logs:error": "tail -f storage/logs/error*.log",
+    "logs:api": "tail -f storage/logs/api*.log",
+    "health": "php -f src/api/health.php",
+    "status": "php -f config/database_postgresql.php",
+    "migrate": "php src/etl/migrate.php",
+    "etl:ozon": "php src/etl/ozon_sync.php",
+    "etl:wb": "php src/etl/wb_sync.php",
+    "etl:cleanup": "php src/etl/cleanup.php",
+    "etl:all": "npm run etl:ozon && npm run etl:wb",
+    "monitor": "php src/utils/monitor.php",
+    "benchmark": "php tests/performance/benchmark.php",
+    "security:check": "npm audit && composer audit",
+    "docs:generate": "cd frontend && npm run docs:generate",
+    "precommit": "npm run lint:fix && npm run type-check",
+    "prepare": "husky install"
+  },
+  "keywords": [
+    "etl",
+    "inventory",
+    "dashboard",
+    "react",
+    "php",
+    "postgresql",
+    "analytics",
+    "marketplace",
+    "ozon",
+    "wildberries"
+  ],
+  "author": {
+    "name": "MI Core Development Team",
+    "email": "dev@mi-core.com"
+  },
+  "license": "proprietary",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mi-core/etl-system.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mi-core/etl-system/issues"
+  },
+  "homepage": "https://github.com/mi-core/etl-system#readme",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0",
+    "php": ">=8.1.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ],
+  "lint-staged": {
+    "frontend/src/**/*.{js,jsx,ts,tsx}": [
+      "cd frontend && npm run lint -- --fix",
+      "cd frontend && npm run type-check"
+    ],
+    "src/**/*.php": [
+      "composer run cs-fix"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
+}

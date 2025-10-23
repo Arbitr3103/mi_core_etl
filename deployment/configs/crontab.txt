@@ -1,0 +1,122 @@
+# MI Core ETL System - Cron Jobs Configuration
+# =============================================
+# This file contains all scheduled tasks for the MI Core ETL system
+# Install with: crontab deployment/configs/crontab.txt
+# View current crontab: crontab -l
+# Edit crontab: crontab -e
+
+# Environment variables
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+PROJECT_ROOT=/var/www/mi_core_etl
+MAILTO=admin@example.com
+
+# =============================================
+# ETL Data Synchronization Jobs
+# =============================================
+
+# Daily inventory sync - Runs at 2:00 AM every day
+# Updates inventory data from all marketplaces
+0 2 * * * cd $PROJECT_ROOT && php src/etl/run_inventory_sync.php >> storage/logs/cron_inventory_sync.log 2>&1
+
+# Hourly stock updates - Runs every hour at minute 15
+# Quick updates for stock levels only
+15 * * * * cd $PROJECT_ROOT && php src/etl/run_stock_update.php >> storage/logs/cron_stock_update.log 2>&1
+
+# Weekly full ETL - Runs every Sunday at 3:00 AM
+# Complete data refresh including historical data
+0 3 * * 0 cd $PROJECT_ROOT && php src/etl/run_weekly_etl.php >> storage/logs/cron_weekly_etl.log 2>&1
+
+# =============================================
+# Database Maintenance Jobs
+# =============================================
+
+# Daily database backup - Runs at 1:00 AM every day
+# Creates full backup of database and stores in backups directory
+0 1 * * * cd $PROJECT_ROOT && bash deployment/scripts/backup.sh >> storage/logs/cron_backup.log 2>&1
+
+# Weekly database optimization - Runs every Monday at 4:00 AM
+# Optimizes tables and updates statistics
+0 4 * * 1 cd $PROJECT_ROOT && bash scripts/optimize_database.sh >> storage/logs/cron_db_optimize.log 2>&1
+
+# PostgreSQL materialized views refresh - Runs every 6 hours
+# Refreshes materialized views for dashboard performance
+0 */6 * * * cd $PROJECT_ROOT && bash scripts/refresh_materialized_views.sh >> storage/logs/cron_mv_refresh.log 2>&1
+
+# =============================================
+# Cache Management Jobs
+# =============================================
+
+# Clear expired cache - Runs every 4 hours
+# Removes expired cache entries to free up space
+0 */4 * * * cd $PROJECT_ROOT && php src/utils/clear_expired_cache.php >> storage/logs/cron_cache_clear.log 2>&1
+
+# Warm up cache - Runs at 6:00 AM every day
+# Pre-loads frequently accessed data into cache
+0 6 * * * cd $PROJECT_ROOT && php src/utils/warm_cache.php >> storage/logs/cron_cache_warm.log 2>&1
+
+# =============================================
+# Log Management Jobs
+# =============================================
+
+# Rotate logs - Runs daily at 11:59 PM
+# Rotates and compresses old log files
+59 23 * * * cd $PROJECT_ROOT && bash scripts/rotate_logs.sh >> storage/logs/cron_log_rotate.log 2>&1
+
+# Clean old logs - Runs weekly on Sunday at 5:00 AM
+# Removes logs older than 30 days
+0 5 * * 0 find $PROJECT_ROOT/storage/logs -name "*.log" -mtime +30 -delete
+
+# Clean old backups - Runs weekly on Sunday at 5:30 AM
+# Keeps only the last 10 backups
+30 5 * * 0 cd $PROJECT_ROOT/storage/backups && ls -t mi_core_etl_backup_*.tar.gz | tail -n +11 | xargs rm -f
+
+# =============================================
+# Monitoring and Health Checks
+# =============================================
+
+# Health check - Runs every 15 minutes
+# Monitors system health and sends alerts if issues detected
+*/15 * * * * curl -f http://localhost/api/health >> storage/logs/cron_health_check.log 2>&1 || echo "Health check failed at $(date)" | mail -s "MI Core ETL Health Check Failed" $MAILTO
+
+# System status report - Runs daily at 8:00 AM
+# Generates and emails daily system status report
+0 8 * * * cd $PROJECT_ROOT && php src/utils/generate_status_report.php >> storage/logs/cron_status_report.log 2>&1
+
+# Disk space check - Runs every hour
+# Alerts if disk space is running low
+0 * * * * df -h $PROJECT_ROOT | awk 'NR==2 {if ($5+0 > 85) print "Disk usage is at " $5}' | mail -s "MI Core ETL Disk Space Warning" $MAILTO
+
+# =============================================
+# Analytics and Reporting Jobs
+# =============================================
+
+# Daily analytics aggregation - Runs at 7:00 AM every day
+# Aggregates analytics data for reporting
+0 7 * * * cd $PROJECT_ROOT && php src/etl/run_analytics_aggregation.php >> storage/logs/cron_analytics.log 2>&1
+
+# Weekly report generation - Runs every Monday at 9:00 AM
+# Generates weekly business reports
+0 9 * * 1 cd $PROJECT_ROOT && php src/utils/generate_weekly_report.php >> storage/logs/cron_weekly_report.log 2>&1
+
+# =============================================
+# Marketplace Specific Jobs
+# =============================================
+
+# Ozon data sync - Runs every 2 hours
+# Syncs data from Ozon marketplace
+0 */2 * * * cd $PROJECT_ROOT && php src/etl/extractors/OzonExtractor.php >> storage/logs/cron_ozon_sync.log 2>&1
+
+# Wildberries data sync - Runs every 2 hours at minute 30
+# Syncs data from Wildberries marketplace
+30 */2 * * * cd $PROJECT_ROOT && php src/etl/extractors/WildberriesExtractor.php >> storage/logs/cron_wb_sync.log 2>&1
+
+# =============================================
+# Notes:
+# =============================================
+# - All times are in server local time
+# - Logs are stored in storage/logs/ directory
+# - Failed jobs will send email to MAILTO address
+# - Adjust schedules based on server load and business needs
+# - Monitor log files regularly for errors
+# - Test new cron jobs before deploying to production
