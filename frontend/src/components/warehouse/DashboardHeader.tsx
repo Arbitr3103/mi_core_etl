@@ -38,9 +38,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Дашборд складских остатков
-          </h1>
           <p className="text-sm text-gray-600">
             Последнее обновление: {formatLastUpdated(lastUpdated)}
           </p>
