@@ -235,7 +235,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div
         ref={parentRef}
-        className="overflow-x-auto"
+        className="overflow-x-auto relative"
         style={{
           maxHeight: shouldVirtualize ? "800px" : "none",
           overflowY: shouldVirtualize ? "auto" : "visible",
