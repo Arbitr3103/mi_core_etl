@@ -100,9 +100,42 @@ function validateInput($action, $params = []) {
     return $errors;
 }
 
-// Функция для получения статистики активности товаров
-function getActivityStatistics($pdo) {
+// Функция для получения статистики активности товаров (только для текущей выборки)
+function getActivityStatistics($pdo, $products = null) {
     try {
+        // Если передан массив продуктов, считаем статистику по нему
+        if ($products !== null) {
+            $active_count = 0;
+            $inactive_count = 0;
+            $total_count = count($products);
+            
+            foreach ($products as $product) {
+                // Используем total_stock если доступно, иначе рассчитываем
+                $total_stock = $product['total_stock'] ?? (
+                    ($product['quantity_present'] ?? 0) + 
+                    ($product['available_stock'] ?? 0) + 
+                    ($product['preparing_for_sale'] ?? 0) + 
+                    ($product['in_requests'] ?? 0) + 
+                    ($product['in_transit'] ?? 0)
+                );
+                              
+                if ($total_stock > 0) {
+                    $active_count++;
+                } else {
+                    $inactive_count++;
+                }
+            }
+            
+            return [
+                'active_count' => $active_count,
+                'inactive_count' => $inactive_count,
+                'total_count' => $total_count,
+                'active_percentage' => $total_count > 0 ? round(($active_count / $total_count) * 100, 2) : 0,
+                'inactive_percentage' => $total_count > 0 ? round(($inactive_count / $total_count) * 100, 2) : 0
+            ];
+        }
+        
+        // Иначе считаем по всей таблице (для общей статистики)
         $stmt = $pdo->prepare("
             SELECT 
                 COUNT(CASE WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 THEN 1 END) as active_count,
@@ -221,8 +254,19 @@ try {
                 return $data;
             }, 300); // 5 минут кэш
             
-            // Получаем статистику активности товаров
-            $activity_stats = getActivityStatistics($pdo);
+            // Получаем статистику активности товаров для текущей выборки
+            $all_products = [];
+            if (isset($result['data']['critical_products']['items'])) {
+                $all_products = array_merge($all_products, $result['data']['critical_products']['items']);
+            }
+            if (isset($result['data']['low_stock_products']['items'])) {
+                $all_products = array_merge($all_products, $result['data']['low_stock_products']['items']);
+            }
+            if (isset($result['data']['overstock_products']['items'])) {
+                $all_products = array_merge($all_products, $result['data']['overstock_products']['items']);
+            }
+            
+            $activity_stats = getActivityStatistics($pdo, $all_products);
             
             $dashboard_metrics = $performance_monitor->endTimer('dashboard_request', [
                 'cache_hit' => $cache->get($cache_key) !== null,
@@ -296,44 +340,58 @@ try {
             
         case 'low-stock-products':
             $limit = $params['limit'] ?? '10';
-            $cache_key = 'low_stock_products_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
+            $activity_filter = $params['activity_filter'] ?? 'active';
+            $cache_key = 'low_stock_products_' . $activity_filter . '_limit_' . $limit;
             $result = $cache->remember($cache_key, function() use ($pdo, $params) {
                 return getLowStockProducts($pdo, $params);
             }, 300); // 5 минут кэш для товаров с низкими остатками
+            
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
-                    'active_only' => $params['active_only'] ?? 'true',
+                    'activity_filter' => $activity_filter,
+                    'activity_stats' => $activity_stats,
                     'limit' => $limit
                 ])
             ]);
             break;
             
         case 'warehouse-summary':
-            $cache_key = InventoryCacheKeys::getWarehouseSummaryKey() . '_' . ($params['active_only'] ?? 'true');
+            $activity_filter = $params['activity_filter'] ?? 'active';
+            $cache_key = InventoryCacheKeys::getWarehouseSummaryKey() . '_' . $activity_filter;
             $result = $cache->remember($cache_key, function() use ($pdo, $params) {
                 return getWarehouseSummary($pdo, $params);
             }, 300); // 5 минут кэш
+            
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
-                    'active_only' => $params['active_only'] ?? 'true'
+                    'activity_filter' => $activity_filter,
+                    'activity_stats' => $activity_stats
                 ])
             ]);
             break;
             
         case 'warehouse-details':
             $warehouse_name = $_GET['warehouse'];
-            $cache_key = InventoryCacheKeys::getWarehouseDetailsKey($warehouse_name) . '_' . ($params['active_only'] ?? 'true');
+            $activity_filter = $params['activity_filter'] ?? 'active';
+            $cache_key = InventoryCacheKeys::getWarehouseDetailsKey($warehouse_name) . '_' . $activity_filter;
             $result = $cache->remember($cache_key, function() use ($pdo, $warehouse_name, $params) {
                 return getWarehouseDetails($pdo, $warehouse_name, $params);
             }, 300); // 5 минут кэш
+            
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
             
             echo json_encode([
                 'status' => 'success',
@@ -341,34 +399,45 @@ try {
                 'metadata' => [
                     'cached' => $cache->get($cache_key) !== null,
                     'warehouse' => $warehouse_name,
-                    'active_only' => $params['active_only'] ?? 'true'
+                    'activity_filter' => $activity_filter,
+                    'activity_stats' => $activity_stats
                 ]
             ]);
             break;
             
         case 'products-by-warehouse':
             $result = getProductsByWarehouse($pdo, $params);
+            
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
+            
             echo json_encode([
                 'status' => 'success',
                 'data' => $result,
                 'metadata' => [
-                    'active_only' => $params['active_only'] ?? 'true'
+                    'activity_filter' => $params['activity_filter'] ?? 'active',
+                    'activity_stats' => $activity_stats
                 ]
             ]);
             break;
             
         case 'recommendations':
-            $cache_key = InventoryCacheKeys::getRecommendationsKey() . '_' . ($params['active_only'] ?? 'true');
+            $activity_filter = $params['activity_filter'] ?? 'active';
+            $cache_key = InventoryCacheKeys::getRecommendationsKey() . '_' . $activity_filter;
             $result = $cache->remember($cache_key, function() use ($pdo, $params) {
                 return getDetailedRecommendations($pdo, $params);
             }, 600); // 10 минут кэш для рекомендаций
+            
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result,
                 'metadata' => [
                     'cached' => $cache->get($cache_key) !== null,
-                    'active_only' => $params['active_only'] ?? 'true'
+                    'activity_filter' => $activity_filter,
+                    'activity_stats' => $activity_stats
                 ]
             ]);
             break;
@@ -466,7 +535,9 @@ function getInventoryDashboardData($pdo, $params = []) {
                 i.sku,
                 COALESCE(i.name, 'Товар ' || i.sku) as name,
                 COALESCE(i.warehouse_name, 'Основной склад') as warehouse_name,
+                -- Вычисляем общий остаток как сумму всех полей остатков
                 (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) as total_stock,
+                COALESCE(i.quantity_present, 0) as quantity_present,
                 COALESCE(i.available, 0) as available_stock,
                 COALESCE(i.reserved, i.quantity_reserved, 0) as reserved_stock,
                 COALESCE(i.preparing_for_sale, 0) as preparing_for_sale,
@@ -576,12 +647,18 @@ function getInventoryDashboardData($pdo, $params = []) {
             'name' => $product_name,
             'sku' => $product['sku'],
             'stock' => (int)$product['total_stock'],
+            'total_stock' => (int)$product['total_stock'],
+            'quantity_present' => (int)$product['quantity_present'],
             'available_stock' => (int)$product['available_stock'],
             'reserved_stock' => (int)$product['reserved_stock'],
+            'preparing_for_sale' => (int)$product['preparing_for_sale'],
+            'in_requests' => (int)$product['in_requests'],
+            'in_transit' => (int)$product['in_transit'],
             'warehouse' => $product['warehouse_name'],
             'unit_cost' => $unit_cost,
             'last_updated' => $product['last_updated'],
-            'category' => $product['category']
+            'category' => $product['category'],
+            'activity_status' => $product['activity_status']
         ];
         
         switch ($product['stock_status']) {
@@ -715,16 +792,17 @@ function getCriticalProducts($pdo, $params = []) {
             SELECT 
                 i.sku,
                 i.warehouse_name,
-                SUM(i.current_stock) as total_stock,
-                SUM(i.available_stock) as available_stock,
-                SUM(i.reserved_stock) as reserved_stock,
-                MAX(i.last_sync_at) as last_updated
-            FROM inventory_data i
-            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
-            GROUP BY i.sku, i.warehouse_name
-            HAVING SUM(i.current_stock) <= 5
-            ORDER BY SUM(i.current_stock) ASC, i.sku
+                (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) as total_stock,
+                COALESCE(i.available, 0) as available_stock,
+                COALESCE(i.reserved, i.quantity_reserved, 0) as reserved_stock,
+                COALESCE(i.updated_at, NOW()) as last_updated,
+                CASE 
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 THEN 'active'
+                    ELSE 'inactive'
+                END as activity_status
+            FROM inventory i
+            WHERE (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) <= 5 " . $activeFilter . "
+            ORDER BY (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) ASC, i.sku
         ");
         
         $stmt->execute();
@@ -795,12 +873,14 @@ function getCriticalProducts($pdo, $params = []) {
                 'name' => $product_name,
                 'sku' => $product['sku'],
                 'stock' => (int)$product['total_stock'],
+                'total_stock' => (int)$product['total_stock'],
                 'available_stock' => (int)$product['available_stock'],
                 'reserved_stock' => (int)$product['reserved_stock'],
                 'warehouse' => $product['warehouse_name'],
                 'unit_cost' => $unit_cost,
                 'last_updated' => $product['last_updated'],
-                'urgency' => $product['total_stock'] == 0 ? 'out_of_stock' : 'critical'
+                'urgency' => $product['total_stock'] == 0 ? 'out_of_stock' : 'critical',
+                'activity_status' => $product['activity_status']
             ];
         }
         
@@ -853,17 +933,18 @@ function getOverstockProducts($pdo, $params = []) {
             SELECT 
                 i.sku,
                 i.warehouse_name,
-                SUM(i.current_stock) as total_stock,
-                SUM(i.available_stock) as available_stock,
-                SUM(i.reserved_stock) as reserved_stock,
-                MAX(i.last_sync_at) as last_updated,
-                (SUM(i.current_stock) - 100) as excess_stock
-            FROM inventory_data i
-            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
-            GROUP BY i.sku, i.warehouse_name
-            HAVING SUM(i.current_stock) > 100
-            ORDER BY SUM(i.current_stock) DESC, i.sku
+                (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) as total_stock,
+                COALESCE(i.available, 0) as available_stock,
+                COALESCE(i.reserved, i.quantity_reserved, 0) as reserved_stock,
+                COALESCE(i.updated_at, NOW()) as last_updated,
+                ((COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) - 100) as excess_stock,
+                CASE 
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 THEN 'active'
+                    ELSE 'inactive'
+                END as activity_status
+            FROM inventory i
+            WHERE (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 100 " . $activeFilter . "
+            ORDER BY (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) DESC, i.sku
         ");
         
         $stmt->execute();
@@ -928,13 +1009,15 @@ function getOverstockProducts($pdo, $params = []) {
             'name' => $product_name,
             'sku' => $product['sku'],
             'stock' => (int)$product['total_stock'],
+            'total_stock' => (int)$product['total_stock'],
             'available_stock' => (int)$product['available_stock'],
             'reserved_stock' => (int)$product['reserved_stock'],
             'warehouse' => $product['warehouse_name'],
             'unit_cost' => $unit_cost,
             'excess_stock' => (int)$product['excess_stock'],
             'excess_value' => $excess_value,
-            'last_updated' => $product['last_updated']
+            'last_updated' => $product['last_updated'],
+            'activity_status' => $product['activity_status']
         ];
     }
     
@@ -981,16 +1064,18 @@ function getLowStockProducts($pdo, $params = []) {
             SELECT 
                 i.sku,
                 i.warehouse_name,
-                SUM(i.current_stock) as total_stock,
-                SUM(i.available_stock) as available_stock,
-                SUM(i.reserved_stock) as reserved_stock,
-                MAX(i.last_sync_at) as last_updated
-            FROM inventory_data i
-            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
-            GROUP BY i.sku, i.warehouse_name
-            HAVING SUM(i.current_stock) > 5 AND SUM(i.current_stock) <= 20
-            ORDER BY SUM(i.current_stock) ASC, i.sku
+                (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) as total_stock,
+                COALESCE(i.available, 0) as available_stock,
+                COALESCE(i.reserved, i.quantity_reserved, 0) as reserved_stock,
+                COALESCE(i.updated_at, NOW()) as last_updated,
+                CASE 
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 THEN 'active'
+                    ELSE 'inactive'
+                END as activity_status
+            FROM inventory i
+            WHERE (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 5 
+              AND (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) <= 20 " . $activeFilter . "
+            ORDER BY (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) ASC, i.sku
         ");
         
         $stmt->execute();
@@ -1064,12 +1149,14 @@ function getLowStockProducts($pdo, $params = []) {
                 'name' => $product_name,
                 'sku' => $product['sku'],
                 'stock' => (int)$product['total_stock'],
+                'total_stock' => (int)$product['total_stock'],
                 'available_stock' => (int)$product['available_stock'],
                 'reserved_stock' => (int)$product['reserved_stock'],
                 'warehouse' => $product['warehouse_name'],
                 'unit_cost' => $unit_cost,
                 'last_updated' => $product['last_updated'],
-                'status' => 'low_stock'
+                'status' => 'low_stock',
+                'activity_status' => $product['activity_status']
             ];
         }
         

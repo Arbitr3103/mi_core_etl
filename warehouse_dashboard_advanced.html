@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Дашборд мониторинга складов - Расширенная версия</title>
+    <link rel="stylesheet" href="dashboard_styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🏪 Дашборд мониторинга складов</h1>
+      <div class="subtitle">
+        Аналитика продаж и рекомендации по пополнению •
+        <span id="lastUpdate">Загрузка...</span> •
+        <span id="connectionStatus" class="status-indicator"
+          >🔄 Подключение...</span
+        >
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Loading Overlay -->
+      <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div>Загрузка данных...</div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="dashboard-grid" id="summaryCards">
+        <!-- Cards will be populated by JavaScript -->
+      </div>
+
+      <!-- Activity Statistics -->
+      <div class="activity-stats-section" id="activityStatsSection">
+        <div class="stats-card">
+          <div class="stats-header">
+            <h3>📊 Статистика по активности товаров</h3>
+            <div class="stats-filter-indicator" id="statsFilterIndicator">
+              Показаны: активные товары
+            </div>
+          </div>
+          <div class="stats-grid" id="activityStatsGrid">
+            <!-- Stats will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-time Alerts -->
+      <div id="alertsSection" class="alerts-section" style="display: none">
+        <div class="alert-header">
+          <span>🚨</span>
+          <div class="alert-title">Критические уведомления</div>
+          <button class="alert-close" onclick="closeAlerts()">×</button>
+        </div>
+        <div id="alertsList" class="alerts-list"></div>
+      </div>
+
+      <!-- Filters and Controls -->
+      <div class="controls-section">
+        <!-- Activity Filter Section -->
+        <div class="activity-filter-section">
+          <div class="filter-group">
+            <div class="filter-label">Активность товаров:</div>
+            <div class="activity-filters">
+              <button class="activity-filter-btn active" data-activity="active">
+                ✅ Активные
+              </button>
+              <button class="activity-filter-btn" data-activity="inactive">
+                ❌ Неактивные
+              </button>
+              <button class="activity-filter-btn" data-activity="all">
+                📋 Все товары
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warehouse Status Filters -->
+        <div class="warehouse-filter-section">
+          <div class="filter-group">
+            <div class="filter-label">Статус складов:</div>
+            <div class="filters">
+              <button class="filter-btn active" data-filter="all">
+                Все склады
+              </button>
+              <button class="filter-btn" data-filter="critical">
+                Критические
+              </button>
+              <button class="filter-btn" data-filter="warning">
+                Требуют внимания
+              </button>
+              <button class="filter-btn" data-filter="normal">
+                Нормальные
+              </button>
+              <button class="filter-btn" data-filter="excess">
+                Избыточные
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="control-btn" onclick="refreshData()">
+            🔄 Обновить
+          </button>
+          <button class="control-btn" onclick="toggleAutoRefresh()">
+            ⏱️ Авто-обновление
+          </button>
+          <select id="refreshInterval" class="control-select">
+            <option value="30">30 сек</option>
+            <option value="60" selected>1 мин</option>
+            <option value="300">5 мин</option>
+            <option value="600">10 мин</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Warehouses Grid -->
+      <div class="warehouse-grid" id="warehousesGrid">
+        <!-- Warehouse cards will be populated by JavaScript -->
+      </div>
+
+      <!-- Charts Section -->
+      <div class="charts-section">
+        <div class="chart-container">
+          <div class="chart-header">
+            <div class="chart-title">📊 Остатки и продажи по складам</div>
+            <div class="chart-controls">
+              <button class="chart-btn active" data-chart="bar">Столбцы</button>
+              <button class="chart-btn" data-chart="line">Линии</button>
+            </div>
+          </div>
+          <canvas id="salesChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-header">
+            <div class="chart-title">🎯 Распределение по критичности</div>
+          </div>
+          <canvas id="distributionChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Export and Actions -->
+      <div class="export-section">
+        <button class="export-btn primary" onclick="exportProcurementOrder()">
+          🛒 Создать заявку на пополнение
+        </button>
+        <button class="export-btn" onclick="exportReport('excel')">
+          📊 Excel
+        </button>
+        <button class="export-btn" onclick="exportReport('pdf')">📄 PDF</button>
+        <button class="export-btn" onclick="printReport()">🖨️ Печать</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Система мониторинга складов • Данные обновляются в реальном времени</p>
+      <p>Версия 2.0 • API статус: <span id="apiStatus">Проверка...</span></p>
+    </div>
+
+    <script src="dashboard_script.js"></script>
+  </body>
+</html>

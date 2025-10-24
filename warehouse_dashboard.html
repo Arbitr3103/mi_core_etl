@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Дашборд мониторинга складов - Аналитика продаж</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f5f7fa;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 2rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .header h1 {
+        font-size: 1.8rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .header .subtitle {
+        opacity: 0.9;
+        font-size: 0.9rem;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        border: 1px solid #e1e8ed;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      .card-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        font-size: 1.2rem;
+      }
+
+      .card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .metric-label {
+        color: #718096;
+        font-size: 0.9rem;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .status-critical {
+        background: #fed7d7;
+        color: #c53030;
+      }
+      .status-warning {
+        background: #fef5e7;
+        color: #d69e2e;
+      }
+      .status-normal {
+        background: #c6f6d5;
+        color: #38a169;
+      }
+      .status-excess {
+        background: #bee3f8;
+        color: #3182ce;
+      }
+
+      .warehouse-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .warehouse-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        border-left: 4px solid #667eea;
+      }
+
+      .warehouse-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      .warehouse-name {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .warehouse-metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .metric {
+        text-align: center;
+      }
+
+      .metric-number {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #4a5568;
+      }
+
+      .metric-text {
+        font-size: 0.8rem;
+        color: #718096;
+        text-transform: uppercase;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 0.5rem 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+      }
+
+      .progress-critical {
+        background: #f56565;
+      }
+      .progress-warning {
+        background: #ed8936;
+      }
+      .progress-normal {
+        background: #48bb78;
+      }
+      .progress-excess {
+        background: #4299e1;
+      }
+
+      .urgent-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 2rem;
+      }
+
+      .urgent-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f7fafc;
+      }
+
+      .urgent-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #2d3748;
+        margin-left: 0.5rem;
+      }
+
+      .urgent-list {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .urgent-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: #f7fafc;
+        border-radius: 8px;
+        border-left: 4px solid #f56565;
+      }
+
+      .urgent-info {
+        flex: 1;
+      }
+
+      .urgent-product {
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .urgent-details {
+        font-size: 0.9rem;
+        color: #718096;
+        margin-top: 0.25rem;
+      }
+
+      .urgent-action {
+        background: #f56565;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      .urgent-action:hover {
+        background: #e53e3e;
+      }
+
+      .filters {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+      }
+
+      .filter-btn {
+        padding: 0.75rem 1.5rem;
+        border: 2px solid #e2e8f0;
+        background: white;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s ease;
+      }
+
+      .filter-btn.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      .filter-btn:hover {
+        border-color: #667eea;
+      }
+
+      .export-section {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-bottom: 2rem;
+      }
+
+      .export-btn {
+        padding: 0.75rem 1.5rem;
+        background: #48bb78;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      .export-btn:hover {
+        background: #38a169;
+      }
+
+      .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 2rem;
+      }
+
+      .chart-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 1rem;
+      }
+
+      .chart-placeholder {
+        height: 300px;
+        background: linear-gradient(45deg, #f7fafc 25%, transparent 25%),
+          linear-gradient(-45deg, #f7fafc 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #f7fafc 75%),
+          linear-gradient(-45deg, transparent 75%, #f7fafc 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #718096;
+        font-weight: 600;
+      }
+
+      .footer {
+        text-align: center;
+        padding: 2rem;
+        color: #718096;
+        border-top: 1px solid #e2e8f0;
+        margin-top: 2rem;
+      }
+
+      @media (max-width: 768px) {
+        .dashboard-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .warehouse-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .container {
+          padding: 1rem;
+        }
+
+        .filters {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🏪 Дашборд мониторинга складов</h1>
+      <div class="subtitle">
+        Аналитика продаж и рекомендации по пополнению • Обновлено:
+        <span id="lastUpdate"></span>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Summary Cards -->
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="background: #c6f6d5; color: #38a169">
+              📦
+            </div>
+            <div class="card-title">Общие остатки</div>
+          </div>
+          <div class="metric-value" style="color: #38a169">6,969</div>
+          <div class="metric-label">единиц на всех складах</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="background: #bee3f8; color: #3182ce">
+              📈
+            </div>
+            <div class="card-title">Продажи за 28 дней</div>
+          </div>
+          <div class="metric-value" style="color: #3182ce">213</div>
+          <div class="metric-label">единиц продано</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="background: #fef5e7; color: #d69e2e">
+              ⚠️
+            </div>
+            <div class="card-title">Требуют пополнения</div>
+          </div>
+          <div class="metric-value" style="color: #d69e2e">0</div>
+          <div class="metric-label">товаров срочно</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterWarehouses('all')">
+          Все склады
+        </button>
+        <button class="filter-btn" onclick="filterWarehouses('critical')">
+          Критические (< 0.5 мес)
+        </button>
+        <button class="filter-btn" onclick="filterWarehouses('low')">
+          Низкие (0.5-1 мес)
+        </button>
+        <button class="filter-btn" onclick="filterWarehouses('normal')">
+          Нормальные (1-2 мес)
+        </button>
+        <button class="filter-btn" onclick="filterWarehouses('excess')">
+          Избыточные (> 2 мес)
+        </button>
+      </div>
+
+      <!-- Urgent Replenishments Section -->
+      <div class="urgent-section">
+        <div class="urgent-header">
+          <span style="font-size: 1.5rem">🚨</span>
+          <div class="urgent-title">Срочные пополнения</div>
+        </div>
+        <div class="urgent-list" id="urgentList">
+          <div style="text-align: center; color: #718096; padding: 2rem">
+            ✅ Все товары имеют достаточные остатки. Срочных пополнений не
+            требуется.
+          </div>
+        </div>
+      </div>
+
+      <!-- Warehouses Grid -->
+      <div class="warehouse-grid" id="warehousesGrid">
+        <!-- Warehouse cards will be populated by JavaScript -->
+      </div>
+
+      <!-- Charts Section -->
+      <div class="chart-container">
+        <div class="chart-title">📊 Динамика остатков и продаж по складам</div>
+        <div class="chart-placeholder">
+          График будет отображен здесь<br />
+          <small>(Интеграция с Chart.js или другой библиотекой графиков)</small>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <div class="chart-title">
+          🎯 Распределение товаров по критичности пополнения
+        </div>
+        <div class="chart-placeholder">
+          Круговая диаграмма критичности<br />
+          <small>(30 товаров избыточные, 0 критических)</small>
+        </div>
+      </div>
+
+      <!-- Export Section -->
+      <div class="export-section">
+        <button class="export-btn" onclick="exportReport('excel')">
+          📊 Экспорт в Excel
+        </button>
+        <button class="export-btn" onclick="exportReport('pdf')">
+          📄 Экспорт в PDF
+        </button>
+        <button class="export-btn" onclick="exportProcurementOrder()">
+          🛒 Заявка на пополнение
+        </button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Система мониторинга складов • Данные обновляются каждые 6 часов</p>
+      <p>Для технической поддержки обращайтесь к администратору системы</p>
+    </div>
+
+    <script>
+      // Warehouse data (in real implementation, this would come from API)
+      const warehousesData = [
+        {
+          name: "Москва_РФЦ",
+          products: 15,
+          totalStock: 3406,
+          sales28d: 105,
+          monthsOfStock: 71.46,
+          status: "excess",
+          urgentItems: 0,
+          plannedItems: 0,
+          recommendedOrder: 0,
+          efficiency: 0.2,
+        },
+        {
+          name: "АДЫГЕЙСК_РФЦ",
+          products: 9,
+          totalStock: 1168,
+          sales28d: 36,
+          monthsOfStock: 22.98,
+          status: "excess",
+          urgentItems: 0,
+          plannedItems: 0,
+          recommendedOrder: 36,
+          efficiency: 0.5,
+        },
+        {
+          name: "Екатеринбург_РФЦ",
+          products: 9,
+          totalStock: 751,
+          sales28d: 30,
+          monthsOfStock: 16.49,
+          status: "excess",
+          urgentItems: 0,
+          plannedItems: 0,
+          recommendedOrder: 133,
+          efficiency: 0.7,
+        },
+        {
+          name: "Санкт-Петербург_РФЦ",
+          products: 7,
+          totalStock: 1100,
+          sales28d: 28,
+          monthsOfStock: 22.48,
+          status: "excess",
+          urgentItems: 0,
+          plannedItems: 0,
+          recommendedOrder: 23,
+          efficiency: 0.5,
+        },
+        {
+          name: "Новосибирск_РФЦ",
+          products: 3,
+          totalStock: 205,
+          sales28d: 7,
+          monthsOfStock: 4.56,
+          status: "excess",
+          urgentItems: 0,
+          plannedItems: 0,
+          recommendedOrder: 65,
+          efficiency: 2.6,
+        },
+        {
+          name: "Ростов-на-Дону_РФЦ",
+          products: 3,
+          totalStock: 260,
+          sales28d: 5,
+          monthsOfStock: 5.2,
+          status: "excess",
+          urgentItems: 0,
+          plannedItems: 0,
+          recommendedOrder: 40,
+          efficiency: 2.3,
+        },
+        {
+          name: "Казань_РФЦ",
+          products: 1,
+          totalStock: 79,
+          sales28d: 2,
+          monthsOfStock: 1.32,
+          status: "normal",
+          urgentItems: 0,
+          plannedItems: 0,
+          recommendedOrder: 41,
+          efficiency: 9.1,
+        },
+      ];
+
+      function getStatusColor(status) {
+        const colors = {
+          critical: { bg: "#fed7d7", border: "#f56565", text: "#c53030" },
+          warning: { bg: "#fef5e7", border: "#ed8936", text: "#d69e2e" },
+          normal: { bg: "#c6f6d5", border: "#48bb78", text: "#38a169" },
+          excess: { bg: "#bee3f8", border: "#4299e1", text: "#3182ce" },
+        };
+        return colors[status] || colors.normal;
+      }
+
+      function getStatusText(status) {
+        const texts = {
+          critical: "Критический",
+          warning: "Требует внимания",
+          normal: "Нормальный",
+          excess: "Избыточный",
+        };
+        return texts[status] || "Неизвестно";
+      }
+
+      function renderWarehouses(filter = "all") {
+        const grid = document.getElementById("warehousesGrid");
+        let filteredWarehouses = warehousesData;
+
+        if (filter !== "all") {
+          filteredWarehouses = warehousesData.filter((w) => {
+            switch (filter) {
+              case "critical":
+                return w.monthsOfStock < 0.5;
+              case "low":
+                return w.monthsOfStock >= 0.5 && w.monthsOfStock < 1;
+              case "normal":
+                return w.monthsOfStock >= 1 && w.monthsOfStock <= 2;
+              case "excess":
+                return w.monthsOfStock > 2;
+              default:
+                return true;
+            }
+          });
+        }
+
+        grid.innerHTML = filteredWarehouses
+          .map((warehouse) => {
+            const colors = getStatusColor(warehouse.status);
+            const statusText = getStatusText(warehouse.status);
+
+            return `
+                    <div class="warehouse-card" style="border-left-color: ${
+                      colors.border
+                    }">
+                        <div class="warehouse-header">
+                            <div class="warehouse-name">${warehouse.name}</div>
+                            <span class="status-indicator status-${
+                              warehouse.status
+                            }">${statusText}</span>
+                        </div>
+                        
+                        <div class="warehouse-metrics">
+                            <div class="metric">
+                                <div class="metric-number">${
+                                  warehouse.products
+                                }</div>
+                                <div class="metric-text">Товаров</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-number">${warehouse.totalStock.toLocaleString()}</div>
+                                <div class="metric-text">Остаток</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-number">${
+                                  warehouse.sales28d
+                                }</div>
+                                <div class="metric-text">Продажи 28д</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-number">${warehouse.monthsOfStock.toFixed(
+                                  1
+                                )}</div>
+                                <div class="metric-text">Месяцев запаса</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 1rem 0;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.9rem; color: #718096;">Эффективность оборота</span>
+                                <span style="font-size: 0.9rem; font-weight: 600;">${warehouse.efficiency.toFixed(
+                                  1
+                                )}x/год</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill progress-${
+                                  warehouse.status
+                                }" 
+                                     style="width: ${Math.min(
+                                       warehouse.efficiency * 10,
+                                       100
+                                     )}%"></div>
+                            </div>
+                        </div>
+
+                        ${
+                          warehouse.recommendedOrder > 0
+                            ? `
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                                <div style="font-weight: 600; color: #2d3748; margin-bottom: 0.5rem;">
+                                    💰 Рекомендуемый заказ
+                                </div>
+                                <div style="font-size: 1.2rem; font-weight: 700; color: #667eea;">
+                                    ${warehouse.recommendedOrder.toLocaleString()} единиц
+                                </div>
+                                <div style="font-size: 0.9rem; color: #718096;">
+                                    ≈ ${(
+                                      (warehouse.recommendedOrder * 1000) /
+                                      1000000
+                                    ).toFixed(2)} млн руб
+                                </div>
+                            </div>
+                        `
+                            : `
+                            <div style="background: #c6f6d5; padding: 1rem; border-radius: 8px; margin-top: 1rem; text-align: center;">
+                                <span style="color: #38a169; font-weight: 600;">✅ Пополнение не требуется</span>
+                            </div>
+                        `
+                        }
+                    </div>
+                `;
+          })
+          .join("");
+      }
+
+      function filterWarehouses(filter) {
+        // Update active filter button
+        document.querySelectorAll(".filter-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        // Render filtered warehouses
+        renderWarehouses(filter);
+      }
+
+      function exportReport(format) {
+        alert(
+          `Экспорт отчета в формате ${format.toUpperCase()} будет реализован в следующей версии.`
+        );
+      }
+
+      function exportProcurementOrder() {
+        const totalOrder = warehousesData.reduce(
+          (sum, w) => sum + w.recommendedOrder,
+          0
+        );
+        const totalValue = (totalOrder * 1000) / 1000000;
+
+        alert(
+          `Заявка на пополнение:\n\nОбщее количество: ${totalOrder.toLocaleString()} единиц\nОбщая стоимость: ${totalValue.toFixed(
+            2
+          )} млн руб\n\nФункция экспорта заявки будет реализована в следующей версии.`
+        );
+      }
+
+      // Initialize dashboard
+      document.addEventListener("DOMContentLoaded", function () {
+        // Set last update time
+        document.getElementById("lastUpdate").textContent =
+          new Date().toLocaleString("ru-RU");
+
+        // Render warehouses
+        renderWarehouses();
+
+        // Auto-refresh every 5 minutes (in real implementation)
+        // setInterval(() => {
+        //     location.reload();
+        // }, 300000);
+      });
+
+      // Add some interactivity
+      document.addEventListener("click", function (e) {
+        if (e.target.classList.contains("warehouse-card")) {
+          e.target.style.transform = "scale(0.98)";
+          setTimeout(() => {
+            e.target.style.transform = "";
+          }, 150);
+        }
+      });
+    </script>
+  </body>
+</html>

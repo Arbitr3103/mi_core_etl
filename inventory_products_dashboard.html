@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Дашборд товарных остатков</title>
+    <link rel="stylesheet" href="dashboard_styles.css" />
+    <style>
+      /* Additional styles for product inventory table */
+      .products-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        border: 1px solid #e1e8ed;
+        margin-bottom: 2rem;
+      }
+
+      .products-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f7fafc;
+      }
+
+      .products-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #2d3748;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .products-controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+
+      .products-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+      }
+
+      .products-table th,
+      .products-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .products-table th {
+        background: #f7fafc;
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .products-table tbody tr {
+        transition: all 0.2s ease;
+      }
+
+      .products-table tbody tr:hover {
+        background: #f7fafc;
+      }
+
+      /* Activity status styling - Enhanced color coding */
+      .product-row.active {
+        background: linear-gradient(
+          135deg,
+          rgba(72, 187, 120, 0.08),
+          rgba(56, 161, 105, 0.03)
+        );
+        border-left: 3px solid #48bb78;
+      }
+
+      .product-row.inactive {
+        background: linear-gradient(
+          135deg,
+          rgba(245, 101, 101, 0.08),
+          rgba(229, 62, 62, 0.03)
+        );
+        border-left: 3px solid #f56565;
+      }
+
+      .product-row.active:hover {
+        background: linear-gradient(
+          135deg,
+          rgba(72, 187, 120, 0.12),
+          rgba(56, 161, 105, 0.06)
+        );
+        box-shadow: 0 2px 8px rgba(72, 187, 120, 0.15);
+      }
+
+      .product-row.inactive:hover {
+        background: linear-gradient(
+          135deg,
+          rgba(245, 101, 101, 0.12),
+          rgba(229, 62, 62, 0.06)
+        );
+        box-shadow: 0 2px 8px rgba(245, 101, 101, 0.15);
+      }
+
+      /* SKU and Name styling based on activity */
+      .product-row.active .product-sku {
+        color: #2f855a;
+        font-weight: 600;
+      }
+
+      .product-row.inactive .product-sku {
+        color: #c53030;
+        font-weight: 600;
+      }
+
+      .product-row.active .product-name {
+        color: #2d3748;
+      }
+
+      .product-row.inactive .product-name {
+        color: #718096;
+        font-style: italic;
+      }
+
+      /* Total stock column highlighting */
+      .total-stock-cell {
+        font-weight: 700;
+        font-size: 1.1rem;
+        padding: 12px 16px;
+        position: relative;
+      }
+
+      .total-stock-cell.active {
+        color: #38a169;
+        background: linear-gradient(
+          135deg,
+          rgba(72, 187, 120, 0.1),
+          rgba(56, 161, 105, 0.05)
+        );
+      }
+
+      .total-stock-cell.inactive {
+        color: #e53e3e;
+        background: linear-gradient(
+          135deg,
+          rgba(245, 101, 101, 0.1),
+          rgba(229, 62, 62, 0.05)
+        );
+        font-weight: 900;
+      }
+
+      .total-stock-cell.zero-stock {
+        background: linear-gradient(135deg, #fed7d7, #feb2b2);
+        color: #c53030;
+        font-weight: 900;
+        position: relative;
+        border: 2px solid #f56565;
+        border-radius: 6px;
+        animation: pulse-warning 2s infinite;
+      }
+
+      .total-stock-cell.zero-stock::before {
+        content: "⚠️";
+        position: absolute;
+        left: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.9rem;
+        animation: bounce 1s infinite;
+      }
+
+      .total-stock-cell.zero-stock::after {
+        content: "НЕТ В НАЛИЧИИ";
+        position: absolute;
+        right: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #c53030;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 2px 4px;
+        border-radius: 3px;
+      }
+
+      /* Animation for zero stock warning */
+      @keyframes pulse-warning {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(245, 101, 101, 0.4);
+        }
+        50% {
+          box-shadow: 0 0 0 8px rgba(245, 101, 101, 0);
+        }
+      }
+
+      @keyframes bounce {
+        0%,
+        20%,
+        50%,
+        80%,
+        100% {
+          transform: translateY(-50%);
+        }
+        40% {
+          transform: translateY(-60%);
+        }
+        60% {
+          transform: translateY(-55%);
+        }
+      }
+
+      /* Enhanced styling for very low stock (1-2 items) */
+      .total-stock-cell.very-low-stock {
+        background: linear-gradient(135deg, #fef5e7, #fed7aa);
+        color: #d69e2e;
+        font-weight: 800;
+        border: 1px solid #ed8936;
+        border-radius: 4px;
+      }
+
+      .total-stock-cell.very-low-stock::before {
+        content: "⚡";
+        position: absolute;
+        left: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.8rem;
+        color: #d69e2e;
+      }
+
+      /* Activity status badges */
+      .activity-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .activity-badge.active {
+        background: #c6f6d5;
+        color: #38a169;
+      }
+
+      .activity-badge.inactive {
+        background: #fed7d7;
+        color: #c53030;
+      }
+
+      /* Sortable column headers */
+      .sortable {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+      }
+
+      .sortable:hover {
+        background: #e2e8f0;
+      }
+
+      .sortable::after {
+        content: "↕️";
+        position: absolute;
+        right: 8px;
+        opacity: 0.5;
+        font-size: 0.8rem;
+      }
+
+      .sortable.asc::after {
+        content: "↑";
+        opacity: 1;
+      }
+
+      .sortable.desc::after {
+        content: "↓";
+        opacity: 1;
+      }
+
+      /* Loading and pagination */
+      .table-loading {
+        text-align: center;
+        padding: 2rem;
+        color: #718096;
+      }
+
+      .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .pagination button {
+        padding: 0.5rem 1rem;
+        border: 1px solid #e2e8f0;
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .pagination button:hover:not(:disabled) {
+        background: #f7fafc;
+        border-color: #667eea;
+      }
+
+      .pagination button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .pagination .current-page {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      /* Search and filters */
+      .search-input {
+        padding: 0.75rem 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        width: 250px;
+      }
+
+      .search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      /* Responsive design */
+      @media (max-width: 768px) {
+        .products-header {
+          flex-direction: column;
+          gap: 1rem;
+          align-items: stretch;
+        }
+
+        .products-controls {
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .products-table {
+          font-size: 0.9rem;
+        }
+
+        .products-table th,
+        .products-table td {
+          padding: 8px;
+        }
+
+        .search-input {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>📦 Дашборд товарных остатков</h1>
+      <div class="subtitle">
+        Детальный просмотр товаров с фильтрацией по активности •
+        <span id="lastUpdate">Загрузка...</span> •
+        <span id="connectionStatus" class="status-indicator"
+          >🔄 Подключение...</span
+        >
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Loading Overlay -->
+      <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div>Загрузка данных...</div>
+      </div>
+
+      <!-- Activity Statistics -->
+      <div class="activity-stats-section" id="activityStatsSection">
+        <div class="stats-card">
+          <div class="stats-header">
+            <h3>📊 Статистика по активности товаров</h3>
+            <div class="stats-filter-indicator" id="statsFilterIndicator">
+              Показаны: активные товары
+            </div>
+          </div>
+          <div class="stats-grid" id="activityStatsGrid">
+            <!-- Stats will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Filter Section -->
+      <div class="controls-section">
+        <div class="activity-filter-section">
+          <div class="filter-group">
+            <div class="filter-label">Активность товаров:</div>
+            <div class="activity-filters">
+              <button class="activity-filter-btn active" data-activity="active">
+                ✅ Активные
+              </button>
+              <button class="activity-filter-btn" data-activity="inactive">
+                ❌ Неактивные
+              </button>
+              <button class="activity-filter-btn" data-activity="all">
+                📋 Все товары
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Products Table Section -->
+      <div class="products-section">
+        <div class="products-header">
+          <div class="products-title">
+            📋 Список товаров
+            <span id="productsCount" class="metric-change positive"
+              >0 товаров</span
+            >
+          </div>
+          <div class="products-controls">
+            <input
+              type="text"
+              id="searchInput"
+              class="search-input"
+              placeholder="Поиск по SKU или названию..."
+            />
+            <button class="control-btn" onclick="refreshProducts()">
+              🔄 Обновить
+            </button>
+          </div>
+        </div>
+
+        <div id="productsTableContainer">
+          <table class="products-table" id="productsTable">
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="sku">SKU</th>
+                <th class="sortable" data-sort="name">Название товара</th>
+                <th class="sortable" data-sort="warehouse">Склад</th>
+                <th class="sortable" data-sort="total_stock">Общий остаток</th>
+                <th class="sortable" data-sort="quantity_present">На складе</th>
+                <th class="sortable" data-sort="available">Доступно</th>
+                <th class="sortable" data-sort="reserved">Зарезервировано</th>
+                <th class="sortable" data-sort="activity_status">Статус</th>
+                <th class="sortable" data-sort="last_updated">Обновлено</th>
+              </tr>
+            </thead>
+            <tbody id="productsTableBody">
+              <tr>
+                <td colspan="9" class="table-loading">
+                  <div class="loading-spinner"></div>
+                  Загрузка товаров...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination" id="pagination">
+          <!-- Pagination will be populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>
+        Система управления товарными остатками • Данные обновляются в реальном
+        времени
+      </p>
+      <p>Версия 1.0 • API статус: <span id="apiStatus">Проверка...</span></p>
+    </div>
+
+    <script src="inventory_products_script.js"></script>
+  </body>
+</html>
