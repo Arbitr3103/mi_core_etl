@@ -1,308 +1,212 @@
-# Implementation Plan
+# План реализации: Разделение товаров на активные и неактивные
 
--   [x] 1. Set up database schema and migrations
+## Задачи для выполнения
 
-    -   Create new tables for stock reports tracking and logging
-    -   Extend existing inventory table with report-specific fields
-    -   Create necessary indexes for performance optimization
-    -   _Requirements: 1.3, 2.4, 3.2_
+-   [x] 1. Анализ и исправление подключения к базе данных
 
--   [x] 1.1 Create ozon_stock_reports table
+    -   Исправить ошибку подключения в check_inventory_stats.php
+    -   Проверить структуру таблицы inventory в PostgreSQL
+    -   Создать рабочий скрипт для анализа остатков
+    -   _Требования: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4_
 
-    -   Write SQL migration to create table with proper structure
-    -   Add indexes for status, requested_at, and report_type fields
-    -   Include JSON field for request parameters storage
-    -   _Requirements: 1.3, 2.4_
+-   [x] 1.1 Исправить скрипт check_inventory_stats.php
 
--   [x] 1.2 Create stock_report_logs table
+    -   Добавить правильное подключение к PostgreSQL через postgresql_config.php
+    -   Исправить ошибку "Undefined variable $pdo"
+    -   Добавить обработку ошибок подключения
+    -   _Требования: 2.1, 2.2, 2.3_
 
-    -   Write SQL migration for logging table with foreign key to reports
-    -   Add indexes for efficient log querying and filtering
-    -   Include JSON context field for structured logging data
-    -   _Requirements: 2.5, 5.5_
+-   [x] 1.2 Проанализировать структуру таблицы inventory
 
--   [x] 1.3 Extend inventory table schema
+    -   Выполнить DESCRIBE inventory для понимания полей
+    -   Проверить наличие полей остатков (quantity_present, available, etc.)
+    -   Создать SQL запрос для анализа распределения остатков
+    -   _Требования: 1.1, 1.2, 1.3_
 
-    -   Add report_source, last_report_update, and report_code columns
-    -   Create indexes for new fields to optimize queries
-    -   Write migration script with proper ALTER TABLE statements
-    -   _Requirements: 1.3, 3.2_
+-   [x] 1.3 Создать тестовые запросы для анализа активности
 
--   [x] 2. Implement core report management classes
+    -   Написать SQL для подсчета активных товаров (остаток > 0)
+    -   Написать SQL для подсчета неактивных товаров (остаток = 0)
+    -   Проверить корректность логики суммирования остатков
+    -   _Требования: 1.4, 3.1, 3.2, 3.3_
 
-    -   Create OzonStockReportsManager as main orchestrator
-    -   Implement ReportRequestHandler for API communication
-    -   Build ReportStatusMonitor with retry logic and timeout handling
-    -   _Requirements: 1.1, 1.2, 1.4, 2.1, 2.2, 2.3_
+-   [ ] 2. Создание системы анализа остатков и продаж по складам
 
--   [x] 2.1 Create OzonStockReportsManager class
+    -   Создать скрипт для анализа остатков в разрезе каждого склада
+    -   Интегрировать данные продаж для расчета потребности в пополнении
+    -   Реализовать определение складов, требующих пополнения на основе продаж
+    -   Создать дашборд для мониторинга состояния складов с рекомендациями
+    -   _Требования: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4_
 
-    -   Implement main ETL orchestration methods
-    -   Add executeStockReportsETL() method with full workflow
-    -   Include error handling and logging throughout the process
-    -   _Requirements: 1.1, 2.1, 2.5_
+-   [x] 2.1 Проанализировать структуру данных продаж и создать базовые запросы
 
--   [x] 2.2 Implement ReportRequestHandler class
+    -   Исследовать структуру таблиц с данными продаж (orders, order_items, sales, etc.)
+    -   Создать SQL запросы для извлечения продаж за последний месяц по товарам и складам
+    -   Написать запросы для группировки данных остатков по warehouse_name
+    -   Рассчитать общие остатки, активные и неактивные товары по каждому складу
+    -   Определить средние, минимальные и максимальные остатки по складам
+    -   _Требования: 1.1, 1.2, 1.3_
 
-    -   Create methods for POST /v1/report/warehouse/stock API calls
-    -   Implement POST /v1/report/info for status checking
-    -   Add downloadReportFile() method with proper error handling
-    -   _Requirements: 1.1, 1.2, 5.1, 5.2_
+-   [x] 2.2 Реализовать анализ продаж и прогнозирование потребности
 
--   [x] 2.3 Build ReportStatusMonitor class
+    -   Создать запросы для анализа фактических продаж за последний месяц по товарам и складам
+    -   Рассчитать среднемесячный расход товаров на каждом складе
+    -   Определить минимальный запас для обеспечения продаж на месяц вперед
+    -   Создать алгоритм прогнозирования потребности в пополнении
+    -   _Требования: 1.4, 2.1, 2.2_
 
-    -   Implement waitForReportCompletion() with configurable timeout
-    -   Add retry logic with exponential backoff for failed requests
-    -   Create status checking with 5-10 minute intervals as specified
-    -   _Requirements: 1.2, 1.4, 5.1, 5.3_
+-   [x] 2.3 Реализовать определение критических складов на основе продаж
 
--   [x] 3. Develop CSV processing and data transformation
+    -   Создать логику для выявления складов с недостаточными остатками относительно продаж
+    -   Установить пороговые значения: критический (< 0.5 месяца), низкий (< 1 месяца), нормальный (1-2 месяца), избыточный (> 2 месяцев)
+    -   Добавить категоризацию складов на основе соотношения остатков к месячным продажам
+    -   Рассчитать приоритет пополнения на основе скорости продаж и текущих остатков
+    -   _Требования: 1.4, 2.1, 2.2_
 
-    -   Create CSVReportProcessor for parsing warehouse stock reports
-    -   Implement data validation and normalization logic
-    -   Build warehouse name mapping and SKU resolution
-    -   _Requirements: 1.5, 3.1, 3.2, 3.3_
+-   [x] 2.4 Создать систему рекомендаций по пополнению
 
--   [x] 3.1 Create CSVReportProcessor class
+    -   Рассчитать рекомендуемое количество для заказа на основе месячных продаж
+    -   Определить критичность пополнения (срочно, в течение недели, плановое)
+    -   Создать формулы: рекомендуемый*заказ = (среднемесячные*продажи \* 2) - текущий_остаток
+    -   Добавить учет времени поставки и сезонности продаж
+    -   _Требования: 2.3, 2.4, 3.1, 3.2_
 
-    -   Implement parseWarehouseStockCSV() method for file processing
-    -   Add CSV structure validation with required columns check
-    -   Include data type validation and format checking
-    -   _Requirements: 1.5, 3.1_
+-   [x] 2.5 Создать отчет по состоянию складов с рекомендациями
 
--   [x] 3.2 Implement data normalization methods
+    -   Сформировать детальный отчет с данными по каждому складу включая продажи
+    -   Добавить топ-10 товаров требующих срочного пополнения по каждому складу
+    -   Включить конкретные рекомендации по количеству и срокам пополнения
+    -   Создать сводную таблицу с ключевыми метриками: остатки, продажи, дни до исчерпания, рекомендуемый заказ
+    -   Добавить расчет общей суммы рекомендуемых закупок по складам
+    -   _Требования: 2.3, 2.4, 3.1, 3.2_
 
-    -   Create normalizeWarehouseNames() for consistent naming
-    -   Build mapProductSKUs() to resolve SKUs to product_ids
-    -   Add data validation rules for stock quantities and dates
-    -   _Requirements: 3.1, 3.2, 3.3_
+-   [x] 2.6 Создать дашборд мониторинга складов с аналитикой продаж
 
--   [x] 3.3 Add warehouse mapping functionality
+    -   Разработать веб-интерфейс для отображения состояния складов с учетом продаж
+    -   Добавить цветовую индикацию: красный (< 0.5 мес), желтый (0.5-1 мес), зеленый (> 1 мес)
+    -   Реализовать детальный просмотр товаров по выбранному складу с данными продаж
+    -   Добавить графики динамики продаж и остатков по товарам
+    -   Создать раздел "Срочные пополнения" с приоритизированным списком
+    -   Добавить возможность экспорта отчетов и заявок на пополнение
+    -   _Требования: 3.3, 3.4, 4.1, 4.2_
 
-    -   Create mapping between Ozon warehouse names and internal IDs
-    -   Implement geographic location mapping for warehouses
-    -   Add validation for unknown or new warehouse names
-    -   _Requirements: 3.2, 3.3_
+-   [x] 3. Реализация логики активности товаров в API
 
--   [ ] 4. Build inventory data update system
+    -   Обновить API inventory-analytics.php для расчета активности
+    -   Добавить поле activity_status в ответ API
+    -   Реализовать правильную логику суммирования остатков
+    -   _Требования: 3.1, 3.2, 3.3, 3.4_
 
-    -   Create InventoryDataUpdater for database operations
-    -   Implement upsert logic for inventory records
-    -   Add batch processing for large datasets
-    -   _Requirements: 1.5, 2.4, 3.4, 3.5_
+-   [x] 3.1 Обновить API для расчета общего остатка
 
--   [x] 4.1 Create InventoryDataUpdater class
+    -   Модифицировать SQL запрос для суммирования всех полей остатков
+    -   Добавить вычисление total_stock = quantity_present + available + preparing_for_sale + in_requests + in_transit
+    -   Добавить поле total_stock в ответ API
+    -   _Требования: 3.1, 3.2_
 
-    -   Implement updateInventoryFromReport() for bulk updates
-    -   Add upsertInventoryRecord() with proper conflict resolution
-    -   Include transaction management for data consistency
-    -   _Requirements: 1.5, 2.4, 3.4_
+-   [x] 3.2 Добавить определение статуса активности
 
--   [x] 4.2 Implement batch processing logic
+    -   Реализовать логику: active если total_stock > 0, иначе inactive
+    -   Добавить поле activity_status в JSON ответ API
+    -   Обеспечить корректную типизацию данных
+    -   _Требования: 3.2, 3.3_
 
-    -   Add batch processing for handling large CSV files efficiently
-    -   Implement memory management for processing thousands of records
-    -   Create progress tracking and logging for long-running operations
-    -   _Requirements: 2.4, 3.5_
+-   [x] 3.3 Добавить статистику по активности в API
 
--   [x] 4.3 Add data integrity checks
+    -   Реализовать подсчет общего количества активных товаров
+    -   Реализовать подсчет общего количества неактивных товаров
+    -   Добавить эти данные в metadata ответа API
+    -   _Требования: 3.4, 4.4_
 
-    -   Implement validation against existing product catalog
-    -   Add checks for negative stock quantities and invalid dates
-    -   Create reconciliation reports for data quality monitoring
-    -   _Requirements: 3.4, 3.5_
+-   [x] 4. Обновление дашборда с фильтрацией по активности
 
--   [x] 5. Implement stock alert and notification system
+    -   Добавить кнопки фильтрации в интерфейс дашборда
+    -   Реализовать логику фильтрации товаров по активности
+    -   Обновить отображение статистики для каждого фильтра
+    -   _Требования: 4.1, 4.2, 4.3, 4.4_
 
-    -   Create StockAlertManager for critical stock monitoring
-    -   Build notification system for low stock alerts
-    -   Implement alert grouping by warehouse and urgency
-    -   _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
+-   [x] 4.1 Добавить кнопки фильтрации в дашборд
 
--   [x] 5.1 Create StockAlertManager class
+    -   Создать кнопки "Все", "Активные", "Неактивные" в HTML
+    -   Добавить CSS стили для активного состояния кнопок
+    -   Реализовать JavaScript обработчики для переключения фильтров
+    -   _Требования: 4.1, 4.2, 4.3_
 
-    -   Implement analyzeStockLevels() for threshold checking
-    -   Add generateCriticalStockAlerts() with configurable thresholds
-    -   Include sales velocity analysis for dynamic thresholds
-    -   _Requirements: 4.1, 4.2, 4.5_
+-   [x] 4.2 Реализовать логику фильтрации товаров
 
--   [x] 5.2 Build notification delivery system
+    -   Добавить JavaScript функцию для фильтрации по activity_status
+    -   Реализовать показ/скрытие строк таблицы в зависимости от фильтра
+    -   Обеспечить корректную работу с пагинацией
+    -   _Требования: 4.2, 4.3_
 
-    -   Implement sendStockAlertNotifications() for email/SMS alerts
-    -   Add alert grouping by warehouse for efficient communication
-    -   Create alert templates with warehouse-specific information
-    -   _Requirements: 4.3, 4.4_
+-   [x] 4.3 Обновить статистику в дашборде
 
--   [x] 5.3 Add alert history and tracking
+    -   Модифицировать отображение общего количества товаров
+    -   Добавить отображение количества активных/неактивных товаров
+    -   Обновлять статистику при изменении фильтра
+    -   _Требования: 4.4_
 
-    -   Create getStockAlertHistory() for alert audit trail
-    -   Implement alert acknowledgment and resolution tracking
-    -   Add metrics for alert response times and effectiveness
-    -   _Requirements: 4.4, 4.5_
+-   [x] 5. Визуальное различение активных и неактивных товаров
 
--   [x] 6. Create ETL scheduling and automation
+    -   Добавить цветовое кодирование для товаров
+    -   Выделить колонку с общим остатком
+    -   Добавить специальные стили для нулевых остатков
+    -   _Требования: 5.1, 5.2, 5.3, 5.4_
 
-    -   Set up cron job for daily ETL execution at 06:00 UTC
-    -   Implement ETL process monitoring and health checks
-    -   Add automatic retry logic for failed ETL runs
-    -   _Requirements: 2.1, 2.2, 2.5, 5.1, 5.2_
+-   [x] 5.1 Добавить колонку общего остатка
 
--   [x] 6.1 Create ETL scheduler script
+    -   Добавить новую колонку "Общий остаток" в таблицу дашборда
+    -   Отображать значение total_stock из API
+    -   Добавить сортировку по этой колонке
+    -   _Требования: 5.3_
 
-    -   Write cron-compatible script for daily execution
-    -   Add command-line interface for manual ETL triggers
-    -   Implement proper logging and error reporting
-    -   _Requirements: 2.1, 2.2_
+-   [x] 5.2 Реализовать цветовое кодирование
 
--   [x] 6.2 Add ETL monitoring and health checks
+    -   Добавить CSS классы для активных товаров (зеленый/обычный)
+    -   Добавить CSS классы для неактивных товаров (красный/серый)
+    -   Применять стили на основе activity_status
+    -   _Требования: 5.1, 5.2_
 
-    -   Implement process monitoring with timeout detection
-    -   Add health check endpoints for ETL status verification
-    -   Create alerting for failed or stalled ETL processes
-    -   _Requirements: 2.5, 5.1, 5.2_
+-   [x] 5.3 Выделить нулевые остатки
 
--   [x] 6.3 Build retry and recovery mechanisms
+    -   Добавить специальный стиль для значений остатка = 0
+    -   Использовать жирный шрифт или фоновый цвет для выделения
+    -   Добавить иконку или значок для нулевых остатков
+    -   _Требования: 5.4_
 
-    -   Add automatic retry logic for transient failures
-    -   Implement graceful degradation when API is unavailable
-    -   Create manual recovery procedures for critical failures
-    -   _Requirements: 5.1, 5.2, 5.3, 5.4_
+-   [x] 6. Тестирование и валидация
 
--   [x] 7. Implement comprehensive error handling
+    -   Протестировать корректность расчета активности
+    -   Проверить работу фильтрации в дашборде
+    -   Валидировать соответствие статистики реальным данным
+    -   Протестировать анализ остатков по складам
+    -   _Требования: Все требования_
 
-    -   Add retry logic with exponential backoff for API calls
-    -   Create fallback mechanisms for API unavailability
-    -   Implement comprehensive logging and error tracking
-    -   _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+-   [x] 6.1 Тестирование логики активности
 
--   [x] 7.1 Create robust API error handling
+    -   Создать тестовые данные с различными комбинациями остатков
+    -   Проверить корректность суммирования полей остатков
+    -   Валидировать правильность определения активности товаров
+    -   _Требования: 3.1, 3.2, 3.3_
 
-    -   Implement retry logic with 30s, 60s, 120s intervals
-    -   Add specific handling for rate limits and authentication errors
-    -   Create fallback to cached data when API is unavailable
-    -   _Requirements: 5.1, 5.2, 5.4_
+-   [x] 6.2 Тестирование анализа по складам
 
--   [x] 7.2 Add comprehensive logging system
+    -   Проверить корректность группировки данных по складам
+    -   Валидировать расчет критических уровней остатков
+    -   Протестировать определение приоритетов пополнения
+    -   Проверить точность отчетов по состоянию складов
+    -   _Требования: 2.1, 2.2, 2.3, 2.4_
 
-    -   Implement structured logging with context information
-    -   Add log levels (INFO, WARNING, ERROR) with proper categorization
-    -   Create log rotation and archival for long-term storage
-    -   _Requirements: 2.5, 5.5_
+-   [x] 6.3 Тестирование фильтрации в дашборде
 
--   [x] 7.3 Build error notification system
+    -   Проверить работу всех кнопок фильтрации
+    -   Валидировать корректность отображения товаров для каждого фильтра
+    -   Проверить обновление статистики при переключении фильтров
+    -   _Требования: 4.1, 4.2, 4.3, 4.4_
 
-    -   Create administrator notifications for critical errors
-    -   Add escalation procedures for prolonged failures
-    -   Implement error categorization and priority levels
-    -   _Requirements: 5.4, 5.5_
-
--   [x] 8. Create API endpoints for stock data access
-
-    -   Build REST API for accessing warehouse stock data
-    -   Implement filtering by warehouse, product, and date ranges
-    -   Add pagination and sorting for large datasets
-    -   _Requirements: 3.4, 3.5_
-
--   [x] 8.1 Create stock data API endpoints
-
-    -   Implement GET /api/warehouse-stock with filtering options
-    -   Add GET /api/warehouse-stock/{warehouse} for specific warehouses
-    -   Create GET /api/stock-reports for report status and history
-    -   _Requirements: 3.4, 3.5_
-
--   [x] 8.2 Add API documentation and validation
-
-    -   Create OpenAPI/Swagger documentation for all endpoints
-    -   Implement request validation and error responses
-    -   Add rate limiting and authentication for API access
-    -   _Requirements: 3.4, 3.5_
-
--   [x] 8.3 Implement API response optimization
-
-    -   Add response caching for frequently requested data
-    -   Implement data compression for large responses
-    -   Create efficient database queries with proper indexing
-    -   _Requirements: 3.5_
-
--   [x] 9. Build monitoring and alerting system
-
-    -   Create system health monitoring for ETL processes
-    -   Implement business metrics tracking and alerting
-    -   Add performance monitoring and optimization alerts
-    -   _Requirements: 2.5, 4.4, 5.5_
-
--   [x] 9.1 Create system monitoring dashboard
-
-    -   Build monitoring interface for ETL process status
-    -   Add real-time metrics for report generation and processing
-    -   Implement historical trend analysis for system performance
-    -   _Requirements: 2.5, 5.5_
-
--   [x] 9.2 Add business metrics monitoring
-
-    -   Create alerts for critical stock levels across warehouses
-    -   Implement monitoring for data freshness and completeness
-    -   Add trend analysis for stock movement patterns
-    -   _Requirements: 4.4, 5.5_
-
--   [x] 9.3 Build performance monitoring system
-
-    -   Add monitoring for ETL execution times and resource usage
-    -   Create alerts for performance degradation or bottlenecks
-    -   Implement capacity planning metrics and recommendations
-    -   _Requirements: 2.5, 5.5_
-
--   [x] 10. Create comprehensive test suite
-
-    -   Write unit tests for all core classes and methods
-    -   Implement integration tests for ETL workflow
-    -   Add end-to-end tests with mock Ozon API responses
-    -   _Requirements: All requirements validation_
-
--   [x] 10.1 Write unit tests for core functionality
-
-    -   Test CSVReportProcessor with various CSV formats
-    -   Test InventoryDataUpdater with different data scenarios
-    -   Test StockAlertManager with various threshold configurations
-    -   _Requirements: All requirements validation_
-
--   [x] 10.2 Create integration tests
-
-    -   Test complete ETL workflow with mock API responses
-    -   Test database operations with test data
-    -   Test error handling and recovery scenarios
-    -   _Requirements: All requirements validation_
-
--   [x] 10.3 Add end-to-end testing
-
-    -   Create test scenarios with realistic data volumes
-    -   Test system behavior under various failure conditions
-    -   Validate performance with large datasets
-    -   _Requirements: All requirements validation_
-
--   [x] 11. Deploy and configure production environment
-
-    -   Set up production database with proper security
-    -   Configure cron jobs and monitoring systems
-    -   Implement backup and disaster recovery procedures
-    -   _Requirements: 2.1, 2.2, 5.5_
-
--   [x] 11.1 Configure production database
-
-    -   Apply all database migrations in production
-    -   Set up proper user permissions and security
-    -   Configure backup schedules and retention policies
-    -   _Requirements: 2.4, 5.5_
-
--   [x] 11.2 Deploy application code
-
-    -   Deploy all new classes and ETL scripts to production
-    -   Configure environment variables and API credentials
-    -   Set up log rotation and monitoring integration
-    -   _Requirements: 2.1, 2.2, 5.5_
-
--   [x] 11.3 Configure monitoring and alerting
-    -   Set up production monitoring dashboards
-    -   Configure alert thresholds and notification channels
-    -   Test all alerting scenarios and escalation procedures
-    -   _Requirements: 2.5, 4.4, 5.5_
+-   [x] 6.4 Валидация визуального отображения
+    -   Проверить корректность цветового кодирования
+    -   Валидировать выделение нулевых остатков
+    -   Проверить читаемость и удобство интерфейса
+    -   Протестировать дашборд мониторинга складов
+    -   _Требования: 5.1, 5.2, 5.3, 5.4_

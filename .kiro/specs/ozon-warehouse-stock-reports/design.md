@@ -2,7 +2,15 @@
 
 ## Overview
 
-Система получения точных остатков товаров на конкретных FBO-складах Ozon через API отчетов. Решает проблему неточности стандартного API, который возвращает данные по кластерам складов вместо конкретных складов. Использует асинхронный подход через API отчетов Ozon для получения детализированных данных по каждому складу.
+Система получения точных остатков товаров на конкретных FBO-складах Ozon через API отчетов с функциональностью разделения товаров на активные и неактивные. Решает проблему неточности стандартного API и обеспечивает четкую классификацию товаров по наличию остатков для улучшения управления складскими запасами.
+
+## Новая функциональность: Активность товаров
+
+### Определение активности
+
+-   **Активный товар**: Общий остаток > 0 (сумма всех полей остатков)
+-   **Неактивный товар**: Общий остаток = 0 (нет остатков на складах)
+-   **Общий остаток**: quantity_present + available + preparing_for_sale + in_requests + in_transit
 
 ## Architecture
 
@@ -39,6 +47,8 @@
 4. **CSVReportProcessor** - Обработка CSV файлов отчетов
 5. **InventoryDataUpdater** - Обновление данных в БД
 6. **StockAlertManager** - Система уведомлений о критических остатках
+7. **ProductActivityAnalyzer** - Анализ активности товаров (НОВЫЙ)
+8. **DashboardFilterManager** - Управление фильтрацией в дашборде (НОВЫЙ)
 
 ## Components and Interfaces
 
@@ -107,6 +117,46 @@ class ReportStatusMonitor {
 -   `SUCCESS` - Отчет готов к скачиванию
 -   `ERROR` - Ошибка генерации отчета
 -   `TIMEOUT` - Превышено время ожидания
+
+### 7. ProductActivityAnalyzer
+
+**Назначение:** Анализ активности товаров на основе остатков
+
+**Интерфейс:**
+
+```php
+class ProductActivityAnalyzer {
+    public function calculateTotalStock(array $stockData): int;
+    public function determineProductActivity(array $productData): string;
+    public function getActivityStatistics(): array;
+    public function analyzeStockDistribution(): array;
+}
+```
+
+**Логика активности:**
+
+-   Активный: quantity_present + available + preparing_for_sale + in_requests + in_transit > 0
+-   Неактивный: общий остаток = 0
+
+### 8. DashboardFilterManager
+
+**Назначение:** Управление фильтрацией товаров в дашборде
+
+**Интерфейс:**
+
+```php
+class DashboardFilterManager {
+    public function filterByActivity(array $products, string $filter): array;
+    public function getFilterStatistics(array $products): array;
+    public function applyVisualStyles(array $products): array;
+}
+```
+
+**Типы фильтров:**
+
+-   `ALL` - Все товары
+-   `ACTIVE` - Только активные товары (остаток > 0)
+-   `INACTIVE` - Только неактивные товары (остаток = 0)
 
 ### 4. CSVReportProcessor
 
