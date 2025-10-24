@@ -180,33 +180,36 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
     const { item, warehouse } = row;
     return (
       <>
-        <td className="px-6 py-4">
-          <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
+        <td className="px-6 py-4" style={{ width: "30%" }}>
+          <div className="text-sm font-medium text-gray-900 truncate">
             {item.name}
           </div>
           <div className="text-xs text-gray-500 truncate">{item.sku}</div>
         </td>
-        <td className="px-6 py-4 text-sm text-gray-700">
-          <div className="truncate max-w-xs">{warehouse.warehouse_name}</div>
+        <td
+          className="px-6 py-4 text-sm text-gray-700"
+          style={{ width: "15%" }}
+        >
+          <div className="truncate">{warehouse.warehouse_name}</div>
         </td>
-        <td className="px-6 py-4 text-right">
+        <td className="px-6 py-4 text-right" style={{ width: "10%" }}>
           <MetricsTooltip item={item}>
             <span className="text-sm font-semibold text-gray-900 cursor-help border-b border-dashed border-gray-400 whitespace-nowrap">
               {item.available.toLocaleString("ru-RU")}
             </span>
           </MetricsTooltip>
         </td>
-        <td className="px-6 py-4 text-right">
+        <td className="px-6 py-4 text-right" style={{ width: "12%" }}>
           <span className="text-sm text-gray-700 whitespace-nowrap">
             {item.daily_sales_avg.toFixed(2)}
           </span>
         </td>
-        <td className="px-6 py-4 text-right">
+        <td className="px-6 py-4 text-right" style={{ width: "10%" }}>
           <span className="text-sm text-gray-700 whitespace-nowrap">
             {item.days_of_stock}
           </span>
         </td>
-        <td className="px-6 py-4 text-right">
+        <td className="px-6 py-4 text-right" style={{ width: "13%" }}>
           <span
             className={`text-sm font-semibold whitespace-nowrap ${
               item.replenishment_need > 0 ? "text-red-600" : "text-gray-700"
@@ -217,7 +220,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               : "—"}
           </span>
         </td>
-        <td className="px-6 py-4">
+        <td className="px-6 py-4" style={{ width: "10%" }}>
           <LiquidityBadge
             status={item.liquidity_status}
             daysOfStock={item.days_of_stock}
@@ -284,35 +287,44 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
         key={`${item.product_id}-${item.warehouse_name}`}
         className="hover:bg-gray-50 transition-colors"
       >
-        <td className="px-6 py-4">
-          <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
+        <td className="px-6 py-4" style={{ width: "30%" }}>
+          <div className="text-sm font-medium text-gray-900 truncate">
             {item.name}
           </div>
           <div className="text-xs text-gray-500 truncate">{item.sku}</div>
         </td>
-        <td className="px-6 py-4 text-sm text-gray-700">
-          <div className="truncate max-w-xs">{warehouse.warehouse_name}</div>
+        <td
+          className="px-6 py-4 text-sm text-gray-700"
+          style={{ width: "15%" }}
+        >
+          <div className="truncate">{warehouse.warehouse_name}</div>
         </td>
-        <td className="px-6 py-4 text-right">
+        <td className="px-6 py-4 text-right" style={{ width: "10%" }}>
           <MetricsTooltip item={item}>
             <span className="text-sm font-semibold text-gray-900 cursor-help border-b border-dashed border-gray-400 whitespace-nowrap">
               {item.available.toLocaleString("ru-RU")}
             </span>
           </MetricsTooltip>
         </td>
-        <td className="px-6 py-4 text-right text-sm text-gray-700 whitespace-nowrap">
+        <td
+          className="px-6 py-4 text-right text-sm text-gray-700 whitespace-nowrap"
+          style={{ width: "12%" }}
+        >
           {item.daily_sales_avg.toFixed(2)}
         </td>
-        <td className="px-6 py-4 text-right text-sm text-gray-700 whitespace-nowrap">
+        <td
+          className="px-6 py-4 text-right text-sm text-gray-700 whitespace-nowrap"
+          style={{ width: "10%" }}
+        >
           {item.days_of_stock !== null ? Math.round(item.days_of_stock) : "∞"}
         </td>
-        <td className="px-6 py-4 text-right">
+        <td className="px-6 py-4 text-right" style={{ width: "13%" }}>
           <ReplenishmentIndicator
             need={item.replenishment_need}
             targetStock={item.target_stock}
           />
         </td>
-        <td className="px-6 py-4">
+        <td className="px-6 py-4" style={{ width: "10%" }}>
           <LiquidityBadge
             status={item.liquidity_status}
             daysOfStock={item.days_of_stock}
@@ -340,12 +352,16 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
           overflowY: shouldVirtualize ? "auto" : "visible",
         }}
       >
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50 sticky top-28 z-10">
+        <table
+          className="min-w-full divide-y divide-gray-200 table-fixed"
+          style={{ tableLayout: "fixed" }}
+        >
+          <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm border-b-2 border-gray-200">
             <tr>
               <th
                 onClick={() => handleSort("name")}
                 className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
+                style={{ width: "30%" }}
               >
                 <div className="flex items-center">
                   Товар
@@ -355,6 +371,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               <th
                 onClick={() => handleSort("warehouse_name")}
                 className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
+                style={{ width: "15%" }}
               >
                 <div className="flex items-center">
                   Склад
@@ -364,6 +381,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               <th
                 onClick={() => handleSort("available")}
                 className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
+                style={{ width: "10%" }}
               >
                 <div className="flex items-center justify-end">
                   Доступно
@@ -373,6 +391,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               <th
                 onClick={() => handleSort("daily_sales_avg")}
                 className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
+                style={{ width: "12%" }}
               >
                 <div className="flex items-center justify-end">
                   Продажи/день
@@ -382,6 +401,7 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               <th
                 onClick={() => handleSort("days_of_stock")}
                 className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
+                style={{ width: "10%" }}
               >
                 <div className="flex items-center justify-end">
                   Дней запаса
@@ -391,13 +411,17 @@ export const WarehouseTable: React.FC<WarehouseTableProps> = ({
               <th
                 onClick={() => handleSort("replenishment_need")}
                 className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
+                style={{ width: "13%" }}
               >
                 <div className="flex items-center justify-end">
                   Нужно заказать
                   {getSortIcon("replenishment_need")}
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap"
+                style={{ width: "10%" }}
+              >
                 Статус
               </th>
             </tr>

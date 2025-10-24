@@ -81,6 +81,11 @@ function validateInput($action, $params = []) {
         $errors[] = "Параметр active_only должен быть true/false или 1/0";
     }
     
+    // Валидация параметра activity_filter
+    if (isset($params['activity_filter']) && !in_array($params['activity_filter'], ['active', 'inactive', 'all'])) {
+        $errors[] = "Параметр activity_filter должен быть 'active', 'inactive' или 'all'";
+    }
+    
     // Валидация параметра limit (только 'all' или числовые значения)
     if (isset($params['limit'])) {
         if ($params['limit'] !== 'all' && !is_numeric($params['limit'])) {
@@ -95,16 +100,63 @@ function validateInput($action, $params = []) {
     return $errors;
 }
 
+// Функция для получения статистики активности товаров
+function getActivityStatistics($pdo) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                COUNT(CASE WHEN v.current_stock > 0 THEN 1 END) as active_count,
+                COUNT(CASE WHEN v.current_stock = 0 THEN 1 END) as inactive_count,
+                COUNT(*) as total_count
+            FROM v_dashboard_inventory v
+            WHERE v.current_stock IS NOT NULL
+        ");
+        
+        $stmt->execute();
+        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return [
+            'active_count' => (int)$stats['active_count'],
+            'inactive_count' => (int)$stats['inactive_count'],
+            'total_count' => (int)$stats['total_count'],
+            'active_percentage' => $stats['total_count'] > 0 ? round(($stats['active_count'] / $stats['total_count']) * 100, 2) : 0,
+            'inactive_percentage' => $stats['total_count'] > 0 ? round(($stats['inactive_count'] / $stats['total_count']) * 100, 2) : 0
+        ];
+        
+    } catch (PDOException $e) {
+        logError("Database error in getActivityStatistics", ['error' => $e->getMessage()]);
+        return [
+            'active_count' => 0,
+            'inactive_count' => 0,
+            'total_count' => 0,
+            'active_percentage' => 0,
+            'inactive_percentage' => 0
+        ];
+    }
+}
+
 // Функция для получения условия фильтрации активных товаров
 function getActiveProductsFilter($params = []) {
-    // По умолчанию фильтруем только активные товары
-    $activeOnly = $params['active_only'] ?? 'true';
+    // Новый параметр activity_filter имеет приоритет над старым active_only
+    $activityFilter = $params['activity_filter'] ?? ($params['active_only'] ?? 'active');
     
-    if (in_array($activeOnly, ['true', '1'])) {
-        return " AND dp.is_active = 1 AND dp.is_active IS NOT NULL ";
+    switch ($activityFilter) {
+        case 'active':
+            // Только товары с остатками > 0
+            return " AND v.current_stock > 0 ";
+            
+        case 'inactive':
+            // Только товары с остатками = 0
+            return " AND v.current_stock = 0 ";
+            
+        case 'all':
+            // Все товары без фильтрации
+            return " ";
+            
+        default:
+            // По умолчанию показываем только активные товары
+            return " AND v.current_stock > 0 ";
     }
-    
-    return " "; // Возвращаем пустую строку если фильтрация отключена
 }
 
 try {
@@ -161,7 +213,8 @@ try {
             $performance_monitor->startTimer('dashboard_request');
             
             $limit = $params['limit'] ?? '10';
-            $cache_key = InventoryCacheKeys::getDashboardKey() . '_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
+            $activity_filter = $params['activity_filter'] ?? 'active';
+            $cache_key = InventoryCacheKeys::getDashboardKey() . '_' . $activity_filter . '_limit_' . $limit;
             $result = $cache->remember($cache_key, function() use ($pdo, $params, $performance_monitor) {
                 $performance_monitor->startTimer('dashboard_data_generation');
                 $data = getInventoryDashboardData($pdo, $params);
@@ -169,9 +222,12 @@ try {
                 return $data;
             }, 300); // 5 минут кэш
             
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
+            
             $dashboard_metrics = $performance_monitor->endTimer('dashboard_request', [
                 'cache_hit' => $cache->get($cache_key) !== null,
-                'active_only' => $params['active_only'] ?? 'true',
+                'activity_filter' => $activity_filter,
                 'limit' => $limit,
                 'result_count' => count($result['data']['critical_products'] ?? [])
             ]);
@@ -182,7 +238,8 @@ try {
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
                     'cache_key' => $cache_key,
-                    'active_only' => $params['active_only'] ?? 'true',
+                    'activity_filter' => $activity_filter,
+                    'activity_stats' => $activity_stats,
                     'limit' => $limit,
                     'performance' => [
                         'execution_time_ms' => $dashboard_metrics['execution_time_ms'] ?? null,
@@ -194,17 +251,22 @@ try {
             
         case 'critical-products':
             $limit = $params['limit'] ?? '10';
-            $cache_key = InventoryCacheKeys::getCriticalProductsKey() . '_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
+            $activity_filter = $params['activity_filter'] ?? 'active';
+            $cache_key = InventoryCacheKeys::getCriticalProductsKey() . '_' . $activity_filter . '_limit_' . $limit;
             $result = $cache->remember($cache_key, function() use ($pdo, $params) {
                 return getCriticalProducts($pdo, $params);
             }, 180); // 3 минуты кэш для критических товаров
+            
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
-                    'active_only' => $params['active_only'] ?? 'true',
+                    'activity_filter' => $activity_filter,
+                    'activity_stats' => $activity_stats,
                     'limit' => $limit
                 ])
             ]);
@@ -212,17 +274,22 @@ try {
             
         case 'overstock-products':
             $limit = $params['limit'] ?? '10';
-            $cache_key = InventoryCacheKeys::getOverstockProductsKey() . '_' . ($params['active_only'] ?? 'true') . '_limit_' . $limit;
+            $activity_filter = $params['activity_filter'] ?? 'active';
+            $cache_key = InventoryCacheKeys::getOverstockProductsKey() . '_' . $activity_filter . '_limit_' . $limit;
             $result = $cache->remember($cache_key, function() use ($pdo, $params) {
                 return getOverstockProducts($pdo, $params);
             }, 600); // 10 минут кэш для товаров с избытком
+            
+            // Получаем статистику активности товаров
+            $activity_stats = getActivityStatistics($pdo);
             
             echo json_encode([
                 'status' => 'success',
                 'data' => $result['data'],
                 'metadata' => array_merge($result['metadata'] ?? [], [
                     'cached' => $cache->get($cache_key) !== null,
-                    'active_only' => $params['active_only'] ?? 'true',
+                    'activity_filter' => $activity_filter,
+                    'activity_stats' => $activity_stats,
                     'limit' => $limit
                 ])
             ]);
@@ -391,45 +458,39 @@ try {
 
 function getInventoryDashboardData($pdo, $params = []) {
     try {
-        // Проверяем наличие таблицы inventory_data
-        $tableCheck = $pdo->query("SHOW TABLES LIKE 'inventory_data'");
-        if ($tableCheck->rowCount() === 0) {
-            throw new Exception("Таблица inventory_data не найдена");
-        }
-        
         // Получаем условие фильтрации активных товаров
         $activeFilter = getActiveProductsFilter($params);
         
-        // Получаем данные из inventory_data с объединением с dim_products для названий товаров
-        // Используем правильные названия колонок: current_stock вместо stock_quantity
-        // Добавляем фильтрацию по активным товарам
+        // Получаем данные из представления v_dashboard_inventory
+        // Это представление уже содержит все необходимые поля и связи
         $stmt = $pdo->prepare("
             SELECT 
-                i.sku,
-                i.warehouse_name,
-                SUM(i.current_stock) as total_stock,
-                SUM(i.available_stock) as available_stock,
-                SUM(i.reserved_stock) as reserved_stock,
-                MAX(i.last_sync_at) as last_updated,
+                v.sku,
+                v.name,
+                v.warehouse_name,
+                v.current_stock as total_stock,
+                v.available_stock,
+                v.reserved_stock,
+                v.last_updated,
+                v.price,
+                v.category,
                 -- Классификация товаров по уровням остатков согласно требованиям
                 CASE
-                    WHEN SUM(i.current_stock) <= 5 THEN 'critical'
-                    WHEN SUM(i.current_stock) <= 20 THEN 'low'
-                    WHEN SUM(i.current_stock) > 100 THEN 'overstock'
+                    WHEN v.current_stock <= 5 THEN 'critical'
+                    WHEN v.current_stock <= 20 THEN 'low'
+                    WHEN v.current_stock > 100 THEN 'overstock'
                     ELSE 'normal'
                 END as stock_status
-            FROM inventory_data i
-            LEFT JOIN dim_products dp ON (i.sku = dp.sku_ozon OR i.sku = dp.sku_wb)
-            WHERE i.current_stock IS NOT NULL " . $activeFilter . "
-            GROUP BY i.sku, i.warehouse_name
+            FROM v_dashboard_inventory v
+            WHERE v.current_stock IS NOT NULL " . $activeFilter . "
             ORDER BY 
                 CASE 
-                    WHEN SUM(i.current_stock) <= 5 THEN 1
-                    WHEN SUM(i.current_stock) <= 20 THEN 2
-                    WHEN SUM(i.current_stock) > 100 THEN 3
+                    WHEN v.current_stock <= 5 THEN 1
+                    WHEN v.current_stock <= 20 THEN 2
+                    WHEN v.current_stock > 100 THEN 3
                     ELSE 4
                 END,
-                SUM(i.current_stock) ASC
+                v.current_stock ASC
         ");
         
         $stmt->execute();
@@ -468,70 +529,9 @@ function getInventoryDashboardData($pdo, $params = []) {
             ];
         }
     
-        // Получаем названия товаров и цены отдельно (с кросс-референсами)
-        $product_info = [];
+        // Представление v_dashboard_inventory уже содержит названия товаров и цены
+        // Поэтому нам не нужно делать дополнительные запросы
         $missing_names_count = 0;
-        
-        if (!empty($products)) {
-            $skus = array_unique(array_column($products, 'sku'));
-            
-            // Для каждого SKU ищем информацию
-            foreach ($skus as $sku) {
-                $product_name = null;
-                $unit_cost = 0;
-                
-                try {
-                    // Сначала ищем в dim_products
-                    $info_stmt = $pdo->prepare("
-                        SELECT 
-                            COALESCE(product_name, name) as product_name,
-                            COALESCE(cost_price, 0) as unit_cost
-                        FROM dim_products 
-                        WHERE sku_ozon = ? OR sku_wb = ? OR name = ?
-                        LIMIT 1
-                    ");
-                    $info_stmt->execute([$sku, $sku, $sku]);
-                    $info = $info_stmt->fetch();
-                    
-                    if ($info && !empty($info['product_name'])) {
-                        $product_name = $info['product_name'];
-                        $unit_cost = (float)$info['unit_cost'];
-                    } else {
-                        // Ищем в кросс-референсах
-                        $cross_ref_stmt = $pdo->prepare("
-                            SELECT 
-                                scr.product_name,
-                                COALESCE(dp.cost_price, 0) as unit_cost
-                            FROM sku_cross_reference scr
-                            LEFT JOIN dim_products dp ON scr.numeric_sku = dp.sku_ozon
-                            WHERE scr.text_sku = ?
-                            LIMIT 1
-                        ");
-                        $cross_ref_stmt->execute([$sku]);
-                        $cross_ref = $cross_ref_stmt->fetch();
-                        
-                        if ($cross_ref && !empty($cross_ref['product_name'])) {
-                            $product_name = $cross_ref['product_name'];
-                            $unit_cost = (float)$cross_ref['unit_cost'];
-                        }
-                    }
-                } catch (PDOException $e) {
-                    logError("Error fetching product info for SKU: $sku", ['error' => $e->getMessage()]);
-                }
-                
-                // Fallback для отсутствующих названий товаров (требование 3.2)
-                if (empty($product_name)) {
-                    $product_name = 'Товар ' . $sku;
-                    $missing_names_count++;
-                }
-                
-                $product_info[$sku] = [
-                    'name' => $product_name,
-                    'unit_cost' => $unit_cost,
-                    'has_name' => !empty($product_name) && $product_name !== 'Товар ' . $sku
-                ];
-            }
-        }
     
     // Группируем товары по статусу
     $critical_products = [];
@@ -543,12 +543,9 @@ function getInventoryDashboardData($pdo, $params = []) {
     $warehouses_summary = [];
     
     foreach ($products as $product) {
-        $product_name = isset($product_info[$product['sku']]) ? 
-            $product_info[$product['sku']]['name'] : 
-            'Товар ' . $product['sku'];
-        $unit_cost = isset($product_info[$product['sku']]) ? 
-            $product_info[$product['sku']]['unit_cost'] : 
-            0;
+        // Представление v_dashboard_inventory уже содержит все необходимые данные
+        $product_name = $product['name'] ?: 'Товар ' . $product['sku'];
+        $unit_cost = (float)($product['price'] ?? 0);
             
         $stock_value = $product['total_stock'] * $unit_cost;
         $total_inventory_value += $stock_value;
@@ -576,7 +573,8 @@ function getInventoryDashboardData($pdo, $params = []) {
             'reserved_stock' => (int)$product['reserved_stock'],
             'warehouse' => $product['warehouse_name'],
             'unit_cost' => $unit_cost,
-            'last_updated' => $product['last_updated']
+            'last_updated' => $product['last_updated'],
+            'category' => $product['category']
         ];
         
         switch ($product['stock_status']) {

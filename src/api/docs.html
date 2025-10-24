@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Warehouse Stock API Documentation</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        text-align: center;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 2.5rem;
+      }
+
+      .header p {
+        margin: 0.5rem 0 0 0;
+        opacity: 0.9;
+      }
+
+      .section {
+        background: white;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .section h2 {
+        color: #667eea;
+        border-bottom: 2px solid #667eea;
+        padding-bottom: 0.5rem;
+        margin-top: 0;
+      }
+
+      .endpoint {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 5px 5px 0;
+      }
+
+      .method {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        font-weight: bold;
+        font-size: 0.8rem;
+        margin-right: 0.5rem;
+      }
+
+      .method.get {
+        background: #28a745;
+        color: white;
+      }
+
+      .url {
+        font-family: "Monaco", "Menlo", monospace;
+        font-weight: bold;
+        color: #495057;
+      }
+
+      .params-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+      }
+
+      .params-table th,
+      .params-table td {
+        border: 1px solid #dee2e6;
+        padding: 0.75rem;
+        text-align: left;
+      }
+
+      .params-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+      }
+
+      .params-table code {
+        background: #f8f9fa;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-size: 0.9rem;
+      }
+
+      .example {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+
+      .example pre {
+        margin: 0;
+        overflow-x: auto;
+      }
+
+      .example code {
+        font-family: "Monaco", "Menlo", monospace;
+        font-size: 0.9rem;
+      }
+
+      .auth-info {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+
+      .auth-info strong {
+        color: #856404;
+      }
+
+      .rate-limit-info {
+        background: #d1ecf1;
+        border: 1px solid #bee5eb;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+
+      .rate-limit-info strong {
+        color: #0c5460;
+      }
+
+      .try-it {
+        background: #e7f3ff;
+        border: 1px solid #b3d9ff;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+
+      .try-it button {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+
+      .try-it button:hover {
+        background: #5a6fd8;
+      }
+
+      .try-it input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        margin: 0.5rem 0;
+      }
+
+      .response-example {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Warehouse Stock API</h1>
+      <p>REST API for accessing warehouse stock data from Ozon reports</p>
+      <p>Version 1.0.0</p>
+    </div>
+
+    <div class="section">
+      <h2>Authentication</h2>
+      <div class="auth-info">
+        <strong>API Key Required:</strong> All requests must include a valid API
+        key in the <code>X-API-Key</code> header.
+      </div>
+      <p>Example:</p>
+      <div class="example">
+        <pre><code>curl -H "X-API-Key: your_api_key_here" \
+     https://your-domain.com/api/warehouse-stock</code></pre>
+      </div>
+
+      <h3>Demo API Keys</h3>
+      <ul>
+        <li>
+          <code>demo_warehouse_api_key_2025</code> - Demo key (expires
+          2025-12-31)
+        </li>
+        <li>
+          <code>test_api_key_manhattan_2025</code> - Test key (no expiration)
+        </li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>Rate Limiting</h2>
+      <div class="rate-limit-info">
+        <strong>Rate Limits:</strong> API requests are limited to prevent abuse.
+      </div>
+      <table class="params-table">
+        <thead>
+          <tr>
+            <th>Endpoint</th>
+            <th>Limit</th>
+            <th>Window</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Warehouse Stock</td>
+            <td>1000 requests</td>
+            <td>1 hour</td>
+          </tr>
+          <tr>
+            <td>Stock Reports</td>
+            <td>200 requests</td>
+            <td>1 hour</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Endpoints</h2>
+
+      <div class="endpoint">
+        <h3>
+          <span class="method get">GET</span>
+          <span class="url">/api/warehouse-stock</span>
+        </h3>
+        <p>Get warehouse stock data with filtering, pagination, and sorting.</p>
+
+        <h4>Query Parameters</h4>
+        <table class="params-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>warehouse</code></td>
+              <td>string</td>
+              <td>Filter by warehouse name</td>
+              <td>Хоругвино</td>
+            </tr>
+            <tr>
+              <td><code>product_id</code></td>
+              <td>integer</td>
+              <td>Filter by product ID</td>
+              <td>12345</td>
+            </tr>
+            <tr>
+              <td><code>sku</code></td>
+              <td>string</td>
+              <td>Filter by product SKU (partial match)</td>
+              <td>ABC123</td>
+            </tr>
+            <tr>
+              <td><code>source</code></td>
+              <td>enum</td>
+              <td>Filter by data source (Ozon, Wildberries)</td>
+              <td>Ozon</td>
+            </tr>
+            <tr>
+              <td><code>stock_level</code></td>
+              <td>enum</td>
+              <td>Filter by stock level (zero, low, normal, high)</td>
+              <td>low</td>
+            </tr>
+            <tr>
+              <td><code>date_from</code></td>
+              <td>date</td>
+              <td>Filter records updated from this date (YYYY-MM-DD)</td>
+              <td>2025-10-01</td>
+            </tr>
+            <tr>
+              <td><code>date_to</code></td>
+              <td>date</td>
+              <td>Filter records updated to this date (YYYY-MM-DD)</td>
+              <td>2025-10-23</td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>integer</td>
+              <td>Number of records per page (max 1000)</td>
+              <td>50</td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>integer</td>
+              <td>Number of records to skip</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><code>sort_by</code></td>
+              <td>enum</td>
+              <td>Field to sort by</td>
+              <td>quantity_present</td>
+            </tr>
+            <tr>
+              <td><code>sort_order</code></td>
+              <td>enum</td>
+              <td>Sort order (ASC, DESC)</td>
+              <td>DESC</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="try-it">
+          <h4>Try it out</h4>
+          <input
+            type="text"
+            id="apiKey1"
+            placeholder="Enter your API key"
+            value="demo_warehouse_api_key_2025"
+          />
+          <input
+            type="text"
+            id="warehouse1"
+            placeholder="Warehouse name (optional)"
+          />
+          <input
+            type="number"
+            id="limit1"
+            placeholder="Limit (default: 100)"
+            value="10"
+          />
+          <button onclick="testWarehouseStock()">Test Request</button>
+          <div id="result1" class="example" style="display: none">
+            <pre><code id="response1"></code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <h3>
+          <span class="method get">GET</span>
+          <span class="url">/api/warehouse-stock/{warehouse}</span>
+        </h3>
+        <p>
+          Get stock data for a specific warehouse with additional warehouse
+          statistics.
+        </p>
+
+        <div class="try-it">
+          <h4>Try it out</h4>
+          <input
+            type="text"
+            id="apiKey2"
+            placeholder="Enter your API key"
+            value="demo_warehouse_api_key_2025"
+          />
+          <input
+            type="text"
+            id="warehouse2"
+            placeholder="Warehouse name"
+            value="Хоругвино"
+          />
+          <input
+            type="number"
+            id="limit2"
+            placeholder="Limit (default: 100)"
+            value="5"
+          />
+          <button onclick="testWarehouseSpecific()">Test Request</button>
+          <div id="result2" class="example" style="display: none">
+            <pre><code id="response2"></code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <h3>
+          <span class="method get">GET</span>
+          <span class="url">/api/stock-reports</span>
+        </h3>
+        <p>
+          Get stock report status and history with filtering and pagination.
+        </p>
+
+        <div class="try-it">
+          <h4>Try it out</h4>
+          <input
+            type="text"
+            id="apiKey3"
+            placeholder="Enter your API key"
+            value="demo_warehouse_api_key_2025"
+          />
+          <input
+            type="text"
+            id="status3"
+            placeholder="Status filter (optional)"
+          />
+          <input
+            type="number"
+            id="limit3"
+            placeholder="Limit (default: 50)"
+            value="5"
+          />
+          <button onclick="testStockReports()">Test Request</button>
+          <div id="result3" class="example" style="display: none">
+            <pre><code id="response3"></code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <h3>
+          <span class="method get">GET</span>
+          <span class="url">/api/stock-reports/{reportCode}</span>
+        </h3>
+        <p>
+          Get detailed information about a specific stock report including logs
+          and processing statistics.
+        </p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Response Format</h2>
+      <p>All API responses follow a consistent JSON format:</p>
+      <div class="example response-example">
+        <pre><code>{
+  "success": true,
+  "data": [...],
+  "pagination": {
+    "total_count": 1000,
+    "current_page": 1,
+    "total_pages": 10,
+    "limit": 100,
+    "offset": 0,
+    "has_next": true,
+    "has_previous": false
+  },
+  "filters_applied": {
+    "warehouse": "Хоругвино",
+    "limit": 100,
+    "offset": 0,
+    "sort_by": "updated_at",
+    "sort_order": "DESC"
+  },
+  "timestamp": "2025-10-23T14:30:00Z"
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Error Handling</h2>
+      <p>Error responses include detailed information about what went wrong:</p>
+      <div class="example">
+        <pre><code>{
+  "success": false,
+  "error": {
+    "message": "Validation failed",
+    "code": 400,
+    "details": {
+      "limit": ["Limit cannot exceed 1000"],
+      "sort_by": ["sort_by must be one of: warehouse_name, product_id, quantity_present, quantity_reserved, updated_at, last_report_update"]
+    }
+  },
+  "timestamp": "2025-10-23T14:30:00Z"
+}</code></pre>
+      </div>
+
+      <h3>HTTP Status Codes</h3>
+      <table class="params-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>200</td>
+            <td>Success</td>
+          </tr>
+          <tr>
+            <td>400</td>
+            <td>Bad Request - Invalid parameters</td>
+          </tr>
+          <tr>
+            <td>401</td>
+            <td>Unauthorized - Invalid or missing API key</td>
+          </tr>
+          <tr>
+            <td>404</td>
+            <td>Not Found - Resource not found</td>
+          </tr>
+          <tr>
+            <td>429</td>
+            <td>Too Many Requests - Rate limit exceeded</td>
+          </tr>
+          <tr>
+            <td>500</td>
+            <td>Internal Server Error</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      async function makeApiRequest(url, apiKey) {
+        try {
+          const response = await fetch(url, {
+            headers: {
+              "X-API-Key": apiKey,
+              Accept: "application/json",
+            },
+          });
+
+          const data = await response.json();
+          return {
+            status: response.status,
+            data: data,
+          };
+        } catch (error) {
+          return {
+            status: 0,
+            data: { error: error.message },
+          };
+        }
+      }
+
+      async function testWarehouseStock() {
+        const apiKey = document.getElementById("apiKey1").value;
+        const warehouse = document.getElementById("warehouse1").value;
+        const limit = document.getElementById("limit1").value;
+
+        let url = "/api/warehouse-stock?";
+        const params = new URLSearchParams();
+
+        if (warehouse) params.append("warehouse", warehouse);
+        if (limit) params.append("limit", limit);
+
+        url += params.toString();
+
+        const result = await makeApiRequest(url, apiKey);
+
+        document.getElementById("response1").textContent = JSON.stringify(
+          result.data,
+          null,
+          2
+        );
+        document.getElementById("result1").style.display = "block";
+      }
+
+      async function testWarehouseSpecific() {
+        const apiKey = document.getElementById("apiKey2").value;
+        const warehouse = document.getElementById("warehouse2").value;
+        const limit = document.getElementById("limit2").value;
+
+        if (!warehouse) {
+          alert("Warehouse name is required");
+          return;
+        }
+
+        let url = `/api/warehouse-stock/${encodeURIComponent(warehouse)}?`;
+        const params = new URLSearchParams();
+
+        if (limit) params.append("limit", limit);
+
+        url += params.toString();
+
+        const result = await makeApiRequest(url, apiKey);
+
+        document.getElementById("response2").textContent = JSON.stringify(
+          result.data,
+          null,
+          2
+        );
+        document.getElementById("result2").style.display = "block";
+      }
+
+      async function testStockReports() {
+        const apiKey = document.getElementById("apiKey3").value;
+        const status = document.getElementById("status3").value;
+        const limit = document.getElementById("limit3").value;
+
+        let url = "/api/stock-reports?";
+        const params = new URLSearchParams();
+
+        if (status) params.append("status", status);
+        if (limit) params.append("limit", limit);
+
+        url += params.toString();
+
+        const result = await makeApiRequest(url, apiKey);
+
+        document.getElementById("response3").textContent = JSON.stringify(
+          result.data,
+          null,
+          2
+        );
+        document.getElementById("result3").style.display = "block";
+      }
+    </script>
+  </body>
+</html>

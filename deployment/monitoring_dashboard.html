@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ozon Stock Reports - Monitoring Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background-color: #f5f5f5;
+        color: #333;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 2rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .header h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+      }
+
+      .header .subtitle {
+        opacity: 0.9;
+        margin-top: 0.25rem;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .metric-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #667eea;
+      }
+
+      .metric-card.success {
+        border-left-color: #10b981;
+      }
+
+      .metric-card.warning {
+        border-left-color: #f59e0b;
+      }
+
+      .metric-card.error {
+        border-left-color: #ef4444;
+      }
+
+      .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+      }
+
+      .metric-label {
+        color: #666;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .metric-change {
+        font-size: 0.75rem;
+        margin-top: 0.5rem;
+      }
+
+      .metric-change.positive {
+        color: #10b981;
+      }
+
+      .metric-change.negative {
+        color: #ef4444;
+      }
+
+      .section {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: #374151;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+      }
+
+      .status-healthy {
+        background-color: #10b981;
+      }
+
+      .status-warning {
+        background-color: #f59e0b;
+      }
+
+      .status-error {
+        background-color: #ef4444;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table th,
+      .table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .table th {
+        background-color: #f9fafb;
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .table tr:hover {
+        background-color: #f9fafb;
+      }
+
+      .refresh-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+      }
+
+      .refresh-btn:hover {
+        background: #5a67d8;
+      }
+
+      .alert {
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+      }
+
+      .alert-error {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+      }
+
+      .alert-warning {
+        background-color: #fffbeb;
+        border: 1px solid #fed7aa;
+        color: #92400e;
+      }
+
+      .alert-success {
+        background-color: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #166534;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 2rem;
+        color: #666;
+      }
+
+      .timestamp {
+        font-size: 0.75rem;
+        color: #666;
+        text-align: right;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Ozon Stock Reports Monitoring</h1>
+      <div class="subtitle">
+        Real-time system health and performance monitoring
+      </div>
+    </div>
+
+    <div class="container">
+      <button class="refresh-btn" onclick="refreshData()">
+        🔄 Refresh Data
+      </button>
+
+      <!-- System Health Metrics -->
+      <div class="metrics-grid" id="metricsGrid">
+        <div class="metric-card" id="systemStatus">
+          <div class="metric-value" id="systemStatusValue">Loading...</div>
+          <div class="metric-label">System Status</div>
+        </div>
+
+        <div class="metric-card" id="etlStatus">
+          <div class="metric-value" id="etlStatusValue">Loading...</div>
+          <div class="metric-label">ETL Process Status</div>
+        </div>
+
+        <div class="metric-card" id="reportsToday">
+          <div class="metric-value" id="reportsTodayValue">Loading...</div>
+          <div class="metric-label">Reports Today</div>
+          <div class="metric-change" id="reportsTodayChange"></div>
+        </div>
+
+        <div class="metric-card" id="successRate">
+          <div class="metric-value" id="successRateValue">Loading...</div>
+          <div class="metric-label">Success Rate (24h)</div>
+          <div class="metric-change" id="successRateChange"></div>
+        </div>
+
+        <div class="metric-card" id="avgProcessingTime">
+          <div class="metric-value" id="avgProcessingTimeValue">Loading...</div>
+          <div class="metric-label">Avg Processing Time</div>
+          <div class="metric-change" id="avgProcessingTimeChange"></div>
+        </div>
+
+        <div class="metric-card" id="criticalAlerts">
+          <div class="metric-value" id="criticalAlertsValue">Loading...</div>
+          <div class="metric-label">Critical Alerts</div>
+          <div class="metric-change" id="criticalAlertsChange"></div>
+        </div>
+      </div>
+
+      <!-- Active Alerts -->
+      <div class="section">
+        <div class="section-title">🚨 Active Alerts</div>
+        <div id="activeAlerts">
+          <div class="loading">Loading alerts...</div>
+        </div>
+      </div>
+
+      <!-- Recent ETL Runs -->
+      <div class="section">
+        <div class="section-title">📊 Recent ETL Runs</div>
+        <div id="recentRuns">
+          <div class="loading">Loading ETL runs...</div>
+        </div>
+      </div>
+
+      <!-- System Performance -->
+      <div class="section">
+        <div class="section-title">⚡ System Performance</div>
+        <div id="systemPerformance">
+          <div class="loading">Loading performance data...</div>
+        </div>
+      </div>
+
+      <!-- Recent Errors -->
+      <div class="section">
+        <div class="section-title">❌ Recent Errors</div>
+        <div id="recentErrors">
+          <div class="loading">Loading error logs...</div>
+        </div>
+      </div>
+
+      <div class="timestamp" id="lastUpdated">Last updated: Loading...</div>
+    </div>
+
+    <script>
+      // Configuration
+      const API_BASE_URL = "/api";
+      const REFRESH_INTERVAL = 30000; // 30 seconds
+
+      // Auto-refresh
+      let refreshTimer;
+
+      // Initialize dashboard
+      document.addEventListener("DOMContentLoaded", function () {
+        refreshData();
+        startAutoRefresh();
+      });
+
+      function startAutoRefresh() {
+        refreshTimer = setInterval(refreshData, REFRESH_INTERVAL);
+      }
+
+      function stopAutoRefresh() {
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+        }
+      }
+
+      async function refreshData() {
+        try {
+          await Promise.all([
+            loadSystemHealth(),
+            loadActiveAlerts(),
+            loadRecentRuns(),
+            loadSystemPerformance(),
+            loadRecentErrors(),
+          ]);
+
+          updateTimestamp();
+        } catch (error) {
+          console.error("Error refreshing data:", error);
+          showError("Failed to refresh dashboard data");
+        }
+      }
+
+      async function loadSystemHealth() {
+        try {
+          const response = await fetch(`${API_BASE_URL}/ozon_health_check.php`);
+          const data = await response.json();
+
+          updateSystemMetrics(data);
+        } catch (error) {
+          console.error("Error loading system health:", error);
+          showSystemError();
+        }
+      }
+
+      function updateSystemMetrics(data) {
+        // System Status
+        const systemStatusCard = document.getElementById("systemStatus");
+        const systemStatusValue = document.getElementById("systemStatusValue");
+
+        if (data.status === "healthy") {
+          systemStatusValue.textContent = "✅ Healthy";
+          systemStatusCard.className = "metric-card success";
+        } else if (data.status === "warning") {
+          systemStatusValue.textContent = "⚠️ Warning";
+          systemStatusCard.className = "metric-card warning";
+        } else {
+          systemStatusValue.textContent = "❌ Error";
+          systemStatusCard.className = "metric-card error";
+        }
+
+        // ETL Status
+        const etlStatusValue = document.getElementById("etlStatusValue");
+        const etlStatusCard = document.getElementById("etlStatus");
+
+        if (data.etl_status === "running") {
+          etlStatusValue.textContent = "🔄 Running";
+          etlStatusCard.className = "metric-card success";
+        } else if (data.etl_status === "idle") {
+          etlStatusValue.textContent = "⏸️ Idle";
+          etlStatusCard.className = "metric-card";
+        } else {
+          etlStatusValue.textContent = "❌ Failed";
+          etlStatusCard.className = "metric-card error";
+        }
+
+        // Reports Today
+        document.getElementById("reportsTodayValue").textContent =
+          data.reports_today || "0";
+
+        // Success Rate
+        const successRate = data.success_rate || 0;
+        document.getElementById(
+          "successRateValue"
+        ).textContent = `${successRate}%`;
+
+        const successRateCard = document.getElementById("successRate");
+        if (successRate >= 95) {
+          successRateCard.className = "metric-card success";
+        } else if (successRate >= 80) {
+          successRateCard.className = "metric-card warning";
+        } else {
+          successRateCard.className = "metric-card error";
+        }
+
+        // Average Processing Time
+        const avgTime = data.avg_processing_time || 0;
+        document.getElementById(
+          "avgProcessingTimeValue"
+        ).textContent = `${avgTime}min`;
+
+        // Critical Alerts
+        const criticalAlerts = data.critical_alerts || 0;
+        document.getElementById("criticalAlertsValue").textContent =
+          criticalAlerts;
+
+        const criticalAlertsCard = document.getElementById("criticalAlerts");
+        if (criticalAlerts === 0) {
+          criticalAlertsCard.className = "metric-card success";
+        } else if (criticalAlerts <= 5) {
+          criticalAlertsCard.className = "metric-card warning";
+        } else {
+          criticalAlertsCard.className = "metric-card error";
+        }
+      }
+
+      async function loadActiveAlerts() {
+        try {
+          // Mock data - replace with actual API call
+          const alerts = [
+            {
+              id: 1,
+              level: "warning",
+              message: "Low stock detected for 15 products in Тверь warehouse",
+              timestamp: "2025-10-24 10:30:00",
+            },
+            {
+              id: 2,
+              level: "error",
+              message:
+                "ETL process timeout - report generation took longer than expected",
+              timestamp: "2025-10-24 09:15:00",
+            },
+          ];
+
+          displayActiveAlerts(alerts);
+        } catch (error) {
+          console.error("Error loading alerts:", error);
+        }
+      }
+
+      function displayActiveAlerts(alerts) {
+        const container = document.getElementById("activeAlerts");
+
+        if (alerts.length === 0) {
+          container.innerHTML =
+            '<div class="alert alert-success">✅ No active alerts</div>';
+          return;
+        }
+
+        const alertsHtml = alerts
+          .map((alert) => {
+            const alertClass = `alert-${alert.level}`;
+            const icon = alert.level === "error" ? "❌" : "⚠️";
+
+            return `
+                    <div class="alert ${alertClass}">
+                        ${icon} <strong>${alert.message}</strong>
+                        <div style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.8;">
+                            ${alert.timestamp}
+                        </div>
+                    </div>
+                `;
+          })
+          .join("");
+
+        container.innerHTML = alertsHtml;
+      }
+
+      async function loadRecentRuns() {
+        try {
+          // Mock data - replace with actual API call
+          const runs = [
+            {
+              id: "RPT_20251024_060001",
+              status: "SUCCESS",
+              start_time: "2025-10-24 06:00:01",
+              end_time: "2025-10-24 06:15:23",
+              records_processed: 15420,
+              duration: "15m 22s",
+            },
+            {
+              id: "RPT_20251023_060001",
+              status: "SUCCESS",
+              start_time: "2025-10-23 06:00:01",
+              end_time: "2025-10-23 06:12:45",
+              records_processed: 14890,
+              duration: "12m 44s",
+            },
+            {
+              id: "RPT_20251022_060001",
+              status: "ERROR",
+              start_time: "2025-10-22 06:00:01",
+              end_time: "2025-10-22 06:05:12",
+              records_processed: 0,
+              duration: "5m 11s",
+            },
+          ];
+
+          displayRecentRuns(runs);
+        } catch (error) {
+          console.error("Error loading recent runs:", error);
+        }
+      }
+
+      function displayRecentRuns(runs) {
+        const container = document.getElementById("recentRuns");
+
+        if (runs.length === 0) {
+          container.innerHTML =
+            '<div class="loading">No recent ETL runs found</div>';
+          return;
+        }
+
+        const tableHtml = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Report ID</th>
+                            <th>Status</th>
+                            <th>Start Time</th>
+                            <th>Duration</th>
+                            <th>Records</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${runs
+                          .map((run) => {
+                            const statusIcon =
+                              run.status === "SUCCESS"
+                                ? "✅"
+                                : run.status === "ERROR"
+                                ? "❌"
+                                : "⏳";
+
+                            return `
+                                <tr>
+                                    <td>${run.id}</td>
+                                    <td>
+                                        <span class="status-indicator status-${run.status.toLowerCase()}"></span>
+                                        ${statusIcon} ${run.status}
+                                    </td>
+                                    <td>${run.start_time}</td>
+                                    <td>${run.duration}</td>
+                                    <td>${run.records_processed.toLocaleString()}</td>
+                                </tr>
+                            `;
+                          })
+                          .join("")}
+                    </tbody>
+                </table>
+            `;
+
+        container.innerHTML = tableHtml;
+      }
+
+      async function loadSystemPerformance() {
+        try {
+          // Mock data - replace with actual API call
+          const performance = {
+            cpu_usage: 25,
+            memory_usage: 68,
+            disk_usage: 45,
+            database_connections: 8,
+            api_response_time: 150,
+          };
+
+          displaySystemPerformance(performance);
+        } catch (error) {
+          console.error("Error loading system performance:", error);
+        }
+      }
+
+      function displaySystemPerformance(perf) {
+        const container = document.getElementById("systemPerformance");
+
+        const performanceHtml = `
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">${perf.cpu_usage}%</div>
+                        <div class="metric-label">CPU Usage</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${perf.memory_usage}%</div>
+                        <div class="metric-label">Memory Usage</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${perf.disk_usage}%</div>
+                        <div class="metric-label">Disk Usage</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${perf.database_connections}</div>
+                        <div class="metric-label">DB Connections</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${perf.api_response_time}ms</div>
+                        <div class="metric-label">API Response Time</div>
+                    </div>
+                </div>
+            `;
+
+        container.innerHTML = performanceHtml;
+      }
+
+      async function loadRecentErrors() {
+        try {
+          // Mock data - replace with actual API call
+          const errors = [
+            {
+              timestamp: "2025-10-24 09:15:23",
+              level: "ERROR",
+              message: "Report generation timeout for warehouse stock report",
+              context: "ReportStatusMonitor::waitForReportCompletion()",
+            },
+            {
+              timestamp: "2025-10-24 08:30:15",
+              level: "WARNING",
+              message: "API rate limit approaching (85% of limit used)",
+              context: "OzonAnalyticsAPI::makeRequest()",
+            },
+          ];
+
+          displayRecentErrors(errors);
+        } catch (error) {
+          console.error("Error loading recent errors:", error);
+        }
+      }
+
+      function displayRecentErrors(errors) {
+        const container = document.getElementById("recentErrors");
+
+        if (errors.length === 0) {
+          container.innerHTML =
+            '<div class="alert alert-success">✅ No recent errors</div>';
+          return;
+        }
+
+        const errorsHtml = errors
+          .map((error) => {
+            const levelClass = error.level.toLowerCase();
+            const icon = error.level === "ERROR" ? "❌" : "⚠️";
+
+            return `
+                    <div class="alert alert-${levelClass}">
+                        ${icon} <strong>[${error.level}]</strong> ${error.message}
+                        <div style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.8;">
+                            ${error.timestamp} - ${error.context}
+                        </div>
+                    </div>
+                `;
+          })
+          .join("");
+
+        container.innerHTML = errorsHtml;
+      }
+
+      function showSystemError() {
+        document.getElementById("systemStatusValue").textContent = "❌ Error";
+        document.getElementById("systemStatus").className = "metric-card error";
+      }
+
+      function showError(message) {
+        const container = document.querySelector(".container");
+        const errorDiv = document.createElement("div");
+        errorDiv.className = "alert alert-error";
+        errorDiv.textContent = `❌ ${message}`;
+        container.insertBefore(errorDiv, container.firstChild);
+
+        setTimeout(() => {
+          errorDiv.remove();
+        }, 5000);
+      }
+
+      function updateTimestamp() {
+        const now = new Date();
+        document.getElementById(
+          "lastUpdated"
+        ).textContent = `Last updated: ${now.toLocaleString()}`;
+      }
+
+      // Visibility change handling
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) {
+          stopAutoRefresh();
+        } else {
+          refreshData();
+          startAutoRefresh();
+        }
+      });
+    </script>
+  </body>
+</html>

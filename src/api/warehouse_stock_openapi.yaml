@@ -1,0 +1,850 @@
+openapi: 3.0.3
+info:
+  title: Warehouse Stock API
+  description: |
+    API for accessing warehouse stock data from Ozon reports.
+    Provides filtering, pagination, and sorting capabilities for large datasets.
+  version: 1.0.0
+  contact:
+    name: Manhattan System
+    email: support@manhattan-system.com
+
+servers:
+  - url: /api
+    description: API Server
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /warehouse-stock:
+    get:
+      summary: Get warehouse stock data
+      description: |
+        Retrieve warehouse stock data with filtering options.
+        Supports pagination and sorting for large datasets.
+      tags:
+        - Warehouse Stock
+      parameters:
+        - name: warehouse
+          in: query
+          description: Filter by warehouse name
+          schema:
+            type: string
+            example: "Хоругвино"
+        - name: product_id
+          in: query
+          description: Filter by product ID
+          schema:
+            type: integer
+            example: 12345
+        - name: sku
+          in: query
+          description: Filter by product SKU (partial match)
+          schema:
+            type: string
+            example: "ABC123"
+        - name: source
+          in: query
+          description: Filter by data source
+          schema:
+            type: string
+            enum: [Ozon, Wildberries]
+            example: "Ozon"
+        - name: stock_level
+          in: query
+          description: Filter by stock level category
+          schema:
+            type: string
+            enum: [zero, low, normal, high]
+            example: "low"
+        - name: date_from
+          in: query
+          description: Filter records updated from this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2025-10-01"
+        - name: date_to
+          in: query
+          description: Filter records updated to this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2025-10-23"
+        - name: limit
+          in: query
+          description: Number of records per page (max 1000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+            example: 50
+        - name: offset
+          in: query
+          description: Number of records to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+        - name: sort_by
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            enum:
+              [
+                warehouse_name,
+                product_id,
+                quantity_present,
+                quantity_reserved,
+                updated_at,
+                last_report_update,
+              ]
+            default: "updated_at"
+            example: "quantity_present"
+        - name: sort_order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: "DESC"
+            example: "DESC"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WarehouseStockResponse"
+        "400":
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /warehouse-stock/{warehouse}:
+    get:
+      summary: Get stock data for specific warehouse
+      description: |
+        Retrieve stock data for a specific warehouse with additional warehouse statistics.
+      tags:
+        - Warehouse Stock
+      parameters:
+        - name: warehouse
+          in: path
+          required: true
+          description: Warehouse name
+          schema:
+            type: string
+            example: "Хоругвино"
+        - name: product_id
+          in: query
+          description: Filter by product ID
+          schema:
+            type: integer
+            example: 12345
+        - name: sku
+          in: query
+          description: Filter by product SKU (partial match)
+          schema:
+            type: string
+            example: "ABC123"
+        - name: stock_level
+          in: query
+          description: Filter by stock level category
+          schema:
+            type: string
+            enum: [zero, low, normal, high]
+            example: "low"
+        - name: limit
+          in: query
+          description: Number of records per page (max 1000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+            example: 50
+        - name: offset
+          in: query
+          description: Number of records to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+        - name: sort_by
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            enum: [product_id, quantity_present, quantity_reserved, updated_at]
+            default: "updated_at"
+            example: "quantity_present"
+        - name: sort_order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: "DESC"
+            example: "DESC"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WarehouseSpecificStockResponse"
+        "400":
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Warehouse not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stock-reports:
+    get:
+      summary: Get stock reports history
+      description: |
+        Retrieve stock report status and history with filtering and pagination.
+      tags:
+        - Stock Reports
+      parameters:
+        - name: status
+          in: query
+          description: Filter by report status
+          schema:
+            type: string
+            enum: [REQUESTED, PROCESSING, SUCCESS, ERROR, TIMEOUT]
+            example: "SUCCESS"
+        - name: report_type
+          in: query
+          description: Filter by report type
+          schema:
+            type: string
+            enum: [warehouse_stock]
+            example: "warehouse_stock"
+        - name: date_from
+          in: query
+          description: Filter reports requested from this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2025-10-01"
+        - name: date_to
+          in: query
+          description: Filter reports requested to this date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2025-10-23"
+        - name: limit
+          in: query
+          description: Number of records per page (max 500)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+            example: 25
+        - name: offset
+          in: query
+          description: Number of records to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+        - name: sort_by
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            enum:
+              [
+                requested_at,
+                completed_at,
+                status,
+                report_type,
+                records_processed,
+              ]
+            default: "requested_at"
+            example: "requested_at"
+        - name: sort_order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: "DESC"
+            example: "DESC"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockReportsResponse"
+        "400":
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stock-reports/{reportCode}:
+    get:
+      summary: Get specific stock report details
+      description: |
+        Retrieve detailed information about a specific stock report including logs and processing statistics.
+      tags:
+        - Stock Reports
+      parameters:
+        - name: reportCode
+          in: path
+          required: true
+          description: Report code identifier
+          schema:
+            type: string
+            example: "RPT_20251023_001"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockReportDetailsResponse"
+        "401":
+          description: Unauthorized - invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    WarehouseStockResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockRecord"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        filters_applied:
+          $ref: "#/components/schemas/AppliedFilters"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-10-23T14:30:00Z"
+
+    WarehouseSpecificStockResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockRecord"
+        warehouse_info:
+          $ref: "#/components/schemas/WarehouseInfo"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        filters_applied:
+          $ref: "#/components/schemas/AppliedFilters"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-10-23T14:30:00Z"
+
+    StockReportsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockReport"
+        summary:
+          $ref: "#/components/schemas/ReportsSummary"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        filters_applied:
+          $ref: "#/components/schemas/ReportFilters"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-10-23T14:30:00Z"
+
+    StockReportDetailsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/StockReportDetails"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-10-23T14:30:00Z"
+
+    StockRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12345
+        product:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 67890
+            sku:
+              type: string
+              example: "ABC123DEF"
+            name:
+              type: string
+              example: "Product Name"
+        warehouse_name:
+          type: string
+          example: "Хоругвино"
+        source:
+          type: string
+          enum: [Ozon, Wildberries]
+          example: "Ozon"
+        stock:
+          type: object
+          properties:
+            present:
+              type: integer
+              example: 150
+            reserved:
+              type: integer
+              example: 25
+            available:
+              type: integer
+              example: 125
+        stock_type:
+          type: string
+          example: "fbo"
+        report_source:
+          type: string
+          example: "API_REPORTS"
+        last_report_update:
+          type: string
+          format: date-time
+          example: "2025-10-23T10:30:00Z"
+        report_code:
+          type: string
+          example: "RPT_20251023_001"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-10-23T10:35:00Z"
+
+    StockReport:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        report_code:
+          type: string
+          example: "RPT_20251023_001"
+        report_type:
+          type: string
+          example: "warehouse_stock"
+        status:
+          type: string
+          enum: [REQUESTED, PROCESSING, SUCCESS, ERROR, TIMEOUT]
+          example: "SUCCESS"
+        request_parameters:
+          type: object
+          nullable: true
+        download_url:
+          type: string
+          nullable: true
+          example: "https://example.com/download/report.csv"
+        file_size:
+          type: integer
+          nullable: true
+          example: 1048576
+        records_processed:
+          type: integer
+          example: 5000
+        error_message:
+          type: string
+          nullable: true
+        requested_at:
+          type: string
+          format: date-time
+          example: "2025-10-23T06:00:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-10-23T06:15:00Z"
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-10-23T06:20:00Z"
+        duration:
+          type: object
+          nullable: true
+          properties:
+            total_minutes:
+              type: integer
+              example: 15
+            formatted:
+              type: string
+              example: "0 hours 15 minutes 30 seconds"
+
+    StockReportDetails:
+      allOf:
+        - $ref: "#/components/schemas/StockReport"
+        - type: object
+          properties:
+            processing_stats:
+              $ref: "#/components/schemas/ProcessingStats"
+            logs:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportLog"
+
+    WarehouseInfo:
+      type: object
+      properties:
+        warehouse_name:
+          type: string
+          example: "Хоругвино"
+        exists:
+          type: boolean
+          example: true
+        statistics:
+          type: object
+          properties:
+            total_products:
+              type: integer
+              example: 1500
+            total_stock:
+              type: integer
+              example: 25000
+            total_reserved:
+              type: integer
+              example: 3000
+            total_available:
+              type: integer
+              example: 22000
+            zero_stock_products:
+              type: integer
+              example: 50
+            low_stock_products:
+              type: integer
+              example: 120
+        last_updated:
+          type: string
+          format: date-time
+          example: "2025-10-23T10:30:00Z"
+
+    ProcessingStats:
+      type: object
+      properties:
+        inventory_records_created:
+          type: integer
+          example: 5000
+        unique_warehouses:
+          type: integer
+          example: 15
+        unique_products:
+          type: integer
+          example: 2500
+        total_stock_processed:
+          type: integer
+          example: 150000
+        first_processed:
+          type: string
+          format: date-time
+          example: "2025-10-23T06:15:00Z"
+        last_processed:
+          type: string
+          format: date-time
+          example: "2025-10-23T06:20:00Z"
+
+    ReportLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 456
+        level:
+          type: string
+          enum: [INFO, WARNING, ERROR]
+          example: "INFO"
+        message:
+          type: string
+          example: "Report processing started"
+        context:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-23T06:00:30Z"
+
+    ReportsSummary:
+      type: object
+      properties:
+        total_reports:
+          type: integer
+          example: 100
+        successful_reports:
+          type: integer
+          example: 95
+        failed_reports:
+          type: integer
+          example: 3
+        processing_reports:
+          type: integer
+          example: 1
+        timeout_reports:
+          type: integer
+          example: 1
+        success_rate:
+          type: number
+          format: float
+          example: 95.0
+        avg_processing_time_minutes:
+          type: number
+          format: float
+          nullable: true
+          example: 12.5
+        total_records_processed:
+          type: integer
+          example: 500000
+        last_report_requested:
+          type: string
+          format: date-time
+          example: "2025-10-23T06:00:00Z"
+
+    Pagination:
+      type: object
+      properties:
+        total_count:
+          type: integer
+          example: 1000
+        current_page:
+          type: integer
+          example: 1
+        total_pages:
+          type: integer
+          example: 10
+        limit:
+          type: integer
+          example: 100
+        offset:
+          type: integer
+          example: 0
+        has_next:
+          type: boolean
+          example: true
+        has_previous:
+          type: boolean
+          example: false
+
+    AppliedFilters:
+      type: object
+      properties:
+        warehouse:
+          type: string
+          nullable: true
+          example: "Хоругвино"
+        product_id:
+          type: integer
+          nullable: true
+          example: 12345
+        sku:
+          type: string
+          nullable: true
+          example: "ABC123"
+        source:
+          type: string
+          nullable: true
+          example: "Ozon"
+        stock_level:
+          type: string
+          nullable: true
+          example: "low"
+        date_from:
+          type: string
+          nullable: true
+          example: "2025-10-01"
+        date_to:
+          type: string
+          nullable: true
+          example: "2025-10-23"
+        limit:
+          type: integer
+          example: 100
+        offset:
+          type: integer
+          example: 0
+        sort_by:
+          type: string
+          example: "updated_at"
+        sort_order:
+          type: string
+          example: "DESC"
+
+    ReportFilters:
+      type: object
+      properties:
+        status:
+          type: string
+          nullable: true
+          example: "SUCCESS"
+        report_type:
+          type: string
+          nullable: true
+          example: "warehouse_stock"
+        date_from:
+          type: string
+          nullable: true
+          example: "2025-10-01"
+        date_to:
+          type: string
+          nullable: true
+          example: "2025-10-23"
+        limit:
+          type: integer
+          example: 50
+        offset:
+          type: integer
+          example: 0
+        sort_by:
+          type: string
+          example: "requested_at"
+        sort_order:
+          type: string
+          example: "DESC"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Invalid parameter value"
+            code:
+              type: integer
+              example: 400
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-10-23T14:30:00Z"

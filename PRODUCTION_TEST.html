@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Production Verification - Warehouse Dashboard</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+      }
+      .section {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .checklist {
+        list-style: none;
+        padding: 0;
+      }
+      .checklist li {
+        padding: 10px;
+        margin: 5px 0;
+        background: #f8f9fa;
+        border-radius: 5px;
+        border-left: 4px solid #667eea;
+      }
+      .checklist li:before {
+        content: "☐ ";
+        margin-right: 10px;
+        font-size: 18px;
+      }
+      .button {
+        display: inline-block;
+        padding: 12px 24px;
+        background: #667eea;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        margin: 10px 10px 10px 0;
+        font-weight: 600;
+        transition: background 0.3s;
+      }
+      .button:hover {
+        background: #5568d3;
+      }
+      .button.secondary {
+        background: #48bb78;
+      }
+      .button.secondary:hover {
+        background: #38a169;
+      }
+      .info-box {
+        background: #e6f7ff;
+        border: 1px solid #91d5ff;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 15px 0;
+      }
+      .warning-box {
+        background: #fff7e6;
+        border: 1px solid #ffd591;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 15px 0;
+      }
+      .success-box {
+        background: #f6ffed;
+        border: 1px solid #b7eb8f;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 15px 0;
+      }
+      code {
+        background: #f4f4f4;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: "Courier New", monospace;
+      }
+      h2 {
+        color: #333;
+        border-bottom: 2px solid #667eea;
+        padding-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🚀 Warehouse Dashboard - Production Verification</h1>
+      <p>Deployment completed: October 23, 2025 20:30 MSK</p>
+      <p>
+        <strong>Production URL:</strong>
+        <a
+          href="https://www.market-mi.ru/warehouse-dashboard"
+          target="_blank"
+          style="color: white; text-decoration: underline"
+          >https://www.market-mi.ru/warehouse-dashboard</a
+        >
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>🎯 Quick Actions</h2>
+      <a
+        href="https://www.market-mi.ru/warehouse-dashboard"
+        target="_blank"
+        class="button"
+      >
+        Open Production Site
+      </a>
+      <a
+        href="https://www.market-mi.ru/warehouse-dashboard"
+        target="_blank"
+        class="button secondary"
+        onclick="window.open(this.href, '_blank', 'width=375,height=667'); return false;"
+      >
+        Open Mobile View (375px)
+      </a>
+      <button
+        class="button"
+        onclick="alert('Instructions:\n\n1. Open DevTools (F12)\n2. Go to Console tab\n3. Check for errors\n4. Go to Network tab\n5. Reload page (Cmd+R)\n6. Check all files load (200 status)')"
+      >
+        DevTools Instructions
+      </button>
+    </div>
+
+    <div class="warning-box">
+      <strong>⚠️ Important: Clear Browser Cache First!</strong>
+      <ul>
+        <li><strong>Mac:</strong> Cmd + Shift + R</li>
+        <li><strong>Windows/Linux:</strong> Ctrl + Shift + R</li>
+        <li><strong>Or:</strong> Open in Incognito/Private mode</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>✅ Visual Verification Checklist</h2>
+      <ul class="checklist">
+        <li>Page loads without errors</li>
+        <li>Header displays at top (white background, no overlap)</li>
+        <li>Navigation displays below header (with border)</li>
+        <li>Dashboard metrics display in grid (4 columns on desktop)</li>
+        <li>Filters display in organized layout (4 columns on desktop)</li>
+        <li>Table displays with proper columns</li>
+        <li>Table header is sticky (stays visible when scrolling)</li>
+        <li>Table scrolls horizontally on small screens</li>
+        <li>Pagination displays at bottom</li>
+        <li>No elements overlap each other</li>
+        <li>All text is readable (no cut-off text)</li>
+        <li>No console errors (check F12 DevTools)</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>🔧 Functional Testing Checklist</h2>
+      <ul class="checklist">
+        <li>Filter dropdowns work (warehouse, cluster, liquidity)</li>
+        <li>Checkboxes work (active only, replenishment need)</li>
+        <li>Table sorting works (click column headers)</li>
+        <li>Pagination works (next/previous buttons)</li>
+        <li>CSV export button works (downloads file)</li>
+        <li>Refresh button works (reloads data)</li>
+        <li>Data displays correctly in table</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>📱 Responsive Design Testing</h2>
+      <p>Test at different screen sizes:</p>
+
+      <h3>Desktop (1920px)</h3>
+      <ul class="checklist">
+        <li>4-column grid for metrics</li>
+        <li>4-column grid for filters</li>
+        <li>All table columns visible</li>
+      </ul>
+
+      <h3>Tablet (768px)</h3>
+      <ul class="checklist">
+        <li>2-column grid for metrics</li>
+        <li>2-column grid for filters</li>
+        <li>Table scrolls horizontally</li>
+      </ul>
+
+      <h3>Mobile (375px)</h3>
+      <ul class="checklist">
+        <li>1-column layout for metrics</li>
+        <li>1-column layout for filters</li>
+        <li>Table scrolls horizontally</li>
+        <li>Touch interactions work</li>
+      </ul>
+
+      <div class="info-box">
+        <strong>How to test responsive:</strong>
+        <ol>
+          <li>Open DevTools (F12)</li>
+          <li>Click device toolbar icon (or Cmd+Shift+M / Ctrl+Shift+M)</li>
+          <li>Select different device sizes from dropdown</li>
+          <li>Or manually resize browser window</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🌐 Browser Testing</h2>
+      <ul class="checklist">
+        <li>Chrome/Edge (latest version)</li>
+        <li>Firefox (latest version)</li>
+        <li>Safari (latest version, if available)</li>
+        <li>Mobile Safari (iOS)</li>
+        <li>Chrome Android</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>🔍 Technical Verification</h2>
+
+      <h3>Check DevTools Console (F12)</h3>
+      <ul class="checklist">
+        <li>No JavaScript errors</li>
+        <li>No 404 errors for assets</li>
+        <li>No diagnostic console.log messages</li>
+      </ul>
+
+      <h3>Check DevTools Network Tab</h3>
+      <ul class="checklist">
+        <li>index.html loads (200 status)</li>
+        <li>CSS file loads (200 status, ~23 KB)</li>
+        <li>All JS files load (200 status)</li>
+        <li>API calls work (200 status)</li>
+      </ul>
+
+      <h3>Expected Files</h3>
+      <div class="info-box">
+        <strong>CSS:</strong> <code>index-BnGjtDq2.css</code> (22.67 KB)<br />
+        <strong>JS Files:</strong>
+        <ul>
+          <li><code>index-CiPDvz9m.js</code> (4.37 KB)</li>
+          <li><code>ui-CRQylcxt.js</code> (3.98 KB)</li>
+          <li><code>WarehouseDashboardPage-3s7D5PB6.js</code> (30.35 KB)</li>
+          <li><code>vendor-CqFCj2_q.js</code> (63.63 KB)</li>
+          <li><code>react-vendor-Dm4r2cAM.js</code> (204.25 KB)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>📊 What Changed</h2>
+      <div class="success-box">
+        <h3>✅ Fixed Issues:</h3>
+        <ul>
+          <li>
+            <strong>Layout Overlaps:</strong> Header, navigation, and content
+            now properly stacked
+          </li>
+          <li>
+            <strong>Z-Index Hierarchy:</strong> Header (z-50) → Navigation
+            (z-40) → Table header (z-10)
+          </li>
+          <li>
+            <strong>Responsive Design:</strong> Proper grid layouts for all
+            screen sizes
+          </li>
+          <li>
+            <strong>Table Scrolling:</strong> Horizontal scroll on mobile,
+            sticky headers
+          </li>
+          <li><strong>Console Logging:</strong> All diagnostic logs removed</li>
+        </ul>
+      </div>
+
+      <div class="info-box">
+        <h3>📝 Technical Details:</h3>
+        <ul>
+          <li><strong>Components Modified:</strong> 11 files</li>
+          <li>
+            <strong>CSS Classes Added:</strong> Sticky positioning, responsive
+            grids, proper spacing
+          </li>
+          <li><strong>Breaking Changes:</strong> None (purely visual/CSS)</li>
+          <li>
+            <strong>Performance Impact:</strong> Positive (removed console
+            logging)
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🆘 Troubleshooting</h2>
+
+      <h3>Issue: Old version still showing</h3>
+      <p>
+        <strong>Solution:</strong> Clear browser cache (Cmd+Shift+R) or use
+        incognito mode
+      </p>
+
+      <h3>Issue: CSS not loading (blank page)</h3>
+      <p>
+        <strong>Solution:</strong> Check DevTools Network tab for 404 errors on
+        CSS file
+      </p>
+
+      <h3>Issue: JavaScript errors</h3>
+      <p>
+        <strong>Solution:</strong> Check DevTools Console for specific error
+        messages
+      </p>
+
+      <h3>Issue: Layout still broken</h3>
+      <p>
+        <strong>Solution:</strong> Verify CSS file loaded and has content
+        (should be ~23 KB)
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>🔄 Rollback (if needed)</h2>
+      <div class="warning-box">
+        <p>If critical issues are found, rollback is available:</p>
+        <code
+          style="
+            display: block;
+            padding: 10px;
+            background: #2d2d2d;
+            color: #f8f8f2;
+            border-radius: 4px;
+            margin: 10px 0;
+          "
+        >
+          ssh root@www.market-mi.ru<br />
+          BACKUP_DIR="/tmp/warehouse-dashboard-backup-20251023_202952"<br />
+          rm -rf /var/www/market-mi.ru/warehouse-dashboard<br />
+          cp -r "$BACKUP_DIR/warehouse-dashboard" /var/www/market-mi.ru/
+        </code>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>📚 Documentation</h2>
+      <p>Complete documentation available:</p>
+      <ul>
+        <li><strong>CHANGES.md:</strong> All modifications documented</li>
+        <li>
+          <strong>DEPLOYMENT.md:</strong> Deployment procedures and
+          troubleshooting
+        </li>
+        <li>
+          <strong>TASK_11_DEPLOYMENT_COMPLETE.md:</strong> This deployment
+          summary
+        </li>
+      </ul>
+    </div>
+
+    <div class="success-box" style="margin-top: 30px">
+      <h2 style="border: none; margin-top: 0">✅ Deployment Status: SUCCESS</h2>
+      <p><strong>Server:</strong> www.market-mi.ru</p>
+      <p><strong>Deployment Time:</strong> October 23, 2025 20:30 MSK</p>
+      <p>
+        <strong>Backup Location:</strong>
+        /tmp/warehouse-dashboard-backup-20251023_202952
+      </p>
+      <p><strong>Git Commits:</strong> 1042c08, 0308973</p>
+      <p style="margin-top: 20px; font-size: 18px">
+        <strong>🌐 Production URL:</strong><br />
+        <a
+          href="https://www.market-mi.ru/warehouse-dashboard"
+          target="_blank"
+          style="color: #667eea; font-size: 20px"
+        >
+          https://www.market-mi.ru/warehouse-dashboard
+        </a>
+      </p>
+    </div>
+
+    <script>
+      // Auto-open production site in new tab
+      console.log("Production Verification Page Loaded");
+      console.log(
+        "Production URL: https://www.market-mi.ru/warehouse-dashboard"
+      );
+      console.log("Remember to clear cache before testing!");
+    </script>
+  </body>
+</html>

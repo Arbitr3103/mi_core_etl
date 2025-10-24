@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Debug React App</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .error {
+        color: red;
+        background: #ffe6e6;
+        padding: 10px;
+        margin: 10px 0;
+      }
+      .success {
+        color: green;
+        background: #e6ffe6;
+        padding: 10px;
+        margin: 10px 0;
+      }
+      .info {
+        color: blue;
+        background: #e6f3ff;
+        padding: 10px;
+        margin: 10px 0;
+      }
+      pre {
+        background: #f5f5f5;
+        padding: 10px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔍 Диагностика React приложения</h1>
+
+    <div id="status">Загрузка...</div>
+
+    <h2>Проверки:</h2>
+    <div id="checks"></div>
+
+    <h2>Ошибки консоли:</h2>
+    <div id="console-errors"></div>
+
+    <h2>Загруженные ресурсы:</h2>
+    <div id="resources"></div>
+
+    <script>
+      const statusDiv = document.getElementById("status");
+      const checksDiv = document.getElementById("checks");
+      const errorsDiv = document.getElementById("console-errors");
+      const resourcesDiv = document.getElementById("resources");
+
+      const errors = [];
+      const originalConsoleError = console.error;
+      console.error = function (...args) {
+        errors.push(args.join(" "));
+        originalConsoleError.apply(console, args);
+        updateErrorsDisplay();
+      };
+
+      function addCheck(message, isSuccess) {
+        const div = document.createElement("div");
+        div.className = isSuccess ? "success" : "error";
+        div.textContent = (isSuccess ? "✅ " : "❌ ") + message;
+        checksDiv.appendChild(div);
+      }
+
+      function updateErrorsDisplay() {
+        if (errors.length > 0) {
+          errorsDiv.innerHTML = "<pre>" + errors.join("\\n") + "</pre>";
+        } else {
+          errorsDiv.innerHTML = '<div class="success">Ошибок не найдено</div>';
+        }
+      }
+
+      function checkResources() {
+        const resources = performance.getEntriesByType("resource");
+        let html = "<ul>";
+
+        resources.forEach((resource) => {
+          const status = resource.responseStatus || "unknown";
+          const isSuccess = status >= 200 && status < 300;
+          const color = isSuccess ? "green" : "red";
+
+          if (resource.name.includes("warehouse-dashboard")) {
+            html += `<li style="color: ${color}">
+                        <strong>${resource.name}</strong><br>
+                        Status: ${status}, Size: ${Math.round(
+              resource.transferSize || 0
+            )} bytes, 
+                        Time: ${Math.round(resource.duration || 0)}ms
+                    </li>`;
+          }
+        });
+
+        html += "</ul>";
+        resourcesDiv.innerHTML = html;
+      }
+
+      // Основные проверки
+      setTimeout(() => {
+        // Проверка 1: React загружен?
+        if (typeof React !== "undefined") {
+          addCheck("React загружен", true);
+        } else {
+          addCheck("React НЕ загружен", false);
+        }
+
+        // Проверка 2: Root элемент существует?
+        const rootElement = document.getElementById("root");
+        if (rootElement) {
+          addCheck("Root элемент найден", true);
+
+          // Проверка 3: Root элемент имеет содержимое?
+          if (rootElement.innerHTML.trim()) {
+            addCheck("Root элемент имеет содержимое", true);
+            addCheck(
+              "Содержимое: " + rootElement.innerHTML.substring(0, 100) + "...",
+              true
+            );
+          } else {
+            addCheck("Root элемент ПУСТОЙ", false);
+          }
+        } else {
+          addCheck("Root элемент НЕ найден", false);
+        }
+
+        // Проверка 4: CSS загружен?
+        const cssLoaded = document.querySelector(
+          'link[href*="index-BnGjtDq2.css"]'
+        );
+        if (cssLoaded) {
+          addCheck("CSS файл найден в DOM", true);
+        } else {
+          addCheck("CSS файл НЕ найден в DOM", false);
+        }
+
+        // Проверка 5: Проверим стили
+        const testDiv = document.createElement("div");
+        testDiv.className = "sticky z-50 bg-white";
+        document.body.appendChild(testDiv);
+        const styles = window.getComputedStyle(testDiv);
+
+        if (styles.position === "sticky") {
+          addCheck("Tailwind CSS работает (sticky)", true);
+        } else {
+          addCheck("Tailwind CSS НЕ работает (sticky)", false);
+        }
+
+        if (styles.zIndex === "50") {
+          addCheck("Tailwind CSS работает (z-index)", true);
+        } else {
+          addCheck("Tailwind CSS НЕ работает (z-index)", false);
+        }
+
+        document.body.removeChild(testDiv);
+
+        // Проверка ресурсов
+        checkResources();
+
+        // Обновляем статус
+        statusDiv.innerHTML =
+          '<div class="info">Диагностика завершена. Проверьте результаты выше.</div>';
+
+        // Обновляем ошибки
+        updateErrorsDisplay();
+      }, 3000); // Ждем 3 секунды для загрузки
+
+      // Проверяем каждые 2 секунды
+      setInterval(() => {
+        const rootElement = document.getElementById("root");
+        if (rootElement && rootElement.innerHTML.trim()) {
+          statusDiv.innerHTML =
+            '<div class="success">✅ React приложение загрузилось!</div>';
+        }
+      }, 2000);
+    </script>
+  </body>
+</html>

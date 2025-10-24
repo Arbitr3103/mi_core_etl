@@ -1,247 +1,393 @@
 <?php
 /**
- * Rate Limiting Middleware for mi_core_etl API
- * Implements rate limiting to prevent API abuse
+ * Rate Limit Middleware
+ * 
+ * Implements rate limiting for API endpoints to prevent abuse
+ * 
+ * @version 1.0
+ * @author Manhattan System
  */
 
-require_once __DIR__ . '/BaseMiddleware.php';
-
-class RateLimitMiddleware extends BaseMiddleware {
-    private $cache;
-    private $limits = [];
-    private $defaultLimit = 100; // requests per window
-    private $windowSize = 3600; // 1 hour in seconds
+class RateLimitMiddleware {
+    
+    private $logger;
+    private $rateLimits;
+    private $storage;
     
     public function __construct() {
-        parent::__construct();
-        require_once __DIR__ . '/../../services/CacheService.php';
-        $this->cache = CacheService::getInstance();
-        $this->loadRateLimitConfig();
+        $this->logger = Logger::getInstance();
+        $this->initializeRateLimits();
+        $this->initializeStorage();
     }
     
     /**
-     * Load rate limiting configuration
+     * Check rate limit for current request
+     * 
+     * @param string $identifier - Client identifier (IP, API key, etc.)
+     * @param string $endpoint - Endpoint being accessed
+     * @return bool True if within rate limit
+     * @throws Exception If rate limit exceeded
      */
-    private function loadRateLimitConfig() {
-        // Load from environment variables
-        $this->defaultLimit = (int)($_ENV['RATE_LIMIT_DEFAULT'] ?? 100);
-        $this->windowSize = (int)($_ENV['RATE_LIMIT_WINDOW'] ?? 3600);
+    public function checkRateLimit(string $identifier, string $endpoint = 'default'): bool {
+        try {
+            $limit = $this->getRateLimitForEndpoint($endpoint);
+            $key = $this->generateRateLimitKey($identifier, $endpoint);
+            
+            // Get current usage
+            $currentUsage = $this->getCurrentUsage($key);
+            
+            // Check if limit exceeded
+            if ($currentUsage >= $limit['requests']) {
+                $this->logRateLimitExceeded($identifier, $endpoint, $currentUsage, $limit);
+                throw new Exception('Rate limit exceeded', 429);
+            }
+            
+            // Increment usage
+            $this->incrementUsage($key, $limit['window']);
+            
+            // Log successful request
+            $this->logRateLimitCheck($identifier, $endpoint, $currentUsage + 1, $limit);
+            
+            return true;
+            
+        } catch (Exception $e) {
+            if ($e->getCode() === 429) {
+                throw $e;
+            }
+            
+            $this->logger->error('Rate limit check error', [
+                'identifier' => $identifier,
+                'endpoint' => $endpoint,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fail open - allow request if rate limiting fails
+            return true;
+        }
+    }
+    
+    /**
+     * Get rate limit headers for response
+     * 
+     * @param string $identifier - Client identifier
+     * @param string $endpoint - Endpoint being accessed
+     * @return array Rate limit headers
+     */
+    public function getRateLimitHeaders(string $identifier, string $endpoint = 'default'): array {
+        try {
+            $limit = $this->getRateLimitForEndpoint($endpoint);
+            $key = $this->generateRateLimitKey($identifier, $endpoint);
+            $currentUsage = $this->getCurrentUsage($key);
+            $remaining = max(0, $limit['requests'] - $currentUsage);
+            $resetTime = $this->getResetTime($key, $limit['window']);
+            
+            return [
+                'X-RateLimit-Limit' => $limit['requests'],
+                'X-RateLimit-Remaining' => $remaining,
+                'X-RateLimit-Reset' => $resetTime,
+                'X-RateLimit-Window' => $limit['window']
+            ];
+            
+        } catch (Exception $e) {
+            $this->logger->error('Failed to get rate limit headers', [
+                'identifier' => $identifier,
+                'endpoint' => $endpoint,
+                'error' => $e->getMessage()
+            ]);
+            
+            return [];
+        }
+    }
+    
+    /**
+     * Initialize rate limits configuration
+     */
+    private function initializeRateLimits(): void {
+        $this->rateLimits = [
+            'default' => [
+                'requests' => 100,
+                'window' => 3600 // 1 hour
+            ],
+            'warehouse-stock' => [
+                'requests' => 1000,
+                'window' => 3600 // 1 hour
+            ],
+            'warehouse-stock-specific' => [
+                'requests' => 500,
+                'window' => 3600 // 1 hour
+            ],
+            'stock-reports' => [
+                'requests' => 200,
+                'window' => 3600 // 1 hour
+            ],
+            'stock-reports-details' => [
+                'requests' => 100,
+                'window' => 3600 // 1 hour
+            ]
+        ];
         
-        // Load endpoint-specific limits
-        $endpointLimits = $_ENV['RATE_LIMIT_ENDPOINTS'] ?? '';
-        if ($endpointLimits) {
-            $limits = explode(',', $endpointLimits);
-            foreach ($limits as $limit) {
-                if (strpos($limit, ':') !== false) {
-                    list($endpoint, $maxRequests) = explode(':', $limit, 2);
-                    $this->limits[trim($endpoint)] = (int)$maxRequests;
+        // Load custom rate limits from environment or configuration
+        $this->loadCustomRateLimits();
+    }
+    
+    /**
+     * Load custom rate limits from configuration
+     */
+    private function loadCustomRateLimits(): void {
+        // Check for environment variable overrides
+        $envLimits = [
+            'RATE_LIMIT_DEFAULT' => 'default',
+            'RATE_LIMIT_WAREHOUSE_STOCK' => 'warehouse-stock',
+            'RATE_LIMIT_STOCK_REPORTS' => 'stock-reports'
+        ];
+        
+        foreach ($envLimits as $envVar => $endpoint) {
+            $envValue = $_ENV[$envVar] ?? null;
+            if ($envValue && preg_match('/^(\d+):(\d+)$/', $envValue, $matches)) {
+                $this->rateLimits[$endpoint] = [
+                    'requests' => (int) $matches[1],
+                    'window' => (int) $matches[2]
+                ];
+            }
+        }
+    }
+    
+    /**
+     * Initialize storage for rate limit data
+     */
+    private function initializeStorage(): void {
+        // Use file-based storage for simplicity
+        // In production, consider using Redis or Memcached
+        $this->storage = [
+            'type' => 'file',
+            'path' => sys_get_temp_dir() . '/rate_limits/'
+        ];
+        
+        // Create storage directory if it doesn't exist
+        if (!is_dir($this->storage['path'])) {
+            mkdir($this->storage['path'], 0755, true);
+        }
+    }
+    
+    /**
+     * Get rate limit configuration for endpoint
+     * 
+     * @param string $endpoint - Endpoint name
+     * @return array Rate limit configuration
+     */
+    private function getRateLimitForEndpoint(string $endpoint): array {
+        return $this->rateLimits[$endpoint] ?? $this->rateLimits['default'];
+    }
+    
+    /**
+     * Generate rate limit key for storage
+     * 
+     * @param string $identifier - Client identifier
+     * @param string $endpoint - Endpoint name
+     * @return string Storage key
+     */
+    private function generateRateLimitKey(string $identifier, string $endpoint): string {
+        $limit = $this->getRateLimitForEndpoint($endpoint);
+        $window = floor(time() / $limit['window']);
+        
+        return 'rate_limit:' . hash('sha256', $identifier . ':' . $endpoint . ':' . $window);
+    }
+    
+    /**
+     * Get current usage for a key
+     * 
+     * @param string $key - Storage key
+     * @return int Current usage count
+     */
+    private function getCurrentUsage(string $key): int {
+        $filePath = $this->storage['path'] . $key . '.txt';
+        
+        if (!file_exists($filePath)) {
+            return 0;
+        }
+        
+        $content = file_get_contents($filePath);
+        return (int) $content;
+    }
+    
+    /**
+     * Increment usage for a key
+     * 
+     * @param string $key - Storage key
+     * @param int $window - Time window in seconds
+     */
+    private function incrementUsage(string $key, int $window): void {
+        $filePath = $this->storage['path'] . $key . '.txt';
+        $currentUsage = $this->getCurrentUsage($key);
+        
+        file_put_contents($filePath, $currentUsage + 1);
+        
+        // Set file to expire after the window
+        touch($filePath, time() + $window);
+    }
+    
+    /**
+     * Get reset time for rate limit window
+     * 
+     * @param string $key - Storage key
+     * @param int $window - Time window in seconds
+     * @return int Unix timestamp when rate limit resets
+     */
+    private function getResetTime(string $key, int $window): int {
+        $currentWindow = floor(time() / $window);
+        return ($currentWindow + 1) * $window;
+    }
+    
+    /**
+     * Clean up expired rate limit files
+     */
+    public function cleanupExpiredLimits(): void {
+        try {
+            $files = glob($this->storage['path'] . '*.txt');
+            $now = time();
+            $cleaned = 0;
+            
+            foreach ($files as $file) {
+                if (filemtime($file) < $now) {
+                    unlink($file);
+                    $cleaned++;
                 }
             }
-        }
-        
-        // Default endpoint limits
-        if (empty($this->limits)) {
-            $this->limits = [
-                '/api/inventory/dashboard' => 60,
-                '/api/inventory/search' => 30,
-                '/api/inventory/bulk-update' => 10,
-                '/api/inventory/product' => 120
-            ];
-        }
-    }
-    
-    /**
-     * Handle rate limiting
-     */
-    public function handle($request, $next) {
-        $clientId = $this->getClientIdentifier();
-        $endpoint = $this->getEndpoint();
-        $limit = $this->getEndpointLimit($endpoint);
-        
-        // Check rate limit
-        $result = $this->checkRateLimit($clientId, $endpoint, $limit);
-        
-        if (!$result['allowed']) {
-            $this->logger->warning('Rate limit exceeded', [
-                'client_id' => $clientId,
-                'endpoint' => $endpoint,
-                'limit' => $limit,
-                'current_requests' => $result['current_requests'],
-                'reset_time' => $result['reset_time']
-            ]);
             
-            // Set rate limit headers
-            header('X-RateLimit-Limit: ' . $limit);
-            header('X-RateLimit-Remaining: 0');
-            header('X-RateLimit-Reset: ' . $result['reset_time']);
-            header('Retry-After: ' . ($result['reset_time'] - time()));
-            
-            $this->errorResponse('Rate limit exceeded', 429, [
-                'limit' => $limit,
-                'window_size' => $this->windowSize,
-                'reset_time' => date('Y-m-d H:i:s', $result['reset_time']),
-                'retry_after' => $result['reset_time'] - time()
-            ]);
-        }
-        
-        // Set rate limit headers for successful requests
-        header('X-RateLimit-Limit: ' . $limit);
-        header('X-RateLimit-Remaining: ' . ($limit - $result['current_requests']));
-        header('X-RateLimit-Reset: ' . $result['reset_time']);
-        
-        $this->logger->debug('Rate limit check passed', [
-            'client_id' => $clientId,
-            'endpoint' => $endpoint,
-            'current_requests' => $result['current_requests'],
-            'limit' => $limit
-        ]);
-        
-        return $next($request);
-    }
-    
-    /**
-     * Get client identifier for rate limiting
-     */
-    private function getClientIdentifier() {
-        // Try to get authenticated user first
-        $headers = $this->getHeaders();
-        
-        // Check for API key
-        $apiKey = $headers['X-API-Key'] ?? $headers['x-api-key'] ?? null;
-        if ($apiKey) {
-            return 'api_key:' . md5($apiKey);
-        }
-        
-        // Check for basic auth
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? null;
-        if ($authHeader && strpos($authHeader, 'Basic ') === 0) {
-            $credentials = base64_decode(substr($authHeader, 6));
-            if ($credentials && strpos($credentials, ':') !== false) {
-                list($username, $password) = explode(':', $credentials, 2);
-                return 'user:' . $username;
+            if ($cleaned > 0) {
+                $this->logger->info('Cleaned up expired rate limit files', [
+                    'files_cleaned' => $cleaned
+                ]);
             }
+            
+        } catch (Exception $e) {
+            $this->logger->error('Failed to cleanup expired rate limits', [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Get client identifier from request
+     * 
+     * @return string Client identifier
+     */
+    public function getClientIdentifier(): string {
+        // Try to get API key first (more specific)
+        $apiKey = $this->getApiKeyFromRequest();
+        if ($apiKey) {
+            return 'api_key:' . hash('sha256', $apiKey);
         }
         
         // Fall back to IP address
-        return 'ip:' . $this->getClientIp();
+        $ipAddress = $this->getClientIpAddress();
+        return 'ip:' . $ipAddress;
     }
     
     /**
-     * Get current endpoint
+     * Get API key from request
+     * 
+     * @return string|null API key or null if not found
      */
-    private function getEndpoint() {
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-        
-        // Remove query parameters
-        $endpoint = parse_url($requestUri, PHP_URL_PATH);
-        
-        // Normalize endpoint for rate limiting
-        $endpoint = rtrim($endpoint, '/');
-        
-        return $endpoint;
-    }
-    
-    /**
-     * Get rate limit for specific endpoint
-     */
-    private function getEndpointLimit($endpoint) {
-        // Check for exact match
-        if (isset($this->limits[$endpoint])) {
-            return $this->limits[$endpoint];
+    private function getApiKeyFromRequest(): ?string {
+        if (isset($_SERVER['HTTP_X_API_KEY'])) {
+            return trim($_SERVER['HTTP_X_API_KEY']);
         }
         
-        // Check for pattern matches
-        foreach ($this->limits as $pattern => $limit) {
-            if (strpos($pattern, '*') !== false) {
-                $regex = str_replace('*', '.*', preg_quote($pattern, '/'));
-                if (preg_match('/^' . $regex . '$/', $endpoint)) {
-                    return $limit;
+        if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
+            if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+                return trim($matches[1]);
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get client IP address
+     * 
+     * @return string Client IP address
+     */
+    private function getClientIpAddress(): string {
+        // Check for IP from various headers (for load balancers, proxies)
+        $headers = [
+            'HTTP_X_FORWARDED_FOR',
+            'HTTP_X_REAL_IP',
+            'HTTP_CLIENT_IP',
+            'REMOTE_ADDR'
+        ];
+        
+        foreach ($headers as $header) {
+            if (isset($_SERVER[$header]) && !empty($_SERVER[$header])) {
+                $ips = explode(',', $_SERVER[$header]);
+                $ip = trim($ips[0]);
+                
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    return $ip;
                 }
             }
         }
         
-        return $this->defaultLimit;
+        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
     }
     
     /**
-     * Check rate limit for client and endpoint
+     * Log rate limit check
+     * 
+     * @param string $identifier - Client identifier
+     * @param string $endpoint - Endpoint name
+     * @param int $currentUsage - Current usage count
+     * @param array $limit - Rate limit configuration
      */
-    private function checkRateLimit($clientId, $endpoint, $limit) {
-        $windowStart = floor(time() / $this->windowSize) * $this->windowSize;
-        $cacheKey = "rate_limit:{$clientId}:{$endpoint}:{$windowStart}";
-        
-        // Get current request count
-        $currentRequests = (int)$this->cache->get($cacheKey, 0);
-        
-        // Increment request count
-        $newRequestCount = $currentRequests + 1;
-        $this->cache->set($cacheKey, $newRequestCount, $this->windowSize);
-        
-        return [
-            'allowed' => $newRequestCount <= $limit,
-            'current_requests' => $newRequestCount,
-            'limit' => $limit,
-            'reset_time' => $windowStart + $this->windowSize
-        ];
-    }
-    
-    /**
-     * Get rate limit status for client
-     */
-    public function getRateLimitStatus($clientId = null, $endpoint = null) {
-        if ($clientId === null) {
-            $clientId = $this->getClientIdentifier();
-        }
-        
-        if ($endpoint === null) {
-            $endpoint = $this->getEndpoint();
-        }
-        
-        $limit = $this->getEndpointLimit($endpoint);
-        $windowStart = floor(time() / $this->windowSize) * $this->windowSize;
-        $cacheKey = "rate_limit:{$clientId}:{$endpoint}:{$windowStart}";
-        
-        $currentRequests = (int)$this->cache->get($cacheKey, 0);
-        
-        return [
-            'client_id' => $clientId,
+    private function logRateLimitCheck(string $identifier, string $endpoint, int $currentUsage, array $limit): void {
+        $this->logger->debug('Rate limit check', [
+            'identifier_hash' => hash('sha256', $identifier),
             'endpoint' => $endpoint,
-            'limit' => $limit,
-            'current_requests' => $currentRequests,
-            'remaining' => max(0, $limit - $currentRequests),
-            'reset_time' => $windowStart + $this->windowSize,
-            'window_size' => $this->windowSize
-        ];
+            'current_usage' => $currentUsage,
+            'limit' => $limit['requests'],
+            'window' => $limit['window'],
+            'remaining' => max(0, $limit['requests'] - $currentUsage)
+        ]);
     }
     
     /**
-     * Reset rate limit for client
+     * Log rate limit exceeded
+     * 
+     * @param string $identifier - Client identifier
+     * @param string $endpoint - Endpoint name
+     * @param int $currentUsage - Current usage count
+     * @param array $limit - Rate limit configuration
      */
-    public function resetRateLimit($clientId, $endpoint = null) {
-        $windowStart = floor(time() / $this->windowSize) * $this->windowSize;
+    private function logRateLimitExceeded(string $identifier, string $endpoint, int $currentUsage, array $limit): void {
+        $this->logger->warning('Rate limit exceeded', [
+            'identifier_hash' => hash('sha256', $identifier),
+            'endpoint' => $endpoint,
+            'current_usage' => $currentUsage,
+            'limit' => $limit['requests'],
+            'window' => $limit['window'],
+            'ip_address' => $this->getClientIpAddress(),
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
+        ]);
+    }
+    
+    /**
+     * Set custom rate limit for specific client
+     * 
+     * @param string $identifier - Client identifier
+     * @param string $endpoint - Endpoint name
+     * @param int $requests - Number of requests allowed
+     * @param int $window - Time window in seconds
+     */
+    public function setCustomRateLimit(string $identifier, string $endpoint, int $requests, int $window): void {
+        // This would typically be stored in database for persistence
+        // For demo purposes, we'll just log it
         
-        if ($endpoint) {
-            $cacheKey = "rate_limit:{$clientId}:{$endpoint}:{$windowStart}";
-            $this->cache->delete($cacheKey);
-        } else {
-            // Reset all endpoints for client (this is expensive, use carefully)
-            $pattern = "rate_limit:{$clientId}:*";
-            // Note: This would require cache implementation that supports pattern deletion
-            $this->logger->info('Rate limit reset requested', [
-                'client_id' => $clientId,
-                'endpoint' => $endpoint
-            ]);
-        }
-    }
-    
-    /**
-     * Get rate limiting configuration
-     */
-    public function getConfig() {
-        return [
-            'default_limit' => $this->defaultLimit,
-            'window_size' => $this->windowSize,
-            'endpoint_limits' => $this->limits
-        ];
+        $this->logger->info('Custom rate limit set', [
+            'identifier_hash' => hash('sha256', $identifier),
+            'endpoint' => $endpoint,
+            'requests' => $requests,
+            'window' => $window
+        ]);
     }
 }
