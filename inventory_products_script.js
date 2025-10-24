@@ -287,7 +287,7 @@ class InventoryProductsDashboard {
                     <td class="product-name">${product.name}</td>
                     <td>${product.warehouse}</td>
                     <td class="total-stock-cell ${stockCellClass}">
-                        ${product.total_stock.toLocaleString()}
+                        ${(product.total_stock ?? 0).toLocaleString()}
                     </td>
                     <td>${(product.quantity_present || 0).toLocaleString()}</td>
                     <td>${(product.available_stock || 0).toLocaleString()}</td>

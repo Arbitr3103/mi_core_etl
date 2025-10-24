@@ -1,0 +1,40 @@
+🎉 ФАЙЛЫ ЗАГРУЖЕНЫ НА СЕРВЕР!
+============================
+
+Теперь подключитесь к серверу и выполните эти команды:
+
+ssh vladimir@178.72.129.61
+
+1️⃣ НАЙТИ ДИРЕКТОРИЮ САЙТА:
+find /var/www -name 'inventory-analytics.php' 2>/dev/null
+find /home -name 'inventory-analytics.php' 2>/dev/null
+
+2️⃣ ПЕРЕЙТИ В ДИРЕКТОРИЮ САЙТА:
+cd /найденная/директория
+
+3️⃣ СКОПИРОВАТЬ ФАЙЛЫ ИЗ ДОМАШНЕЙ ДИРЕКТОРИИ:
+cp ~/inventory_products_dashboard.html .
+cp ~/warehouse_dashboard.html .
+cp ~/warehouse_dashboard_advanced.html .
+cp ~/analyze_inventory_structure.php .
+cp ~/analyze_sales_data_structure.php .
+cp ~/critical_warehouses_analysis.php .
+cp ~/warehouse_dashboard_api.php .
+cp ~/dashboard_styles.css .
+cp ~/inventory_products_script.js .
+
+4️⃣ УСТАНОВИТЬ ПРАВА ДОСТУПА:
+chmod 644 *.html *.css *.js *.php
+
+5️⃣ ПРОВЕРИТЬ ЧТО ФАЙЛЫ НА МЕСТЕ:
+ls -la inventory_products_dashboard.html
+ls -la warehouse_dashboard*.html
+ls -la analyze_*.php
+
+6️⃣ ПРОВЕРИТЬ В БРАУЗЕРЕ:
+https://www.market-mi.ru/inventory_products_dashboard.html
+https://www.market-mi.ru/warehouse_dashboard.html
+https://www.market-mi.ru/analyze_inventory_structure.php
+https://www.market-mi.ru/critical_warehouses_analysis.php
+
+✅ ГОТОВО! Система будет работать после выполнения этих команд!
