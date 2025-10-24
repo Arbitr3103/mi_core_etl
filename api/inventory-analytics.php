@@ -105,11 +105,11 @@ function getActivityStatistics($pdo) {
     try {
         $stmt = $pdo->prepare("
             SELECT 
-                COUNT(CASE WHEN v.current_stock > 0 THEN 1 END) as active_count,
-                COUNT(CASE WHEN v.current_stock = 0 THEN 1 END) as inactive_count,
+                COUNT(CASE WHEN COALESCE(i.current_stock, i.stock, 0) > 0 THEN 1 END) as active_count,
+                COUNT(CASE WHEN COALESCE(i.current_stock, i.stock, 0) = 0 THEN 1 END) as inactive_count,
                 COUNT(*) as total_count
-            FROM v_dashboard_inventory v
-            WHERE v.current_stock IS NOT NULL
+            FROM inventory i
+            WHERE COALESCE(i.current_stock, i.stock, 0) IS NOT NULL
         ");
         
         $stmt->execute();
@@ -143,11 +143,11 @@ function getActiveProductsFilter($params = []) {
     switch ($activityFilter) {
         case 'active':
             // Только товары с остатками > 0
-            return " AND v.current_stock > 0 ";
+            return " AND COALESCE(i.current_stock, i.stock, 0) > 0 ";
             
         case 'inactive':
             // Только товары с остатками = 0
-            return " AND v.current_stock = 0 ";
+            return " AND COALESCE(i.current_stock, i.stock, 0) = 0 ";
             
         case 'all':
             // Все товары без фильтрации
@@ -155,7 +155,7 @@ function getActiveProductsFilter($params = []) {
             
         default:
             // По умолчанию показываем только активные товары
-            return " AND v.current_stock > 0 ";
+            return " AND COALESCE(i.current_stock, i.stock, 0) > 0 ";
     }
 }
 
@@ -461,36 +461,41 @@ function getInventoryDashboardData($pdo, $params = []) {
         // Получаем условие фильтрации активных товаров
         $activeFilter = getActiveProductsFilter($params);
         
-        // Получаем данные из представления v_dashboard_inventory
-        // Это представление уже содержит все необходимые поля и связи
+        // Получаем данные из таблицы inventory с правильными полями
         $stmt = $pdo->prepare("
             SELECT 
-                v.sku,
-                v.name,
-                v.warehouse_name,
-                v.current_stock as total_stock,
-                v.available_stock,
-                v.reserved_stock,
-                v.last_updated,
-                v.price,
-                v.category,
+                i.sku,
+                COALESCE(i.name, i.product_name, 'Товар ' || i.sku) as name,
+                COALESCE(i.warehouse_name, i.warehouse, 'Основной склад') as warehouse_name,
+                COALESCE(i.current_stock, i.stock, 0) as total_stock,
+                COALESCE(i.available_stock, i.current_stock, i.stock, 0) as available_stock,
+                COALESCE(i.reserved_stock, 0) as reserved_stock,
+                COALESCE(i.last_updated, i.updated_at, NOW()) as last_updated,
+                COALESCE(i.price, 0) as price,
+                COALESCE(i.category, 'Без категории') as category,
                 -- Классификация товаров по уровням остатков согласно требованиям
                 CASE
-                    WHEN v.current_stock <= 5 THEN 'critical'
-                    WHEN v.current_stock <= 20 THEN 'low'
-                    WHEN v.current_stock > 100 THEN 'overstock'
+                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 5 THEN 'critical'
+                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 20 THEN 'low'
+                    WHEN COALESCE(i.current_stock, i.stock, 0) > 100 THEN 'overstock'
                     ELSE 'normal'
-                END as stock_status
-            FROM v_dashboard_inventory v
-            WHERE v.current_stock IS NOT NULL " . $activeFilter . "
+                END as stock_status,
+                -- Добавляем статус активности
+                CASE 
+                    WHEN COALESCE(i.current_stock, i.stock, 0) > 0 THEN 'active'
+                    ELSE 'inactive'
+                END as activity_status
+            FROM inventory i
+            WHERE COALESCE(i.current_stock, i.stock, 0) IS NOT NULL " . $activeFilter . "
             ORDER BY 
                 CASE 
-                    WHEN v.current_stock <= 5 THEN 1
-                    WHEN v.current_stock <= 20 THEN 2
-                    WHEN v.current_stock > 100 THEN 3
+                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 5 THEN 1
+                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 20 THEN 2
+                    WHEN COALESCE(i.current_stock, i.stock, 0) > 100 THEN 3
                     ELSE 4
                 END,
-                v.current_stock ASC
+                COALESCE(i.current_stock, i.stock, 0) ASC
+            LIMIT 100
         ");
         
         $stmt->execute();
@@ -529,8 +534,8 @@ function getInventoryDashboardData($pdo, $params = []) {
             ];
         }
     
-        // Представление v_dashboard_inventory уже содержит названия товаров и цены
-        // Поэтому нам не нужно делать дополнительные запросы
+        // Таблица inventory содержит названия товаров и цены
+        // Используем COALESCE для обработки разных названий полей
         $missing_names_count = 0;
     
     // Группируем товары по статусу
@@ -543,7 +548,7 @@ function getInventoryDashboardData($pdo, $params = []) {
     $warehouses_summary = [];
     
     foreach ($products as $product) {
-        // Представление v_dashboard_inventory уже содержит все необходимые данные
+        // Таблица inventory содержит все необходимые данные
         $product_name = $product['name'] ?: 'Товар ' . $product['sku'];
         $unit_cost = (float)($product['price'] ?? 0);
             
