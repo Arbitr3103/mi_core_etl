@@ -48,7 +48,7 @@ function validateDatabaseConnection($pdo) {
 // Функция для проверки наличия данных в inventory_data
 function checkInventoryDataAvailability($pdo) {
     try {
-        $stmt = $pdo->query("SELECT COUNT(*) as count FROM inventory_data WHERE current_stock IS NOT NULL");
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM inventory WHERE quantity_present IS NOT NULL OR available IS NOT NULL");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return (int)$result['count'] > 0;
     } catch (PDOException $e) {
@@ -105,11 +105,10 @@ function getActivityStatistics($pdo) {
     try {
         $stmt = $pdo->prepare("
             SELECT 
-                COUNT(CASE WHEN COALESCE(i.current_stock, i.stock, 0) > 0 THEN 1 END) as active_count,
-                COUNT(CASE WHEN COALESCE(i.current_stock, i.stock, 0) = 0 THEN 1 END) as inactive_count,
+                COUNT(CASE WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 THEN 1 END) as active_count,
+                COUNT(CASE WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) = 0 THEN 1 END) as inactive_count,
                 COUNT(*) as total_count
             FROM inventory i
-            WHERE COALESCE(i.current_stock, i.stock, 0) IS NOT NULL
         ");
         
         $stmt->execute();
@@ -142,12 +141,12 @@ function getActiveProductsFilter($params = []) {
     
     switch ($activityFilter) {
         case 'active':
-            // Только товары с остатками > 0
-            return " AND COALESCE(i.current_stock, i.stock, 0) > 0 ";
+            // Только товары с остатками > 0 (учитываем все типы остатков)
+            return " AND (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 ";
             
         case 'inactive':
-            // Только товары с остатками = 0
-            return " AND COALESCE(i.current_stock, i.stock, 0) = 0 ";
+            // Только товары с остатками = 0 (все типы остатков равны 0)
+            return " AND (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) = 0 ";
             
         case 'all':
             // Все товары без фильтрации
@@ -155,7 +154,7 @@ function getActiveProductsFilter($params = []) {
             
         default:
             // По умолчанию показываем только активные товары
-            return " AND COALESCE(i.current_stock, i.stock, 0) > 0 ";
+            return " AND (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 ";
     }
 }
 
@@ -461,40 +460,43 @@ function getInventoryDashboardData($pdo, $params = []) {
         // Получаем условие фильтрации активных товаров
         $activeFilter = getActiveProductsFilter($params);
         
-        // Получаем данные из таблицы inventory с правильными полями
+        // Получаем данные из таблицы inventory с правильными полями PostgreSQL
         $stmt = $pdo->prepare("
             SELECT 
                 i.sku,
-                COALESCE(i.name, i.product_name, 'Товар ' || i.sku) as name,
-                COALESCE(i.warehouse_name, i.warehouse, 'Основной склад') as warehouse_name,
-                COALESCE(i.current_stock, i.stock, 0) as total_stock,
-                COALESCE(i.available_stock, i.current_stock, i.stock, 0) as available_stock,
-                COALESCE(i.reserved_stock, 0) as reserved_stock,
-                COALESCE(i.last_updated, i.updated_at, NOW()) as last_updated,
-                COALESCE(i.price, 0) as price,
-                COALESCE(i.category, 'Без категории') as category,
+                COALESCE(i.name, 'Товар ' || i.sku) as name,
+                COALESCE(i.warehouse_name, 'Основной склад') as warehouse_name,
+                (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) as total_stock,
+                COALESCE(i.available, 0) as available_stock,
+                COALESCE(i.reserved, i.quantity_reserved, 0) as reserved_stock,
+                COALESCE(i.preparing_for_sale, 0) as preparing_for_sale,
+                COALESCE(i.in_requests, 0) as in_requests,
+                COALESCE(i.in_transit, 0) as in_transit,
+                COALESCE(i.updated_at, NOW()) as last_updated,
+                0 as price,
+                COALESCE(i.cluster, 'Без категории') as category,
                 -- Классификация товаров по уровням остатков согласно требованиям
                 CASE
-                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 5 THEN 'critical'
-                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 20 THEN 'low'
-                    WHEN COALESCE(i.current_stock, i.stock, 0) > 100 THEN 'overstock'
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) <= 5 THEN 'critical'
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) <= 20 THEN 'low'
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 100 THEN 'overstock'
                     ELSE 'normal'
                 END as stock_status,
                 -- Добавляем статус активности
                 CASE 
-                    WHEN COALESCE(i.current_stock, i.stock, 0) > 0 THEN 'active'
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 0 THEN 'active'
                     ELSE 'inactive'
                 END as activity_status
             FROM inventory i
-            WHERE COALESCE(i.current_stock, i.stock, 0) IS NOT NULL " . $activeFilter . "
+            WHERE 1=1 " . $activeFilter . "
             ORDER BY 
                 CASE 
-                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 5 THEN 1
-                    WHEN COALESCE(i.current_stock, i.stock, 0) <= 20 THEN 2
-                    WHEN COALESCE(i.current_stock, i.stock, 0) > 100 THEN 3
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) <= 5 THEN 1
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) <= 20 THEN 2
+                    WHEN (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) > 100 THEN 3
                     ELSE 4
                 END,
-                COALESCE(i.current_stock, i.stock, 0) ASC
+                (COALESCE(i.quantity_present, 0) + COALESCE(i.available, 0) + COALESCE(i.preparing_for_sale, 0) + COALESCE(i.in_requests, 0) + COALESCE(i.in_transit, 0)) DESC
             LIMIT 100
         ");
         
