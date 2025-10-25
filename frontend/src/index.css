@@ -1,0 +1,84 @@
+/**
+ * Base styles for the application
+ * Using Tailwind CSS for utility classes
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom animations for ETL status indicators */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom styles for tooltips */
+.tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #1f2937;
+}
+
+/* Status indicator colors */
+.status-pending {
+  @apply bg-gray-400;
+}
+.status-running {
+  @apply bg-blue-500;
+}
+.status-completed {
+  @apply bg-green-500;
+}
+.status-failed {
+  @apply bg-red-500;
+}
+.status-retrying {
+  @apply bg-yellow-500;
+}
+.status-cancelled {
+  @apply bg-gray-500;
+}
+
+/* Progress ring animation */
+.progress-ring {
+  transition: stroke-dashoffset 0.3s ease-in-out;
+}
+
+/* Hover effects for interactive elements */
+.etl-status-item:hover {
+  @apply shadow-md;
+  transform: translateY(-1px);
+  transition: all 0.2s ease-in-out;
+}
+
+/* Loading states */
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}

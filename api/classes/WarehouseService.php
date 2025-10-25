@@ -48,6 +48,9 @@ class WarehouseService {
             $liquidityStatus = $filters['liquidity_status'] ?? null;
             $activeOnly = $filters['active_only'] ?? true;
             $hasReplenishmentNeed = $filters['has_replenishment_need'] ?? null;
+            $dataSource = $filters['data_source'] ?? null;           // NEW for Analytics API
+            $qualityScore = $filters['quality_score'] ?? null;       // NEW for Analytics API
+            $freshnessHours = $filters['freshness_hours'] ?? null;   // NEW for Analytics API
             $sortBy = $filters['sort_by'] ?? 'replenishment_need';
             $sortOrder = $filters['sort_order'] ?? 'desc';
             $limit = isset($filters['limit']) ? min(1000, max(1, (int)$filters['limit'])) : 100;
@@ -81,6 +84,22 @@ class WarehouseService {
                 $conditions[] = "wsm.replenishment_need > 0";
             }
             
+            // NEW Analytics API filters
+            if ($dataSource && $dataSource !== 'all') {
+                $conditions[] = "i.data_source = :data_source";
+                $params['data_source'] = $dataSource;
+            }
+            
+            if ($qualityScore !== null) {
+                $conditions[] = "COALESCE(i.data_quality_score, 0) >= :quality_score";
+                $params['quality_score'] = $qualityScore;
+            }
+            
+            if ($freshnessHours !== null) {
+                $conditions[] = "COALESCE(i.last_analytics_sync, i.updated_at) >= NOW() - INTERVAL :freshness_hours HOUR";
+                $params['freshness_hours'] = $freshnessHours;
+            }
+            
             $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
             
             // Build ORDER BY clause
@@ -91,7 +110,10 @@ class WarehouseService {
                 'daily_sales_avg' => 'wsm.daily_sales_avg',
                 'days_of_stock' => 'wsm.days_of_stock',
                 'replenishment_need' => 'wsm.replenishment_need',
-                'days_without_sales' => 'wsm.days_without_sales'
+                'days_without_sales' => 'wsm.days_without_sales',
+                'data_quality_score' => 'COALESCE(i.data_quality_score, 0)',    // NEW for Analytics API
+                'last_analytics_sync' => 'COALESCE(i.last_analytics_sync, i.updated_at)',   // NEW for Analytics API
+                'data_source' => 'i.data_source'            // NEW for Analytics API
             ];
             
             $sortField = $allowedSortFields[$sortBy] ?? 'wsm.replenishment_need';
@@ -163,7 +185,20 @@ class WarehouseService {
                     
                     -- Metadata
                     i.updated_at as last_updated,
-                    wsm.calculated_at as metrics_calculated_at
+                    wsm.calculated_at as metrics_calculated_at,
+                    
+                    -- Analytics API fields (NEW)
+                    COALESCE(i.data_source, 'manual') as data_source,
+                    COALESCE(i.data_quality_score, 100) as data_quality_score,
+                    i.last_analytics_sync,
+                    i.normalized_warehouse_name,
+                    i.original_warehouse_name,
+                    i.sync_batch_id,
+                    CASE 
+                        WHEN i.last_analytics_sync IS NOT NULL 
+                        THEN TIMESTAMPDIFF(HOUR, i.last_analytics_sync, NOW())
+                        ELSE NULL 
+                    END as hours_since_sync
                     
                 FROM inventory i
                 INNER JOIN dim_products dp ON i.product_id = dp.id
@@ -206,6 +241,9 @@ class WarehouseService {
                         'liquidity_status' => $liquidityStatus,
                         'active_only' => $activeOnly,
                         'has_replenishment_need' => $hasReplenishmentNeed,
+                        'data_source' => $dataSource,           // NEW for Analytics API
+                        'quality_score' => $qualityScore,       // NEW for Analytics API
+                        'freshness_hours' => $freshnessHours,   // NEW for Analytics API
                         'sort_by' => $sortBy,
                         'sort_order' => $sortOrder
                     ],
@@ -236,8 +274,9 @@ class WarehouseService {
      * Get list of all warehouses
      * 
      * Returns a list of all unique warehouse names in the system.
+     * Enhanced with Analytics API data source information.
      * 
-     * Requirements: 2.3, 9.1
+     * Requirements: 2.3, 9.1, 9.2, 17.3
      * 
      * @return array List of warehouses
      */
@@ -247,7 +286,12 @@ class WarehouseService {
                 SELECT DISTINCT 
                     warehouse_name,
                     cluster,
-                    COUNT(*) as product_count
+                    COUNT(*) as product_count,
+                    -- Analytics API metrics (NEW)
+                    AVG(COALESCE(data_quality_score, 100)) as avg_quality_score,
+                    SUM(CASE WHEN data_source = 'analytics_api' THEN 1 ELSE 0 END) as analytics_api_count,
+                    MAX(last_analytics_sync) as last_analytics_sync,
+                    COUNT(CASE WHEN COALESCE(last_analytics_sync, updated_at) >= NOW() - INTERVAL 6 HOUR THEN 1 END) as fresh_count
                 FROM inventory
                 WHERE warehouse_name IS NOT NULL
                 GROUP BY warehouse_name, cluster
@@ -358,7 +402,12 @@ class WarehouseService {
                 'Дней запаса',
                 'Статус ликвидности',
                 'Целевой запас',
-                'Нужно заказать'
+                'Нужно заказать',
+                'Источник данных',           // NEW for Analytics API
+                'Оценка качества',           // NEW for Analytics API
+                'Последняя синхронизация',   // NEW for Analytics API
+                'Часов с синхронизации',     // NEW for Analytics API
+                'Статус свежести'           // NEW for Analytics API
             ];
             
             // Data rows
@@ -384,7 +433,12 @@ class WarehouseService {
                         $item['days_of_stock'] ?? '∞',
                         $item['liquidity_status'],
                         $item['target_stock'],
-                        $item['replenishment_need']
+                        $item['replenishment_need'],
+                        $item['data_source'] ?? 'manual',                    // NEW for Analytics API
+                        $item['data_quality_score'] ?? 100,                 // NEW for Analytics API
+                        $item['last_analytics_sync'] ?? 'Не синхронизировано', // NEW for Analytics API
+                        $item['hours_since_sync'] ?? 'N/A',                 // NEW for Analytics API
+                        $item['freshness_status'] ?? 'unknown'              // NEW for Analytics API
                     ];
                 }
             }
@@ -408,6 +462,7 @@ class WarehouseService {
     
     /**
      * Format warehouse item for output
+     * Enhanced to include Analytics API data fields.
      * 
      * @param array $item Raw item data
      * @return array Formatted item
@@ -438,8 +493,40 @@ class WarehouseService {
             'liquidity_status' => $item['liquidity_status'],
             'target_stock' => (int)$item['target_stock'],
             'replenishment_need' => (int)$item['replenishment_need'],
-            'last_updated' => $item['last_updated']
+            'last_updated' => $item['last_updated'],
+            
+            // Analytics API fields (NEW)
+            'data_source' => $item['data_source'],
+            'data_quality_score' => (int)$item['data_quality_score'],
+            'last_analytics_sync' => $item['last_analytics_sync'],
+            'normalized_warehouse_name' => $item['normalized_warehouse_name'],
+            'original_warehouse_name' => $item['original_warehouse_name'],
+            'sync_batch_id' => $item['sync_batch_id'],
+            'hours_since_sync' => $item['hours_since_sync'] !== null ? (int)$item['hours_since_sync'] : null,
+            'freshness_status' => $this->calculateFreshnessStatus($item['hours_since_sync'])
         ];
+    }
+    
+    /**
+     * Calculate freshness status based on hours since sync
+     * 
+     * @param int|null $hoursSinceSync Hours since last Analytics sync
+     * @return string Freshness status
+     */
+    private function calculateFreshnessStatus($hoursSinceSync) {
+        if ($hoursSinceSync === null) {
+            return 'unknown';
+        }
+        
+        if ($hoursSinceSync <= 6) {
+            return 'fresh';
+        } elseif ($hoursSinceSync <= 24) {
+            return 'acceptable';
+        } elseif ($hoursSinceSync <= 72) {
+            return 'stale';
+        } else {
+            return 'very_stale';
+        }
     }
     
     /**
@@ -512,6 +599,22 @@ class WarehouseService {
                 $conditions[] = "wsm.replenishment_need > 0";
             }
             
+            // NEW Analytics API filters for summary
+            if (isset($filters['data_source']) && $filters['data_source'] !== 'all') {
+                $conditions[] = "i.data_source = :data_source";
+                $params['data_source'] = $filters['data_source'];
+            }
+            
+            if (isset($filters['quality_score'])) {
+                $conditions[] = "COALESCE(i.data_quality_score, 0) >= :quality_score";
+                $params['quality_score'] = $filters['quality_score'];
+            }
+            
+            if (isset($filters['freshness_hours'])) {
+                $conditions[] = "COALESCE(i.last_analytics_sync, i.updated_at) >= NOW() - INTERVAL :freshness_hours HOUR";
+                $params['freshness_hours'] = $filters['freshness_hours'];
+            }
+            
             $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
             
             $sql = "
@@ -522,7 +625,14 @@ class WarehouseService {
                     SUM(CASE WHEN wsm.liquidity_status = 'critical' THEN 1 ELSE 0 END) as critical_count,
                     SUM(CASE WHEN wsm.liquidity_status = 'low' THEN 1 ELSE 0 END) as low_count,
                     SUM(CASE WHEN wsm.liquidity_status = 'normal' THEN 1 ELSE 0 END) as normal_count,
-                    SUM(CASE WHEN wsm.liquidity_status = 'excess' THEN 1 ELSE 0 END) as excess_count
+                    SUM(CASE WHEN wsm.liquidity_status = 'excess' THEN 1 ELSE 0 END) as excess_count,
+                    -- Analytics API metrics (NEW)
+                    AVG(COALESCE(i.data_quality_score, 100)) as avg_quality_score,
+                    SUM(CASE WHEN i.data_source = 'analytics_api' THEN 1 ELSE 0 END) as analytics_api_count,
+                    SUM(CASE WHEN i.data_source = 'manual' THEN 1 ELSE 0 END) as manual_count,
+                    SUM(CASE WHEN i.data_source = 'import' THEN 1 ELSE 0 END) as import_count,
+                    SUM(CASE WHEN COALESCE(i.last_analytics_sync, i.updated_at) >= NOW() - INTERVAL 6 HOUR THEN 1 ELSE 0 END) as fresh_count,
+                    SUM(CASE WHEN COALESCE(i.last_analytics_sync, i.updated_at) < NOW() - INTERVAL 24 HOUR THEN 1 ELSE 0 END) as stale_count
                 FROM inventory i
                 INNER JOIN dim_products dp ON i.product_id = dp.id
                 LEFT JOIN warehouse_sales_metrics wsm ON 
@@ -545,6 +655,21 @@ class WarehouseService {
                     'low' => (int)$summary['low_count'],
                     'normal' => (int)$summary['normal_count'],
                     'excess' => (int)$summary['excess_count']
+                ],
+                // Analytics API metrics (NEW)
+                'data_quality' => [
+                    'avg_quality_score' => round((float)$summary['avg_quality_score'], 2)
+                ],
+                'by_data_source' => [
+                    'analytics_api' => (int)$summary['analytics_api_count'],
+                    'manual' => (int)$summary['manual_count'],
+                    'import' => (int)$summary['import_count']
+                ],
+                'freshness' => [
+                    'fresh_count' => (int)$summary['fresh_count'],
+                    'stale_count' => (int)$summary['stale_count'],
+                    'fresh_percentage' => $summary['total_products'] > 0 ? 
+                        round(((int)$summary['fresh_count'] / (int)$summary['total_products']) * 100, 2) : 0
                 ]
             ];
             

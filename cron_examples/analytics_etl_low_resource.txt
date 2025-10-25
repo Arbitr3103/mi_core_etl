@@ -1,0 +1,29 @@
+# Low Resource Analytics ETL Cron Configuration
+# For resource-constrained systems or low-volume businesses
+# Task: 6.2 Настроить cron задачи для Analytics ETL
+
+# Environment variables for cron
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=admin@yourcompany.com
+
+# Main Analytics API ETL - twice daily (morning and evening)
+0 8 * * * cd /path/to/project && php warehouse_etl_analytics.php --batch-size=500 --cleanup-logs >> logs/cron/analytics_etl_morning.log 2>&1
+0 20 * * * cd /path/to/project && php warehouse_etl_analytics.php --batch-size=500 >> logs/cron/analytics_etl_evening.log 2>&1
+
+# Daily data quality validation at 12:00 PM (midday, low system load)
+0 12 * * * cd /path/to/project && php warehouse_etl_analytics.php --validate-only --limit=500 >> logs/cron/analytics_etl_validation.log 2>&1
+
+# Weekly comprehensive ETL every Saturday at 2:00 AM (weekend, low usage)
+0 2 * * 6 cd /path/to/project && php warehouse_etl_analytics.php --force --batch-size=300 --cleanup-logs >> logs/cron/analytics_etl_weekly.log 2>&1
+
+# Bi-weekly log cleanup (keep logs longer due to less frequent runs)
+0 3 * * 0 [ $(expr $(date +\%U) \% 2) -eq 0 ] && find /path/to/project/logs/analytics_etl -name "*.log" -mtime +45 -delete && find /path/to/project/logs/cron -name "*.log" -mtime +21 -delete
+
+# Health check twice daily (morning and evening, offset from main ETL)
+0 9,21 * * * cd /path/to/project && timeout 180 php warehouse_etl_analytics.php --validate-only --limit=1 >> logs/cron/analytics_etl_health.log 2>&1 || echo "$(date): Health check timeout or failure" >> logs/cron/analytics_etl_health.log
+
+# Monthly comprehensive maintenance (first Saturday of month at 1:00 AM)
+0 1 1-7 * 6 cd /path/to/project && php warehouse_etl_analytics.php --validate-only --cleanup-logs --force --batch-size=200 >> logs/cron/analytics_etl_monthly.log 2>&1
+
+# Weekly system resource check (to ensure system isn't overloaded)
+0 10 * * 0 echo "$(date): Memory: $(free -h | grep Mem), Disk: $(df -h / | tail -1), Load: $(uptime | awk -F'load average:' '{print $2}')" >> logs/cron/system_resources.log

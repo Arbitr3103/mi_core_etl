@@ -27,8 +27,9 @@ class WarehouseController {
      * 
      * Handles GET /api/warehouse/dashboard
      * Returns warehouse dashboard data with applied filters.
+     * Enhanced to support Analytics API data integration.
      * 
-     * Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 9.1, 9.2, 9.3
+     * Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 9.1, 9.2, 9.3, 9.4, 17.3
      * 
      * Query Parameters:
      * - warehouse (optional): Filter by warehouse name
@@ -36,6 +37,9 @@ class WarehouseController {
      * - liquidity_status (optional): Filter by liquidity status (critical, low, normal, excess)
      * - active_only (optional, default: true): Show only active products
      * - has_replenishment_need (optional): Show only products with replenishment need
+     * - data_source (optional): Filter by data source (analytics_api, manual, import, all)
+     * - quality_score (optional): Minimum quality score (0-100)
+     * - freshness_hours (optional): Maximum hours since last sync
      * - sort_by (optional, default: replenishment_need): Field to sort by
      * - sort_order (optional, default: desc): Sort direction (asc/desc)
      * - limit (optional, default: 100): Number of items per page
@@ -194,6 +198,42 @@ class WarehouseController {
             );
         }
         
+        // Data source filter (enum) - NEW for Analytics API integration
+        if (isset($params['data_source']) && $params['data_source'] !== '') {
+            $validSources = ['analytics_api', 'manual', 'import', 'all'];
+            $source = strtolower(trim($params['data_source']));
+            
+            if (!in_array($source, $validSources)) {
+                throw new ValidationException(
+                    'Invalid data_source. Must be one of: ' . implode(', ', $validSources)
+                );
+            }
+            
+            $filters['data_source'] = $source;
+        }
+        
+        // Quality score filter (integer, 0-100) - NEW for Analytics API integration
+        if (isset($params['quality_score'])) {
+            $qualityScore = filter_var($params['quality_score'], FILTER_VALIDATE_INT);
+            
+            if ($qualityScore === false || $qualityScore < 0 || $qualityScore > 100) {
+                throw new ValidationException('Invalid quality_score. Must be an integer between 0 and 100');
+            }
+            
+            $filters['quality_score'] = $qualityScore;
+        }
+        
+        // Freshness hours filter (integer, >= 0) - NEW for Analytics API integration
+        if (isset($params['freshness_hours'])) {
+            $freshnessHours = filter_var($params['freshness_hours'], FILTER_VALIDATE_INT);
+            
+            if ($freshnessHours === false || $freshnessHours < 0) {
+                throw new ValidationException('Invalid freshness_hours. Must be a non-negative integer');
+            }
+            
+            $filters['freshness_hours'] = $freshnessHours;
+        }
+        
         // Sort by filter (enum)
         if (isset($params['sort_by']) && $params['sort_by'] !== '') {
             $validSortFields = [
@@ -203,7 +243,10 @@ class WarehouseController {
                 'daily_sales_avg', 
                 'days_of_stock', 
                 'replenishment_need',
-                'days_without_sales'
+                'days_without_sales',
+                'data_quality_score',    // NEW for Analytics API
+                'last_analytics_sync',   // NEW for Analytics API
+                'data_source'            // NEW for Analytics API
             ];
             
             $sortBy = strtolower(trim($params['sort_by']));

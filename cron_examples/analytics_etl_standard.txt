@@ -1,0 +1,28 @@
+# Standard Analytics ETL Cron Configuration
+# Balanced approach for most businesses
+# Task: 6.2 Настроить cron задачи для Analytics ETL
+
+# Environment variables for cron
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=admin@yourcompany.com
+
+# Main Analytics API ETL - every 4 hours
+0 */4 * * * cd /path/to/project && php warehouse_etl_analytics.php --cleanup-logs >> logs/cron/analytics_etl_main.log 2>&1
+
+# Daily data quality validation at 7:00 AM
+0 7 * * * cd /path/to/project && php warehouse_etl_analytics.php --validate-only --debug >> logs/cron/analytics_etl_validation.log 2>&1
+
+# Weekly log cleanup every Sunday at 2:00 AM
+0 2 * * 0 find /path/to/project/logs/analytics_etl -name "*.log" -mtime +30 -delete && find /path/to/project/logs/cron -name "*.log" -mtime +14 -delete
+
+# Monthly comprehensive validation and cleanup (first Sunday of month at 3:00 AM)
+0 3 1-7 * 0 cd /path/to/project && php warehouse_etl_analytics.php --validate-only --cleanup-logs --debug --force >> logs/cron/analytics_etl_monthly.log 2>&1
+
+# Health check every 6 hours (offset by 1 hour from main ETL)
+0 1,7,13,19 * * * cd /path/to/project && timeout 300 php warehouse_etl_analytics.php --validate-only --limit=1 >> logs/cron/analytics_etl_health.log 2>&1 || echo "$(date): Health check timeout or failure" >> logs/cron/analytics_etl_health.log
+
+# Weekly performance report every Monday at 9:00 AM
+0 9 * * 1 cd /path/to/project && php warehouse_etl_analytics.php --validate-only --debug > logs/cron/weekly_performance_$(date +\%Y\%m\%d).log 2>&1
+
+# Bi-weekly comprehensive ETL run (every other Sunday at 4:00 AM)
+0 4 * * 0 [ $(expr $(date +\%U) \% 2) -eq 0 ] && cd /path/to/project && php warehouse_etl_analytics.php --force --debug >> logs/cron/analytics_etl_biweekly.log 2>&1

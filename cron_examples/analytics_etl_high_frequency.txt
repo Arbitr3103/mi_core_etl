@@ -1,0 +1,34 @@
+# High Frequency Analytics ETL Cron Configuration
+# For high-volume businesses requiring frequent data updates
+# Task: 6.2 Настроить cron задачи для Analytics ETL
+
+# Environment variables for cron
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=admin@yourcompany.com
+
+# Main Analytics API ETL - every 2 hours
+0 */2 * * * cd /path/to/project && php warehouse_etl_analytics.php --cleanup-logs >> logs/cron/analytics_etl_main.log 2>&1
+
+# Quick validation every hour (limited records for speed)
+0 * * * * cd /path/to/project && timeout 300 php warehouse_etl_analytics.php --validate-only --limit=100 >> logs/cron/analytics_etl_quick_validation.log 2>&1
+
+# Comprehensive daily validation at 6:00 AM
+0 6 * * * cd /path/to/project && php warehouse_etl_analytics.php --validate-only --debug >> logs/cron/analytics_etl_validation.log 2>&1
+
+# Critical warehouse monitoring every 30 minutes during business hours (9 AM - 6 PM)
+*/30 9-18 * * 1-5 cd /path/to/project && php warehouse_etl_analytics.php --validate-only --warehouse='РФЦ_МОСКВА' --limit=50 >> logs/cron/analytics_etl_critical.log 2>&1
+
+# Weekly comprehensive ETL with force flag every Sunday at 1:00 AM
+0 1 * * 0 cd /path/to/project && php warehouse_etl_analytics.php --force --cleanup-logs --debug >> logs/cron/analytics_etl_weekly.log 2>&1
+
+# Daily log cleanup at 3:00 AM (keep 14 days for high frequency)
+0 3 * * * find /path/to/project/logs/analytics_etl -name "*.log" -mtime +14 -delete && find /path/to/project/logs/cron -name "*.log" -mtime +7 -delete
+
+# Health check every 3 hours (offset from main ETL)
+0 1,4,7,10,13,16,19,22 * * * cd /path/to/project && timeout 180 php warehouse_etl_analytics.php --validate-only --limit=1 >> logs/cron/analytics_etl_health.log 2>&1 || echo "$(date): Health check timeout or failure" >> logs/cron/analytics_etl_health.log
+
+# Performance monitoring - log system resources every 6 hours
+0 */6 * * * echo "$(date): $(free -h | head -2), Load: $(uptime | awk -F'load average:' '{print $2}')" >> logs/cron/system_performance.log
+
+# Monthly comprehensive maintenance (first Sunday of month at 2:00 AM)
+0 2 1-7 * 0 cd /path/to/project && php warehouse_etl_analytics.php --validate-only --cleanup-logs --debug --force >> logs/cron/analytics_etl_monthly.log 2>&1

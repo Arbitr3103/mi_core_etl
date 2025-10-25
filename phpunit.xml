@@ -27,6 +27,14 @@
             <file>tests/Unit/InventoryControllerTest.php</file>
         </testsuite>
         
+        <testsuite name="Analytics ETL Tests">
+            <file>tests/Unit/AnalyticsApiClientTest.php</file>
+            <file>tests/Unit/DataValidatorTest.php</file>
+            <file>tests/Unit/WarehouseNormalizerTest.php</file>
+            <file>tests/Unit/AnalyticsETLTest.php</file>
+            <file>tests/Unit/AnalyticsETLControllerTest.php</file>
+        </testsuite>
+        
         <testsuite name="Integration Tests">
             <file>tests/SyncIntegrationTest.php</file>
         </testsuite>
