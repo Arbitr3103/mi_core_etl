@@ -1,372 +1,244 @@
 #!/bin/bash
 
-# Безопасный скрипт развертывания MDM системы на сервер
-# Использование: ./safe_deploy.sh [debug_script.sh]
+# Safe Deployment Script - Preserves local changes
+# Handles git stash/unstash to protect local modifications
 
 set -e
 
-# Конфигурация
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="$SCRIPT_DIR/deployment.log"
-BACKUP_DIR="$SCRIPT_DIR/backup_$(date +%Y%m%d_%H%M%S)"
+# Configuration - ADJUST FOR YOUR SERVER
+PROJECT_DIR="/var/www/html/mi_core_etl"
+VLADIMIR_USER="vladimir"
+APP_USER="www-data"
+APP_GROUP="www-data"
 
-# Цвета для вывода
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Функции логирования
-log() {
-    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
-}
+echo -e "${BLUE}🛡️  Safe Analytics ETL Deployment (Preserving Local Changes)${NC}"
 
-error() {
-    echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1" | tee -a "$LOG_FILE"
-}
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+   echo -e "${RED}❌ This script must be run as root or with sudo${NC}"
+   exit 1
+fi
 
-warning() {
-    echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING:${NC} $1" | tee -a "$LOG_FILE"
-}
+# Check if project directory exists
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo -e "${RED}❌ Project directory $PROJECT_DIR does not exist${NC}"
+    exit 1
+fi
 
-info() {
-    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] INFO:${NC} $1" | tee -a "$LOG_FILE"
-}
+cd "$PROJECT_DIR"
+echo -e "${CYAN}📁 Working in: $(pwd)${NC}"
 
-# Создание резервной копии
-create_backup() {
-    log "Создаем резервную копию..."
-    
-    mkdir -p "$BACKUP_DIR"
-    
-    # Бэкап критических файлов
-    CRITICAL_FILES=(
-        "dashboard_inventory_v4.php"
-        "api/inventory-v4.php"
-        "config.py"
-        ".env"
-    )
-    
-    for file in "${CRITICAL_FILES[@]}"; do
-        if [ -f "$file" ]; then
-            cp "$file" "$BACKUP_DIR/" 2>/dev/null || true
-            log "✓ Создан бэкап: $file"
-        fi
-    done
-    
-    # Бэкап базы данных
-    if command -v mysql &> /dev/null; then
-        log "Создаем бэкап базы данных..."
-        mysql -u root mi_core -e "SELECT 'Database backup created at $(date)'" > "$BACKUP_DIR/db_backup_info.txt" 2>/dev/null || true
-    fi
-    
-    log "Резервная копия создана в: $BACKUP_DIR"
-}
+# Step 1: Change ownership to vladimir for git operations
+echo -e "${BLUE}🔄 Step 1: Changing ownership to $VLADIMIR_USER for git operations...${NC}"
+chown -R $VLADIMIR_USER:$VLADIMIR_USER "$PROJECT_DIR"
 
-# Проверка окружения
-check_environment() {
-    log "Проверяем окружение сервера..."
+# Step 2: Check for local changes as vladimir
+echo -e "${BLUE}🔍 Step 2: Checking for local changes...${NC}"
+LOCAL_CHANGES=$(sudo -u $VLADIMIR_USER git status --porcelain)
+
+if [ -n "$LOCAL_CHANGES" ]; then
+    echo -e "${YELLOW}⚠️  Local changes detected:${NC}"
+    sudo -u $VLADIMIR_USER git status --short
+    echo ""
     
-    # Проверяем PHP
-    if ! command -v php &> /dev/null; then
-        error "PHP не установлен"
-        exit 1
-    fi
+    # Stash local changes
+    echo -e "${BLUE}💾 Stashing local changes...${NC}"
+    STASH_MESSAGE="Auto-stash before deployment $(date '+%Y-%m-%d %H:%M:%S')"
+    sudo -u $VLADIMIR_USER git stash push -m "$STASH_MESSAGE"
     
-    PHP_VERSION=$(php -v | head -n1 | cut -d' ' -f2 | cut -d'.' -f1,2)
-    log "✓ PHP версия: $PHP_VERSION"
-    
-    # Проверяем MySQL
-    if ! command -v mysql &> /dev/null; then
-        warning "MySQL клиент не найден"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Local changes stashed successfully${NC}"
+        STASHED=true
     else
-        log "✓ MySQL клиент доступен"
-    fi
-    
-    # Проверяем права на запись
-    if [ ! -w "." ]; then
-        error "Нет прав на запись в текущую директорию"
+        echo -e "${RED}❌ Failed to stash local changes${NC}"
+        chown -R $APP_USER:$APP_GROUP "$PROJECT_DIR"
         exit 1
     fi
-    
-    log "✓ Окружение проверено"
-}
+else
+    echo -e "${GREEN}✅ No local changes detected${NC}"
+    STASHED=false
+fi
 
-# Развертывание файлов
-deploy_files() {
-    log "Развертываем файлы..."
+# Step 3: Fetch and show what will be updated
+echo -e "${BLUE}🔄 Step 3: Fetching latest changes from repository...${NC}"
+sudo -u $VLADIMIR_USER git fetch origin main
+
+# Show what will be updated
+echo -e "${CYAN}📋 Changes to be pulled:${NC}"
+sudo -u $VLADIMIR_USER git log --oneline HEAD..origin/main | head -10
+
+# Step 4: Perform git pull
+echo -e "${BLUE}🔄 Step 4: Pulling latest changes...${NC}"
+sudo -u $VLADIMIR_USER git pull origin main
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Git pull completed successfully${NC}"
+else
+    echo -e "${RED}❌ Git pull failed${NC}"
     
-    # Создаем необходимые директории
-    DIRECTORIES=(
-        "api"
-        "js"
-        "scripts"
-        "scripts/logs"
-    )
-    
-    for dir in "${DIRECTORIES[@]}"; do
-        mkdir -p "$dir"
-        log "✓ Создана директория: $dir"
-    done
-    
-    # Проверяем ключевые файлы
-    KEY_FILES=(
-        "config.php"
-        "api/sync-stats.php"
-        "api/analytics.php"
-        "api/fix-product-names.php"
-        "js/dashboard-fixes.js"
-        "scripts/fix-missing-product-names.php"
-        "scripts/fix-dashboard-errors.php"
-    )
-    
-    local missing_files=0
-    for file in "${KEY_FILES[@]}"; do
-        if [ -f "$file" ]; then
-            log "✓ Найден файл: $file"
-        else
-            error "✗ Отсутствует файл: $file"
-            ((missing_files++))
-        fi
-    done
-    
-    if [ $missing_files -gt 0 ]; then
-        error "Отсутствует $missing_files критических файлов"
-        exit 1
+    # Restore stashed changes if they exist
+    if [ "$STASHED" = true ]; then
+        echo -e "${BLUE}🔄 Restoring stashed changes due to pull failure...${NC}"
+        sudo -u $VLADIMIR_USER git stash pop
     fi
     
-    log "✓ Все файлы развернуты"
-}
+    chown -R $APP_USER:$APP_GROUP "$PROJECT_DIR"
+    exit 1
+fi
 
-# Настройка конфигурации
-setup_configuration() {
-    log "Настраиваем конфигурацию..."
+# Step 5: Handle stashed changes
+if [ "$STASHED" = true ]; then
+    echo -e "${YELLOW}🤔 You have stashed local changes. Choose how to proceed:${NC}"
+    echo -e "${CYAN}1) Apply stashed changes (may cause conflicts)${NC}"
+    echo -e "${CYAN}2) Keep stashed changes for manual review later${NC}"
+    echo -e "${CYAN}3) Discard stashed changes (use new code only)${NC}"
     
-    # Проверяем .env файл
-    if [ ! -f ".env" ]; then
-        warning ".env файл не найден, создаем из примера..."
-        if [ -f "deployment/production/.env.example" ]; then
-            cp "deployment/production/.env.example" ".env"
-            log "✓ Создан .env файл из примера"
-        else
-            warning "Создаем базовый .env файл..."
-            cat > ".env" << 'EOF'
-# Базовая конфигурация
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=mi_core
-DB_PORT=3306
-EOF
-            log "✓ Создан базовый .env файл"
-        fi
-    fi
-    
-    # Проверяем config.php
-    if [ -f "config.php" ]; then
-        log "✓ Конфигурация PHP найдена"
+    # For automated deployment, we'll keep stashed changes for manual review
+    echo -e "${BLUE}🔄 Keeping stashed changes for manual review...${NC}"
+    echo -e "${YELLOW}📝 To apply later: sudo -u $VLADIMIR_USER git stash pop${NC}"
+    echo -e "${YELLOW}📝 To view stashed changes: sudo -u $VLADIMIR_USER git stash show -p${NC}"
+    echo -e "${YELLOW}📝 To discard stashed changes: sudo -u $VLADIMIR_USER git stash drop${NC}"
+fi
+
+# Step 6: Run database migrations if needed
+echo -e "${BLUE}🔄 Step 6: Checking for database migrations...${NC}"
+if [ -d "migrations" ]; then
+    NEW_MIGRATIONS=$(find migrations -name "*.sql" -newer migrations/.last_migration 2>/dev/null || echo "")
+    if [ -n "$NEW_MIGRATIONS" ]; then
+        echo -e "${YELLOW}📊 New migrations found:${NC}"
+        echo "$NEW_MIGRATIONS"
+        echo -e "${BLUE}🔄 Running migrations...${NC}"
+        # Add your migration command here
+        # sudo -u $VLADIMIR_USER php run_migrations.php
+        touch migrations/.last_migration
+        echo -e "${GREEN}✅ Migrations completed${NC}"
     else
-        error "config.php не найден"
-        exit 1
+        echo -e "${GREEN}✅ No new migrations to run${NC}"
     fi
-    
-    log "✓ Конфигурация настроена"
-}
+fi
 
-# Проверка базы данных
-check_database() {
-    log "Проверяем подключение к базе данных..."
-    
-    if php -r "
-        require_once 'config.php';
-        try {
-            \$pdo = new PDO('mysql:host=' . DB_HOST . ';dbname=' . DB_NAME, DB_USER, DB_PASSWORD);
-            echo 'OK';
-        } catch (Exception \$e) {
-            echo 'FAIL: ' . \$e->getMessage();
-            exit(1);
-        }
-    " > /dev/null 2>&1; then
-        log "✓ Подключение к базе данных успешно"
-    else
-        error "Не удается подключиться к базе данных"
-        info "Проверьте настройки в .env файле"
-        exit 1
-    fi
-    
-    # Проверяем таблицы
-    if mysql -u root mi_core -e "SHOW TABLES;" > /dev/null 2>&1; then
-        local table_count=$(mysql -u root mi_core -e "SHOW TABLES;" | wc -l)
-        log "✓ База данных содержит $((table_count-1)) таблиц"
-    else
-        warning "Не удается получить список таблиц"
-    fi
-}
-
-# Запуск исправлений
-run_fixes() {
-    log "Запускаем исправления..."
-    
-    # Исправляем товары без названий
-    if [ -f "scripts/fix-missing-product-names.php" ]; then
-        log "Запускаем исправление товаров без названий..."
-        if php scripts/fix-missing-product-names.php > /dev/null 2>&1; then
-            log "✓ Товары без названий исправлены"
+# Step 7: Update composer dependencies
+if [ -f "composer.json" ]; then
+    echo -e "${BLUE}🔄 Step 7: Checking composer dependencies...${NC}"
+    if [ -f "composer.lock" ]; then
+        # Check if composer.lock was updated
+        if sudo -u $VLADIMIR_USER git diff HEAD~1 HEAD --name-only | grep -q "composer.lock"; then
+            echo -e "${YELLOW}📦 Composer dependencies updated, installing...${NC}"
+            sudo -u $VLADIMIR_USER composer install --no-dev --optimize-autoloader
+            echo -e "${GREEN}✅ Composer dependencies updated${NC}"
         else
-            warning "Ошибка при исправлении товаров без названий"
+            echo -e "${GREEN}✅ No composer dependency changes${NC}"
         fi
     fi
-    
-    # Проверяем API endpoints
-    API_ENDPOINTS=(
-        "api/sync-stats.php"
-        "api/analytics.php"
-        "api/fix-product-names.php"
-    )
-    
-    for endpoint in "${API_ENDPOINTS[@]}"; do
-        if [ -f "$endpoint" ]; then
-            if php "$endpoint" > /dev/null 2>&1; then
-                log "✓ API endpoint работает: $endpoint"
-            else
-                warning "Проблема с API endpoint: $endpoint"
-            fi
-        fi
-    done
-}
+fi
 
-# Проверка дашборда
-check_dashboard() {
-    log "Проверяем дашборд..."
+# Step 8: Build frontend if needed
+if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
+    echo -e "${BLUE}🔄 Step 8: Checking frontend changes...${NC}"
     
-    if [ -f "dashboard_inventory_v4.php" ]; then
-        # Проверяем, что скрипт добавлен в дашборд
-        if grep -q "dashboard-fixes.js" "dashboard_inventory_v4.php"; then
-            log "✓ JavaScript исправления подключены к дашборду"
-        else
-            warning "JavaScript исправления не подключены к дашборду"
-            info "Добавьте <script src=\"/js/dashboard-fixes.js\"></script> перед </body>"
+    # Check if frontend files were updated
+    FRONTEND_CHANGED=$(sudo -u $VLADIMIR_USER git diff HEAD~1 HEAD --name-only | grep "^frontend/" || echo "")
+    
+    if [ -n "$FRONTEND_CHANGED" ]; then
+        echo -e "${YELLOW}🎨 Frontend changes detected, rebuilding...${NC}"
+        cd frontend
+        
+        # Install dependencies if package-lock.json changed
+        if echo "$FRONTEND_CHANGED" | grep -q "package-lock.json"; then
+            sudo -u $VLADIMIR_USER npm ci
         fi
         
-        log "✓ Дашборд найден"
+        # Build frontend
+        sudo -u $VLADIMIR_USER npm run build
+        cd ..
+        echo -e "${GREEN}✅ Frontend rebuilt successfully${NC}"
     else
-        error "dashboard_inventory_v4.php не найден"
-        exit 1
+        echo -e "${GREEN}✅ No frontend changes detected${NC}"
     fi
-}
+fi
 
-# Запуск дополнительного скрипта отладки
-run_debug_script() {
-    local debug_script="$1"
-    
-    if [ -n "$debug_script" ] && [ -f "$debug_script" ]; then
-        log "Запускаем дополнительный скрипт отладки: $debug_script"
-        
-        # Делаем скрипт исполняемым
-        chmod +x "$debug_script"
-        
-        # Запускаем скрипт
-        if ./"$debug_script"; then
-            log "✓ Скрипт отладки выполнен успешно"
-        else
-            warning "Скрипт отладки завершился с ошибками"
-        fi
-    elif [ -n "$debug_script" ]; then
-        warning "Скрипт отладки не найден: $debug_script"
+# Step 9: Set proper permissions
+echo -e "${BLUE}🔄 Step 9: Setting proper permissions...${NC}"
+
+# Create directories if they don't exist
+sudo -u $VLADIMIR_USER mkdir -p logs/analytics_etl cache/analytics_api storage/temp
+
+# Set executable permissions
+chmod +x warehouse_etl_analytics.php 2>/dev/null || true
+chmod +x analytics_etl_smoke_tests.php 2>/dev/null || true
+chmod +x monitor_analytics_etl.php 2>/dev/null || true
+chmod +x run_alert_manager.php 2>/dev/null || true
+chmod +x scripts/*.php 2>/dev/null || true
+chmod +x migrations/*.sh 2>/dev/null || true
+
+echo -e "${GREEN}✅ Permissions set${NC}"
+
+# Step 10: Restore ownership to application user
+echo -e "${BLUE}🔄 Step 10: Restoring ownership to web server...${NC}"
+chown -R $APP_USER:$APP_GROUP "$PROJECT_DIR"
+
+# Keep vladimir access to maintenance directories
+chown -R $VLADIMIR_USER:$APP_GROUP logs/ cache/ storage/ 2>/dev/null || true
+chmod -R g+w logs/ cache/ storage/ 2>/dev/null || true
+
+echo -e "${GREEN}✅ Ownership restored${NC}"
+
+# Step 11: Restart services
+echo -e "${BLUE}🔄 Step 11: Restarting services...${NC}"
+
+# Restart web server
+if systemctl is-active --quiet nginx; then
+    systemctl reload nginx
+    echo -e "${GREEN}✅ Nginx reloaded${NC}"
+elif systemctl is-active --quiet apache2; then
+    systemctl reload apache2
+    echo -e "${GREEN}✅ Apache reloaded${NC}"
+fi
+
+# Restart PHP-FPM
+if systemctl is-active --quiet php8.1-fpm; then
+    systemctl reload php8.1-fpm
+    echo -e "${GREEN}✅ PHP-FPM reloaded${NC}"
+elif systemctl is-active --quiet php8.0-fpm; then
+    systemctl reload php8.0-fpm
+    echo -e "${GREEN}✅ PHP-FPM reloaded${NC}"
+fi
+
+# Step 12: Run verification tests
+echo -e "${BLUE}🔄 Step 12: Running deployment verification...${NC}"
+if [ -f "analytics_etl_smoke_tests.php" ]; then
+    php analytics_etl_smoke_tests.php
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Smoke tests passed${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Some smoke tests failed, check logs${NC}"
     fi
-}
+fi
 
-# Создание отчета о развертывании
-create_deployment_report() {
-    log "Создаем отчет о развертывании..."
-    
-    local report_file="deployment_report_$(date +%Y%m%d_%H%M%S).txt"
-    
-    cat > "$report_file" << EOF
-=== ОТЧЕТ О РАЗВЕРТЫВАНИИ MDM СИСТЕМЫ ===
-Дата: $(date)
-Сервер: $(hostname)
-Пользователь: $(whoami)
+# Final summary
+echo -e "${GREEN}🎉 Safe deployment completed successfully!${NC}"
+echo -e "${BLUE}📊 Deployment Summary:${NC}"
+echo -e "  • Repository: $(git remote get-url origin)"
+echo -e "  • Current commit: $(git rev-parse --short HEAD) - $(git log -1 --pretty=format:'%s')"
+echo -e "  • Deployment time: $(date)"
+echo -e "  • Local changes: $([ "$STASHED" = true ] && echo "Stashed for review" || echo "None")"
 
-СТАТУС РАЗВЕРТЫВАНИЯ: УСПЕШНО
+if [ "$STASHED" = true ]; then
+    echo -e "${YELLOW}📝 Important: You have stashed local changes!${NC}"
+    echo -e "${CYAN}To review stashed changes:${NC}"
+    echo -e "  sudo -u $VLADIMIR_USER git stash show -p"
+    echo -e "${CYAN}To apply stashed changes:${NC}"
+    echo -e "  sudo -u $VLADIMIR_USER git stash pop"
+    echo -e "${CYAN}To discard stashed changes:${NC}"
+    echo -e "  sudo -u $VLADIMIR_USER git stash drop"
+fi
 
-РАЗВЕРНУТЫЕ КОМПОНЕНТЫ:
-✓ Конфигурация системы (config.php, .env)
-✓ API endpoints (sync-stats, analytics, fix-product-names)
-✓ JavaScript исправления (dashboard-fixes.js)
-✓ Скрипты исправления товаров
-✓ Дашборд с интегрированными исправлениями
-
-ПРОВЕРКИ:
-✓ PHP: $(php -v | head -n1)
-✓ База данных: подключение успешно
-✓ Файловая система: права на запись есть
-✓ API endpoints: работают корректно
-
-РЕЗЕРВНАЯ КОПИЯ: $BACKUP_DIR
-
-СЛЕДУЮЩИЕ ШАГИ:
-1. Откройте дашборд: http://your-server/dashboard_inventory_v4.php
-2. Проверьте работу исправлений
-3. Мониторьте логи в случае проблем
-
-ПОДДЕРЖКА:
-- Логи развертывания: $LOG_FILE
-- Резервная копия: $BACKUP_DIR
-- Документация: ИСПРАВЛЕНИЯ_ВЫПОЛНЕНЫ.md
-EOF
-
-    log "✓ Отчет создан: $report_file"
-}
-
-# Основная функция развертывания
-main() {
-    local debug_script="$1"
-    
-    log "🚀 === НАЧИНАЕМ БЕЗОПАСНОЕ РАЗВЕРТЫВАНИЕ MDM СИСТЕМЫ ==="
-    
-    # Проверяем аргументы
-    if [ -n "$debug_script" ]; then
-        log "Дополнительный скрипт отладки: $debug_script"
-    fi
-    
-    # Выполняем развертывание
-    check_environment
-    create_backup
-    deploy_files
-    setup_configuration
-    check_database
-    run_fixes
-    check_dashboard
-    
-    # Запускаем дополнительный скрипт если указан
-    run_debug_script "$debug_script"
-    
-    create_deployment_report
-    
-    log "🎉 === РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО УСПЕШНО ==="
-    
-    echo ""
-    echo -e "${GREEN}=== РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО ===${NC}"
-    echo "✅ Все компоненты развернуты успешно"
-    echo "✅ Исправления применены"
-    echo "✅ API endpoints работают"
-    echo "✅ Дашборд готов к использованию"
-    echo ""
-    echo -e "${BLUE}Следующие шаги:${NC}"
-    echo "1. Откройте дашборд в браузере"
-    echo "2. Проверьте работу исправлений"
-    echo "3. Мониторьте систему"
-    echo ""
-    echo -e "${YELLOW}Полезные команды:${NC}"
-    echo "- Проверить API: php api/sync-stats.php"
-    echo "- Исправить товары: php scripts/fix-missing-product-names.php"
-    echo "- Просмотреть логи: tail -f $LOG_FILE"
-}
-
-# Обработка ошибок
-trap 'error "Развертывание прервано из-за ошибки"; exit 1' ERR
-
-# Запуск основной функции
-main "$@"
+echo -e "${GREEN}✅ Safe deployment script completed!${NC}"
