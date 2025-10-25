@@ -252,7 +252,7 @@ export interface ETLAlert {
   resolved_at?: string;
   severity: "low" | "medium" | "high" | "critical";
   source: string; // Which component generated the alert
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

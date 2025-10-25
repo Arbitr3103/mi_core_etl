@@ -395,7 +395,7 @@ export interface AdminFilters {
   status?: string[];
   severity?: string[];
   source?: string[];
-  [key: string]: any;
+  [key: string]: string[] | undefined;
 }
 
 /**
@@ -432,5 +432,5 @@ export interface AdminTableAction {
   variant: "primary" | "secondary" | "danger" | "warning";
   requires_confirmation?: boolean;
   confirmation_message?: string;
-  disabled_when?: (row: any) => boolean;
+  disabled_when?: (row: Record<string, unknown>) => boolean;
 }

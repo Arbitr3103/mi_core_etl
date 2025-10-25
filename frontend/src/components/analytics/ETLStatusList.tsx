@@ -75,8 +75,8 @@ export const ETLStatusList: React.FC<ETLStatusListProps> = ({
 
     // Sort
     filtered.sort((a, b) => {
-      let aValue: any = a[sortBy];
-      let bValue: any = b[sortBy];
+      let aValue: string | number | Date = a[sortBy];
+      let bValue: string | number | Date = b[sortBy];
 
       if (sortBy === "started_at") {
         aValue = new Date(aValue).getTime();
