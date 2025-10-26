@@ -1,0 +1,12 @@
+# Ozon ETL System Directory Structure
+
+This directory contains the complete Ozon ETL system implementation.
+
+## Structure:
+- Core/         - Base ETL framework classes
+- Api/          - Ozon API client implementation  
+- Components/   - ETL component implementations (Product, Sales, Inventory)
+- Scripts/      - Executable CLI scripts
+- Config/       - Configuration files
+- Logs/         - Log files (created at runtime)
+- Tests/        - Unit tests

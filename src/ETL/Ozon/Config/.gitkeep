@@ -1,0 +1,6 @@
+# Configuration Files
+
+This directory contains configuration files for the Ozon ETL system:
+- ozon_etl.php - Main ETL configuration
+- api_config.php - API client configuration
+- database_config.php - Database connection settings

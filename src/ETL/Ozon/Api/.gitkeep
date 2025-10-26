@@ -1,0 +1,6 @@
+# Ozon API Client
+
+This directory contains the Ozon API client implementation:
+- OzonApiClient.php - Main API client class
+- ApiException.php - API-specific exceptions
+- RateLimiter.php - Rate limiting implementation

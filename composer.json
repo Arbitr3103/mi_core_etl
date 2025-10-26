@@ -41,6 +41,7 @@
       "MiCore\\": "src/",
       "MiCore\\Api\\": "src/api/",
       "MiCore\\Etl\\": "src/etl/",
+      "MiCore\\ETL\\Ozon\\": "src/ETL/Ozon/",
       "MiCore\\Models\\": "src/models/",
       "MiCore\\Services\\": "src/services/",
       "MiCore\\Utils\\": "src/utils/"

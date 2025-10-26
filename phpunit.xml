@@ -35,6 +35,10 @@
             <file>tests/Unit/AnalyticsETLControllerTest.php</file>
         </testsuite>
         
+        <testsuite name="Ozon ETL Tests">
+            <file>src/ETL/Ozon/Tests/ProductETLTest.php</file>
+        </testsuite>
+        
         <testsuite name="Integration Tests">
             <file>tests/SyncIntegrationTest.php</file>
         </testsuite>

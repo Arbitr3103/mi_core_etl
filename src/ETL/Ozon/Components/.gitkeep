@@ -1,0 +1,6 @@
+# ETL Components
+
+This directory contains the specific ETL component implementations:
+- ProductETL.php - Product catalog synchronization
+- SalesETL.php - Sales history extraction
+- InventoryETL.php - Warehouse inventory updates

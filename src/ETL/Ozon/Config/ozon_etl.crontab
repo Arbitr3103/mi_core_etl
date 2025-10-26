@@ -1,0 +1,50 @@
+# Ozon ETL System Crontab Configuration
+# 
+# This file contains the cron schedule for all Ozon ETL processes.
+# Install with: crontab -u www-data /path/to/ozon_etl.crontab
+# 
+# All times are in Moscow timezone (Europe/Moscow)
+# Logs are written to individual files for each job
+
+# Set environment variables
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
+
+# Project paths - UPDATE THESE PATHS FOR YOUR INSTALLATION
+PROJECT_ROOT=/var/www/html/mi_core_etl
+SCRIPTS_DIR=${PROJECT_ROOT}/src/ETL/Ozon/Scripts
+LOG_DIR=${PROJECT_ROOT}/src/ETL/Ozon/Logs/cron_jobs
+PHP_BIN=/usr/bin/php
+
+# Ensure log directory exists
+@reboot mkdir -p ${LOG_DIR}
+
+# Daily ETL Jobs - Staggered to avoid resource conflicts
+# 
+# 02:00 - Sync Products (Foundation data - must run first)
+0 2 * * * cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/sync_products.php --verbose >> ${LOG_DIR}/sync_products_$(date +\%Y\%m\%d).log 2>&1
+
+# 03:00 - Sync Sales (Depends on product data)
+0 3 * * * cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/sync_sales.php --verbose >> ${LOG_DIR}/sync_sales_$(date +\%Y\%m\%d).log 2>&1
+
+# 04:00 - Sync Inventory (Can run independently)
+0 4 * * * cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/sync_inventory.php --verbose >> ${LOG_DIR}/sync_inventory_$(date +\%Y\%m\%d).log 2>&1
+
+# Health Checks - Every 15 minutes during business hours (9 AM - 6 PM Moscow time)
+*/15 9-18 * * 1-5 cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/health_check.php >> ${LOG_DIR}/health_check_$(date +\%Y\%m\%d).log 2>&1
+
+# ETL Monitoring - Every 30 minutes during business hours
+*/30 9-18 * * 1-5 cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/monitor_etl.php --all >> ${LOG_DIR}/monitor_etl_$(date +\%Y\%m\%d).log 2>&1
+
+# Log Cleanup - Daily at 1 AM, keep logs for 30 days
+0 1 * * * find ${LOG_DIR} -name "*.log" -type f -mtime +30 -delete
+
+# Daily Summary Report - Every day at 8 PM
+0 20 * * * cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/monitor_etl.php --send-summary >> ${LOG_DIR}/daily_summary_$(date +\%Y\%m\%d).log 2>&1
+
+# Weekly Summary Report - Sundays at 8 AM
+0 8 * * 0 cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/generate_weekly_report.php >> ${LOG_DIR}/weekly_report_$(date +\%Y\%m\%d).log 2>&1
+
+# Monthly Cleanup - First day of month at 5 AM
+0 5 1 * * cd ${PROJECT_ROOT} && ${PHP_BIN} ${SCRIPTS_DIR}/monthly_cleanup.php >> ${LOG_DIR}/monthly_cleanup_$(date +\%Y\%m\%d).log 2>&1

@@ -1,0 +1,6 @@
+# Unit Tests
+
+This directory contains unit tests for the Ozon ETL system:
+- Core/ - Tests for base framework classes
+- Api/ - Tests for API client
+- Components/ - Tests for ETL components

@@ -1,0 +1,7 @@
+# Executable Scripts
+
+This directory contains CLI scripts for running ETL processes:
+- sync_products.php - Product synchronization script
+- sync_sales.php - Sales data extraction script  
+- sync_inventory.php - Inventory update script
+- health_check.php - System health check script

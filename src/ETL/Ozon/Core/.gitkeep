@@ -1,0 +1,6 @@
+# Core ETL Framework Classes
+
+This directory contains the base ETL framework classes:
+- BaseETL.php - Abstract base class for all ETL components
+- ETLResult.php - Result object for ETL operations
+- ETLException.php - Custom exception classes
