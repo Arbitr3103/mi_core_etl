@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API Data Test</title>
+    <style>
+      body {
+        font-family: "Courier New", monospace;
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #1e1e1e;
+        color: #d4d4d4;
+      }
+      h1 {
+        color: #4ec9b0;
+      }
+      h2 {
+        color: #569cd6;
+        margin-top: 30px;
+      }
+      pre {
+        background: #252526;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        border-left: 3px solid #007acc;
+      }
+      .success {
+        color: #4ec9b0;
+      }
+      .error {
+        color: #f48771;
+      }
+      .warning {
+        color: #dcdcaa;
+      }
+      button {
+        background: #007acc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 3px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #005a9e;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 API Data Transformation Test</h1>
+
+    <div>
+      <button onclick="testRawAPI()">Test Raw API</button>
+      <button onclick="testTransformedAPI()">Test Transformed API</button>
+      <button onclick="testWarehouses()">Test Warehouses</button>
+    </div>
+
+    <h2>Raw API Response:</h2>
+    <pre id="raw-output">Click "Test Raw API" button...</pre>
+
+    <h2>Transformed Data:</h2>
+    <pre id="transformed-output">Click "Test Transformed API" button...</pre>
+
+    <h2>Warehouses:</h2>
+    <pre id="warehouses-output">Click "Test Warehouses" button...</pre>
+
+    <script>
+      async function testRawAPI() {
+        const output = document.getElementById("raw-output");
+        try {
+          const response = await fetch("/api/inventory/detailed-stock?limit=3");
+          const data = await response.json();
+          output.innerHTML = JSON.stringify(data, null, 2);
+          output.className = "success";
+        } catch (error) {
+          output.innerHTML = `Error: ${error.message}`;
+          output.className = "error";
+        }
+      }
+
+      async function testTransformedAPI() {
+        const output = document.getElementById("transformed-output");
+        try {
+          const response = await fetch("/api/inventory/detailed-stock?limit=3");
+          const rawData = await response.json();
+
+          // Simulate frontend transformation
+          const transformed = {
+            success: rawData.success,
+            data: rawData.data.map((item) => ({
+              productId: item.product_id,
+              productName: item.product_name,
+              sku: item.offer_id,
+              warehouseName: item.warehouse_name,
+              currentStock: item.present || 0,
+              availableStock: item.available_stock || 0,
+              status: item.stock_status || "normal",
+            })),
+            metadata: {
+              totalCount: rawData.meta?.total_count || 0,
+              filteredCount: rawData.meta?.filtered_count || 0,
+              timestamp: rawData.timestamp,
+            },
+          };
+
+          output.innerHTML = JSON.stringify(transformed, null, 2);
+          output.className = "success";
+        } catch (error) {
+          output.innerHTML = `Error: ${error.message}`;
+          output.className = "error";
+        }
+      }
+
+      async function testWarehouses() {
+        const output = document.getElementById("warehouses-output");
+        try {
+          const response = await fetch(
+            "/api/inventory/detailed-stock?action=warehouses"
+          );
+          const data = await response.json();
+          output.innerHTML = JSON.stringify(data, null, 2);
+          output.className = "success";
+        } catch (error) {
+          output.innerHTML = `Error: ${error.message}`;
+          output.className = "error";
+        }
+      }
+    </script>
+  </body>
+</html>

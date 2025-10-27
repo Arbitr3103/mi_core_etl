@@ -53,59 +53,70 @@ class ProductETLTest extends TestCase
     }
 
     /**
-     * Test successful product extraction with pagination
+     * Test successful product extraction using products report
      */
-    public function testExtractSuccessWithPagination(): void
+    public function testExtractSuccessWithProductsReport(): void
     {
-        // Mock API responses for pagination
-        $firstResponse = [
-            'result' => [
-                'items' => [
-                    [
-                        'product_id' => 123,
-                        'offer_id' => 'TEST-001',
-                        'name' => 'Test Product 1',
-                        'fbo_sku' => 'FBO-001',
-                        'fbs_sku' => 'FBS-001',
-                        'status' => 'active'
-                    ],
-                    [
-                        'product_id' => 124,
-                        'offer_id' => 'TEST-002',
-                        'name' => 'Test Product 2',
-                        'fbo_sku' => 'FBO-002',
-                        'fbs_sku' => null,
-                        'status' => 'inactive'
-                    ]
-                ],
-                'last_id' => 'next_page_token'
+        // Mock CSV data from products report
+        $csvData = [
+            [
+                'product_id' => '123',
+                'offer_id' => 'TEST-001',
+                'name' => 'Test Product 1',
+                'fbo_sku' => 'FBO-001',
+                'fbs_sku' => 'FBS-001',
+                'status' => 'active',
+                'visibility' => 'VISIBLE'
+            ],
+            [
+                'product_id' => '124',
+                'offer_id' => 'TEST-002',
+                'name' => 'Test Product 2',
+                'fbo_sku' => 'FBO-002',
+                'fbs_sku' => null,
+                'status' => 'inactive',
+                'visibility' => 'HIDDEN'
+            ],
+            [
+                'product_id' => '125',
+                'offer_id' => 'TEST-003',
+                'name' => 'Test Product 3',
+                'fbo_sku' => null,
+                'fbs_sku' => 'FBS-003',
+                'status' => 'active',
+                'visibility' => 'VISIBLE'
             ]
         ];
         
-        $secondResponse = [
+        // Mock report creation response
+        $createReportResponse = [
             'result' => [
-                'items' => [
-                    [
-                        'product_id' => 125,
-                        'offer_id' => 'TEST-003',
-                        'name' => 'Test Product 3',
-                        'fbo_sku' => null,
-                        'fbs_sku' => 'FBS-003',
-                        'status' => 'active'
-                    ]
-                ],
-                'last_id' => null // No more pages
+                'code' => 'test-report-code-123'
+            ]
+        ];
+        
+        // Mock report completion response
+        $reportStatusResponse = [
+            'result' => [
+                'status' => 'success',
+                'file' => 'https://example.com/report.csv'
             ]
         ];
         
         // Set up API client expectations
-        $this->mockApiClient->expects($this->exactly(2))
-            ->method('getProducts')
-            ->withConsecutive(
-                [100, null],
-                [100, 'next_page_token']
-            )
-            ->willReturnOnConsecutiveCalls($firstResponse, $secondResponse);
+        $this->mockApiClient->expects($this->once())
+            ->method('createProductsReport')
+            ->willReturn($createReportResponse);
+        
+        $this->mockApiClient->expects($this->once())
+            ->method('waitForReportCompletion')
+            ->with('test-report-code-123')
+            ->willReturn($reportStatusResponse);
+        
+        $this->mockApiClient->expects($this->once())
+            ->method('downloadAndParseCsv')
+            ->with('https://example.com/report.csv')
+            ->willReturn($csvData);
         
         // Execute extraction
         $result = $this->productETL->extract();
@@ -113,50 +124,54 @@ class ProductETLTest extends TestCase
         // Assertions
         $this->assertIsArray($result);
         $this->assertCount(3, $result);
-        $this->assertEquals(123, $result[0]['product_id']);
+        $this->assertEquals('123', $result[0]['product_id']);
         $this->assertEquals('TEST-001', $result[0]['offer_id']);
+        $this->assertEquals('VISIBLE', $result[0]['visibility']);
         $this->assertEquals('TEST-003', $result[2]['offer_id']);
+        $this->assertEquals('VISIBLE', $result[2]['visibility']);
     }
 
     /**
-     * Test extraction with API error
+     * Test extraction with API error during report creation
      */
     public function testExtractWithApiError(): void
     {
-        // Mock API client to throw exception
+        // Mock API client to throw exception during report creation
         $this->mockApiClient->expects($this->once())
-            ->method('getProducts')
+            ->method('createProductsReport')
             ->willThrowException(new Exception('API connection failed'));
         
         // Expect exception
         $this->expectException(Exception::class);
-        $this->expectExceptionMessage('Product extraction failed after 0 batches: API connection failed');
+        $this->expectExceptionMessage('Product extraction failed: API connection failed');
         
         // Execute extraction
         $this->productETL->extract();
     }
 
     /**
-     * Test successful data transformation
+     * Test successful data transformation with visibility
      */
     public function testTransformSuccess(): void
     {
         $rawData = [
             [
-                'product_id' => 123,
+                'product_id' => '123',
                 'offer_id' => 'TEST-001',
                 'name' => 'Test Product 1',
                 'fbo_sku' => 'FBO-001',
                 'fbs_sku' => 'FBS-001',
-                'status' => 'active'
+                'status' => 'active',
+                'visibility' => 'VISIBLE'
             ],
             [
-                'product_id' => 124,
+                'product_id' => '124',
                 'offer_id' => 'TEST-002',
                 'name' => '  Test Product 2  ', // Test trimming
                 'fbo_sku' => '',  // Test empty string handling
                 'fbs_sku' => null,
-                'status' => 'INACTIVE' // Test status normalization
+                'status' => 'INACTIVE', // Test status normalization
+                'visibility' => 'СКРЫТ' // Test visibility normalization
             ]
         ];
         
@@ -172,39 +187,51 @@ class ProductETLTest extends TestCase
         $this->assertEquals('Test Product 1', $result[0]['name']);
         $this->assertEquals('FBO-001', $result[0]['fbo_sku']);
         $this->assertEquals('active', $result[0]['status']);
+        $this->assertEquals('VISIBLE', $result[0]['visibility']);
         
         // Check second product (trimming and normalization)
         $this->assertEquals('Test Product 2', $result[1]['name']);
         $this->assertNull($result[1]['fbo_sku']); // Empty string should become null
         $this->assertEquals('inactive', $result[1]['status']); // Should be normalized to lowercase
+        $this->assertEquals('HIDDEN', $result[1]['visibility']); // Should be normalized from Russian
         $this->assertIsString($result[1]['updated_at']);
     }
 
     /**
-     * Test transformation with invalid data
+     * Test transformation with invalid data including missing visibility
      */
     public function testTransformWithInvalidData(): void
     {
         $rawData = [
             [
-                'product_id' => 123,
+                'product_id' => '123',
                 'offer_id' => 'TEST-001',
-                'name' => 'Valid Product'
+                'name' => 'Valid Product',
+                'visibility' => 'VISIBLE'
             ],
             [
                 // Missing product_id
                 'offer_id' => 'TEST-002',
-                'name' => 'Invalid Product 1'
+                'name' => 'Invalid Product 1',
+                'visibility' => 'VISIBLE'
             ],
             [
-                'product_id' => 125,
+                'product_id' => '125',
                 // Missing offer_id
-                'name' => 'Invalid Product 2'
+                'name' => 'Invalid Product 2',
+                'visibility' => 'VISIBLE'
             ],
             [
                 'product_id' => 'invalid', // Non-numeric product_id
                 'offer_id' => 'TEST-004',
-                'name' => 'Invalid Product 3'
+                'name' => 'Invalid Product 3',
+                'visibility' => 'VISIBLE'
+            ],
+            [
+                'product_id' => '126',
+                'offer_id' => 'TEST-005',
+                'name' => 'Invalid Product 4'
+                // Missing visibility
             ]
         ];
         
@@ -214,6 +241,7 @@ class ProductETLTest extends TestCase
         $this->assertCount(1, $result);
         $this->assertEquals(123, $result[0]['product_id']);
         $this->assertEquals('TEST-001', $result[0]['offer_id']);
+        $this->assertEquals('VISIBLE', $result[0]['visibility']);
     }
 
     /**
@@ -241,7 +269,7 @@ class ProductETLTest extends TestCase
     }
 
     /**
-     * Test successful data loading
+     * Test successful data loading with visibility field
      */
     public function testLoadSuccess(): void
     {
@@ -253,6 +281,7 @@ class ProductETLTest extends TestCase
                 'fbo_sku' => 'FBO-001',
                 'fbs_sku' => 'FBS-001',
                 'status' => 'active',
+                'visibility' => 'VISIBLE',
                 'updated_at' => '2023-01-01 12:00:00'
             ],
             [
@@ -262,6 +291,7 @@ class ProductETLTest extends TestCase
                 'fbo_sku' => null,
                 'fbs_sku' => 'FBS-002',
                 'status' => 'inactive',
+                'visibility' => 'HIDDEN',
                 'updated_at' => '2023-01-01 12:00:00'
             ]
         ];
@@ -309,6 +339,7 @@ class ProductETLTest extends TestCase
                 'fbo_sku' => null,
                 'fbs_sku' => null,
                 'status' => 'active',
+                'visibility' => 'VISIBLE',
                 'updated_at' => '2023-01-01 12:00:00'
             ]
         ];
@@ -350,30 +381,38 @@ class ProductETLTest extends TestCase
     }
 
     /**
-     * Test complete ETL execution
+     * Test complete ETL execution with products report
      */
     public function testExecuteCompleteETL(): void
     {
-        // Mock API response
-        $apiResponse = [
-            'result' => [
-                'items' => [
-                    [
-                        'product_id' => 123,
-                        'offer_id' => 'TEST-001',
-                        'name' => 'Test Product',
-                        'fbo_sku' => 'FBO-001',
-                        'fbs_sku' => null,
-                        'status' => 'active'
-                    ]
-                ],
-                'last_id' => null
+        // Mock CSV data from products report
+        $csvData = [
+            [
+                'product_id' => '123',
+                'offer_id' => 'TEST-001',
+                'name' => 'Test Product',
+                'fbo_sku' => 'FBO-001',
+                'fbs_sku' => null,
+                'status' => 'active',
+                'visibility' => 'VISIBLE'
             ]
         ];
         
+        // Mock report responses
+        $createReportResponse = ['result' => ['code' => 'test-report-123']];
+        $reportStatusResponse = ['result' => ['status' => 'success', 'file' => 'https://example.com/report.csv']];
+        
         $this->mockApiClient->expects($this->once())
-            ->method('getProducts')
-            ->willReturn($apiResponse);
+            ->method('createProductsReport')
+            ->willReturn($createReportResponse);
+        
+        $this->mockApiClient->expects($this->once())
+            ->method('waitForReportCompletion')
+            ->willReturn($reportStatusResponse);
+        
+        $this->mockApiClient->expects($this->once())
+            ->method('downloadAndParseCsv')
+            ->willReturn($csvData);
         
         // Mock database operations
         $this->mockDb->expects($this->once())
@@ -407,13 +446,13 @@ class ProductETLTest extends TestCase
     }
 
     /**
-     * Test ETL execution with API error
+     * Test ETL execution with API error during report creation
      */
     public function testExecuteWithApiError(): void
     {
-        // Mock API client to throw exception
+        // Mock API client to throw exception during report creation
         $this->mockApiClient->expects($this->once())
-            ->method('getProducts')
+            ->method('createProductsReport')
             ->willThrowException(new Exception('API rate limit exceeded'));
         
         // Mock ETL execution logging
@@ -529,14 +568,16 @@ class ProductETLTest extends TestCase
     {
         $rawData = [
             [
-                'product_id' => 123,
+                'product_id' => '123',
                 'offer_id' => 'TEST-001', // Valid
-                'name' => 'Valid Product'
+                'name' => 'Valid Product',
+                'visibility' => 'VISIBLE'
             ],
             [
-                'product_id' => 124,
+                'product_id' => '124',
                 'offer_id' => 'TEST@002', // Invalid character
-                'name' => 'Invalid Product'
+                'name' => 'Invalid Product',
+                'visibility' => 'VISIBLE'
             ]
         ];
         
@@ -545,5 +586,99 @@ class ProductETLTest extends TestCase
         // Only the valid product should be returned
         $this->assertCount(1, $result);
         $this->assertEquals('TEST-001', $result[0]['offer_id']);
+    }
+
+    /**
+     * Test visibility status normalization with various input values
+     */
+    public function testVisibilityStatusNormalization(): void
+    {
+        $rawData = [
+            [
+                'product_id' => '123',
+                'offer_id' => 'TEST-001',
+                'name' => 'Product 1',
+                'visibility' => 'VISIBLE'
+            ],
+            [
+                'product_id' => '124',
+                'offer_id' => 'TEST-002',
+                'name' => 'Product 2',
+                'visibility' => 'ACTIVE'
+            ],
+            [
+                'product_id' => '125',
+                'offer_id' => 'TEST-003',
+                'name' => 'Product 3',
+                'visibility' => 'ПРОДАЁТСЯ'
+            ],
+            [
+                'product_id' => '126',
+                'offer_id' => 'TEST-004',
+                'name' => 'Product 4',
+                'visibility' => 'СКРЫТ'
+            ],
+            [
+                'product_id' => '127',
+                'offer_id' => 'TEST-005',
+                'name' => 'Product 5',
+                'visibility' => 'НА МОДЕРАЦИИ'
+            ],
+            [
+                'product_id' => '128',
+                'offer_id' => 'TEST-006',
+                'name' => 'Product 6',
+                'visibility' => 'ОТКЛОНЁН'
+            ],
+            [
+                'product_id' => '129',
+                'offer_id' => 'TEST-007',
+                'name' => 'Product 7',
+                'visibility' => 'unknown_status'
+            ]
+        ];
+        
+        $result = $this->productETL->transform($rawData);
+        
+        $this->assertCount(7, $result);
+        $this->assertEquals('VISIBLE', $result[0]['visibility']);
+        $this->assertEquals('VISIBLE', $result[1]['visibility']);
+        $this->assertEquals('VISIBLE', $result[2]['visibility']);
+        $this->assertEquals('HIDDEN', $result[3]['visibility']);
+        $this->assertEquals('MODERATION', $result[4]['visibility']);
+        $this->assertEquals('DECLINED', $result[5]['visibility']);
+        $this->assertEquals('UNKNOWN', $result[6]['visibility']);
+    }
+
+    /**
+     * Test CSV structure validation
+     */
+    public function testCsvStructureValidation(): void
+    {
+        // Test with missing required headers
+        $invalidCsvData = [
+            [
+                'product_id' => '123',
+                'offer_id' => 'TEST-001',
+                'name' => 'Product 1'
+                // Missing visibility header
+            ]
+        ];
+        
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Products CSV missing required headers: visibility');
+        
+        $this->productETL->transform($invalidCsvData);
+    }
+
+    /**
+     * Test CSV structure validation with empty data
+     */
+    public function testCsvStructureValidationWithEmptyData(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Products CSV data is empty');
+        
+        $this->productETL->transform([]);
     }
 }

@@ -14,6 +14,9 @@ export * from "./admin";
 // Re-export component-specific types
 export * from "./components";
 
+// Re-export inventory dashboard types
+export * from "./inventory-dashboard";
+
 // Type guards and utility functions
 export const isValidDataSource = (source: string): source is DataSource => {
   return ["api", "ui_report", "mixed", "manual"].includes(source);

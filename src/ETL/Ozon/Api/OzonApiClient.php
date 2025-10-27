@@ -1126,6 +1126,52 @@ class OzonApiClient
     }
 
     /**
+     * Create products report
+     * 
+     * @param string $language Report language (DEFAULT, RU, EN, etc.)
+     * @param array $filter Additional filters for products report
+     * @return array API response with report code
+     * @throws RuntimeException When report creation fails
+     */
+    public function createProductsReport(string $language = 'DEFAULT', array $filter = []): array
+    {
+        $requestData = [
+            'language' => $language,
+            'filter' => $filter
+        ];
+        
+        $this->logger->info('Creating products report', [
+            'language' => $language,
+            'filter_count' => count($filter)
+        ]);
+        
+        try {
+            $response = $this->makeRequest('POST', '/v1/report/products/create', $requestData);
+            
+            // Validate response structure
+            if (!isset($response['result']['code'])) {
+                throw new RuntimeException('Missing report code in response');
+            }
+            
+            $reportCode = $response['result']['code'];
+            
+            $this->logger->info('Products report creation initiated', [
+                'report_code' => $reportCode,
+                'language' => $language
+            ]);
+            
+            return $response;
+            
+        } catch (Exception $e) {
+            $this->logger->error('Failed to create products report', [
+                'language' => $language,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Create warehouse stock report
      * 
      * @param string $language Report language (DEFAULT, RU, EN, etc.)
@@ -1508,6 +1554,50 @@ class OzonApiClient
         ]);
         
         return $parsedData;
+    }
+
+    /**
+     * Create and download products report in one operation
+     * 
+     * @param string $language Report language
+     * @param array $filter Additional filters for products report
+     * @param int $maxWaitTime Maximum wait time in seconds
+     * @param int $pollInterval Poll interval in seconds
+     * @return array Parsed CSV data
+     * @throws RuntimeException When report creation or download fails
+     */
+    public function getProductsReportData(
+        string $language = 'DEFAULT',
+        array $filter = [],
+        int $maxWaitTime = 1800,
+        int $pollInterval = 60
+    ): array {
+        $maxAttempts = (int)ceil($maxWaitTime / $pollInterval);
+        
+        $this->logger->info('Starting complete products report process', [
+            'language' => $language,
+            'filter_count' => count($filter),
+            'max_wait_time' => $maxWaitTime,
+            'poll_interval' => $pollInterval
+        ]);
+        
+        // Step 1: Create report
+        $createResponse = $this->createProductsReport($language, $filter);
+        $reportCode = $createResponse['result']['code'];
+        
+        // Step 2: Wait for completion
+        $statusResponse = $this->waitForReportCompletion($reportCode, $maxAttempts, $pollInterval);
+        
+        // Step 3: Download and parse
+        $fileUrl = $statusResponse['result']['file'];
+        $csvData = $this->downloadAndParseCsv($fileUrl);
+        
+        $this->logger->info('Complete products report process finished', [
+            'report_code' => $reportCode,
+            'rows_count' => count($csvData)
+        ]);
+        
+        return $csvData;
     }
 
     /**

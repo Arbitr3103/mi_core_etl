@@ -52,112 +52,80 @@ class ProductETL extends BaseETL
     }
 
     /**
-     * Extract product data from Ozon API with pagination support
+     * Extract product data from Ozon API using products report
      * 
-     * Implements automatic pagination to handle large product catalogs
-     * and provides progress tracking for long-running operations.
+     * Uses the products report API to get comprehensive product data including
+     * visibility status. Implements report polling logic similar to InventoryETL.
      * 
-     * @return array Raw product data from API
+     * @return array Raw product data from CSV report
      * @throws Exception When extraction fails
      */
     public function extract(): array
     {
-        $this->logger->info('Starting product extraction from Ozon API');
+        $this->logger->info('Starting product extraction from Ozon products report API');
         
-        $allProducts = [];
-        $lastId = null;
-        $totalBatches = 0;
-        $totalProducts = 0;
         $startTime = microtime(true);
         
         try {
-            do {
-                $this->logger->debug('Requesting product batch', [
-                    'batch_number' => $totalBatches + 1,
-                    'batch_size' => $this->batchSize,
-                    'last_id' => $lastId,
-                    'total_products_so_far' => $totalProducts
-                ]);
-                
-                // Get batch of products from API
-                $response = $this->apiClient->getProducts($this->batchSize, $lastId);
-                $batch = $response['result']['items'] ?? [];
-                $lastId = $response['result']['last_id'] ?? null;
-                
-                // Add batch to collection
-                $allProducts = array_merge($allProducts, $batch);
-                $totalBatches++;
-                $totalProducts += count($batch);
-                
-                $this->logger->debug('Product batch extracted', [
-                    'batch_number' => $totalBatches,
-                    'batch_size' => count($batch),
-                    'total_products' => $totalProducts,
-                    'has_more' => $lastId !== null
-                ]);
-                
-                // Progress callback for monitoring
-                if ($this->enableProgressCallback) {
-                    $this->logProgress($totalProducts, $totalBatches, count($batch), $lastId !== null);
-                }
-                
-                // Check max products limit
-                if ($this->maxProducts > 0 && $totalProducts >= $this->maxProducts) {
-                    $this->logger->info('Reached maximum products limit', [
-                        'max_products' => $this->maxProducts,
-                        'total_extracted' => $totalProducts
-                    ]);
-                    break;
-                }
-                
-                // Small delay between requests to be respectful to API
-                if ($lastId !== null && count($batch) > 0) {
-                    usleep(100000); // 100ms delay
-                }
-                
-            } while ($lastId !== null && count($batch) > 0);
+            // Create products report
+            $this->logger->info('Creating products report');
+            $reportCode = $this->apiClient->createProductsReport();
+            $reportCode = $reportCode['result']['code'];
+            
+            $this->logger->info('Products report created', [
+                'report_code' => $reportCode
+            ]);
+            
+            // Wait for report completion
+            $this->logger->info('Waiting for products report completion');
+            $statusResponse = $this->apiClient->waitForReportCompletion($reportCode);
+            
+            // Download and parse CSV
+            $fileUrl = $statusResponse['result']['file'];
+            $this->logger->info('Downloading and parsing products CSV', [
+                'file_url' => $fileUrl
+            ]);
+            
+            $csvData = $this->apiClient->downloadAndParseCsv($fileUrl);
             
             $duration = microtime(true) - $startTime;
             
             $this->logger->info('Product extraction completed successfully', [
-                'total_products' => $totalProducts,
-                'total_batches' => $totalBatches,
+                'total_products' => count($csvData),
                 'duration_seconds' => round($duration, 2),
-                'products_per_second' => $totalProducts > 0 ? round($totalProducts / $duration, 2) : 0
+                'report_code' => $reportCode
             ]);
             
             // Update metrics
-            $this->metrics['records_extracted'] = $totalProducts;
-            $this->metrics['extraction_batches'] = $totalBatches;
+            $this->metrics['records_extracted'] = count($csvData);
             $this->metrics['extraction_duration'] = $duration;
+            $this->metrics['report_code'] = $reportCode;
             
-            return $allProducts;
+            return $csvData;
             
         } catch (Exception $e) {
             $this->logger->error('Product extraction failed', [
-                'total_products_extracted' => $totalProducts,
-                'total_batches' => $totalBatches,
-                'last_id' => $lastId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
             
-            throw new Exception("Product extraction failed after {$totalBatches} batches: " . $e->getMessage(), 0, $e);
+            throw new Exception("Product extraction failed: " . $e->getMessage(), 0, $e);
         }
     }
 
     /**
-     * Transform raw product data into normalized format
+     * Transform raw product data from CSV into normalized format
      * 
-     * Normalizes product data structure and validates required fields
+     * Validates CSV structure, normalizes product data and validates required fields
      * according to the database schema requirements. Implements comprehensive
-     * data validation and normalization for product_id, offer_id fields.
+     * data validation and normalization for product_id, offer_id, visibility fields.
      * 
      * Requirements addressed:
-     * - 1.2: Validate and normalize product_id, offer_id, name, fbo_sku, fbs_sku
-     * - 1.4: Ensure offer_id is used as primary key for linking data
+     * - 1.1: Extract visibility field from CSV and validate values
+     * - 1.2: Validate and normalize product_id, offer_id, name, fbo_sku, fbs_sku, visibility
+     * - 2.1: Map Ozon visibility values to standardized internal values
      * 
-     * @param array $data Raw product data from API
+     * @param array $data Raw product data from CSV report
      * @return array Transformed product data ready for loading
      * @throws Exception When transformation fails
      */
@@ -166,6 +134,9 @@ class ProductETL extends BaseETL
         $this->logger->info('Starting product data transformation', [
             'input_count' => count($data)
         ]);
+        
+        // Validate CSV structure first
+        $this->validateProductsCsvStructure($data);
         
         $transformedProducts = [];
         $validProducts = 0;
@@ -376,11 +347,83 @@ class ProductETL extends BaseETL
     }
 
     /**
+     * Validate products CSV structure and required headers
+     * 
+     * Validates that the CSV contains all required headers for product processing
+     * including the new visibility field from the products report.
+     * 
+     * Requirements addressed:
+     * - 1.1: Extract visibility field from CSV and validate values
+     * - 1.2: Validate product_id, offer_id, name, fbo_sku, fbs_sku fields
+     * - 2.1: Ensure visibility field is present for status mapping
+     * 
+     * @param array $csvData Raw CSV data with headers
+     * @throws Exception When CSV structure is invalid
+     */
+    private function validateProductsCsvStructure(array $csvData): void
+    {
+        if (empty($csvData)) {
+            throw new Exception('Products CSV data is empty');
+        }
+        
+        // Get headers from first row (assuming CSV has headers)
+        $firstRow = reset($csvData);
+        if (!is_array($firstRow)) {
+            throw new Exception('Invalid CSV structure: first row is not an array');
+        }
+        
+        $headers = array_keys($firstRow);
+        
+        // Required headers for product processing
+        $requiredHeaders = [
+            'product_id',
+            'offer_id',
+            'name',
+            'visibility'  // New required field from products report
+        ];
+        
+        // Optional headers that we use if present
+        $optionalHeaders = [
+            'fbo_sku',
+            'fbs_sku',
+            'status'
+        ];
+        
+        $missingHeaders = [];
+        foreach ($requiredHeaders as $requiredHeader) {
+            if (!in_array($requiredHeader, $headers)) {
+                $missingHeaders[] = $requiredHeader;
+            }
+        }
+        
+        if (!empty($missingHeaders)) {
+            $this->logger->error('Products CSV missing required headers', [
+                'missing_headers' => $missingHeaders,
+                'available_headers' => $headers,
+                'required_headers' => $requiredHeaders
+            ]);
+            
+            throw new Exception(
+                'Products CSV missing required headers: ' . implode(', ', $missingHeaders) .
+                '. Available headers: ' . implode(', ', $headers)
+            );
+        }
+        
+        $this->logger->info('Products CSV structure validation passed', [
+            'total_rows' => count($csvData),
+            'available_headers' => $headers,
+            'required_headers_found' => $requiredHeaders,
+            'optional_headers_found' => array_intersect($optionalHeaders, $headers)
+        ]);
+    }
+
+    /**
      * Validate product data structure and required fields
      * 
      * Comprehensive validation of product data according to requirements:
      * - 1.2: Validate product_id, offer_id as required fields
      * - 1.4: Ensure offer_id can be used as primary key for data linking
+     * - 2.1: Validate visibility field is present and not empty
      * 
      * @param array $product Raw product data
      * @param int $index Product index for error reporting
@@ -388,8 +431,8 @@ class ProductETL extends BaseETL
      */
     private function validateProductData(array $product, int $index): array
     {
-        // Check required fields according to requirements 1.2 and 1.4
-        $requiredFields = ['product_id', 'offer_id'];
+        // Check required fields according to requirements 1.2, 1.4, and 2.1
+        $requiredFields = ['product_id', 'offer_id', 'visibility'];
         
         foreach ($requiredFields as $field) {
             if (!isset($product[$field]) || $product[$field] === '' || $product[$field] === null) {
@@ -463,10 +506,14 @@ class ProductETL extends BaseETL
      * Performs comprehensive data normalization including:
      * - Type casting for numeric fields
      * - String trimming and null handling
-     * - Status normalization
+     * - Status and visibility normalization
      * - Timestamp generation
      * 
-     * @param array $rawProduct Raw product data from API
+     * Requirements addressed:
+     * - 1.2: Normalize product_id, offer_id, name, fbo_sku, fbs_sku, visibility
+     * - 2.1: Map Ozon visibility values to standardized internal values
+     * 
+     * @param array $rawProduct Raw product data from CSV
      * @return array Transformed product data
      */
     private function transformSingleProduct(array $rawProduct): array
@@ -494,6 +541,9 @@ class ProductETL extends BaseETL
         // Normalize status with known values mapping
         $status = $this->normalizeProductStatus($rawProduct['status'] ?? null);
         
+        // Normalize visibility status (new field from products report)
+        $visibility = $this->normalizeVisibilityStatus($rawProduct['visibility'] ?? null);
+        
         return [
             'product_id' => $productId,
             'offer_id' => $offerId,
@@ -501,8 +551,74 @@ class ProductETL extends BaseETL
             'fbo_sku' => $fboSku,
             'fbs_sku' => $fbsSku,
             'status' => $status,
+            'visibility' => $visibility,
             'updated_at' => date('Y-m-d H:i:s')
         ];
+    }
+
+    /**
+     * Normalize visibility status to standardized internal values
+     * 
+     * Maps Ozon visibility values to standardized internal values according to
+     * the design document requirements. Handles unknown or null visibility values
+     * with default mapping.
+     * 
+     * Requirements addressed:
+     * - 1.2: Map Ozon visibility values to standardized internal values
+     * - 2.1: Handle unknown or null visibility values with default mapping
+     * 
+     * @param string|null $rawVisibility Raw visibility status from Ozon CSV
+     * @return string Normalized visibility status
+     */
+    private function normalizeVisibilityStatus(?string $rawVisibility): string
+    {
+        if ($rawVisibility === null || trim($rawVisibility) === '') {
+            return 'UNKNOWN';
+        }
+        
+        $visibility = strtoupper(trim($rawVisibility));
+        
+        // Map Ozon visibility values to standardized internal values
+        $visibilityMap = [
+            // Visible/Active states
+            'VISIBLE' => 'VISIBLE',
+            'ACTIVE' => 'VISIBLE',
+            'ПРОДАЁТСЯ' => 'VISIBLE',
+            'ПРОДАЕТСЯ' => 'VISIBLE',
+            'ON_SALE' => 'VISIBLE',
+            
+            // Hidden/Inactive states
+            'INACTIVE' => 'HIDDEN',
+            'ARCHIVED' => 'HIDDEN',
+            'СКРЫТ' => 'HIDDEN',
+            'СКРЫТО' => 'HIDDEN',
+            'HIDDEN' => 'HIDDEN',
+            'DISABLED' => 'HIDDEN',
+            
+            // Moderation states
+            'MODERATION' => 'MODERATION',
+            'НА МОДЕРАЦИИ' => 'MODERATION',
+            'MODERATING' => 'MODERATION',
+            'PENDING' => 'MODERATION',
+            
+            // Declined states
+            'DECLINED' => 'DECLINED',
+            'ОТКЛОНЁН' => 'DECLINED',
+            'ОТКЛОНЕНО' => 'DECLINED',
+            'REJECTED' => 'DECLINED'
+        ];
+        
+        $normalizedVisibility = $visibilityMap[$visibility] ?? 'UNKNOWN';
+        
+        // Log unknown visibility values for monitoring
+        if ($normalizedVisibility === 'UNKNOWN' && $visibility !== 'UNKNOWN') {
+            $this->logger->warning('Unknown visibility status encountered', [
+                'raw_visibility' => $rawVisibility,
+                'normalized_visibility' => $normalizedVisibility
+            ]);
+        }
+        
+        return $normalizedVisibility;
     }
 
     /**
@@ -559,17 +675,17 @@ class ProductETL extends BaseETL
         
         $startTime = microtime(true);
         
-        // Prepare upsert SQL with comprehensive ON CONFLICT handling
+        // Prepare upsert SQL with comprehensive ON CONFLICT handling including visibility
         $sql = "
             INSERT INTO dim_products (
-                product_id, offer_id, name, fbo_sku, fbs_sku, status, created_at, updated_at
+                product_id, offer_id, name, fbo_sku, fbs_sku, status, visibility, created_at, updated_at
             ) VALUES ";
         
         $values = [];
         $params = [];
         
         foreach ($batch as $product) {
-            $values[] = "(?, ?, ?, ?, ?, ?, NOW(), ?)";
+            $values[] = "(?, ?, ?, ?, ?, ?, ?, NOW(), ?)";
             $params = array_merge($params, [
                 $product['product_id'],
                 $product['offer_id'],
@@ -577,13 +693,14 @@ class ProductETL extends BaseETL
                 $product['fbo_sku'],
                 $product['fbs_sku'],
                 $product['status'],
+                $product['visibility'],
                 $product['updated_at']
             ]);
         }
         
         $sql .= implode(', ', $values);
         
-        // Add comprehensive upsert logic (PostgreSQL syntax)
+        // Add comprehensive upsert logic (PostgreSQL syntax) including visibility field
         $sql .= "
             ON CONFLICT (offer_id) 
             DO UPDATE SET 
@@ -601,6 +718,7 @@ class ProductETL extends BaseETL
                     ELSE dim_products.fbs_sku 
                 END,
                 status = EXCLUDED.status,
+                visibility = EXCLUDED.visibility,
                 updated_at = EXCLUDED.updated_at
             RETURNING 
                 offer_id,

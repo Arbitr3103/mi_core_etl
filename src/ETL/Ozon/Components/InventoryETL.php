@@ -344,8 +344,8 @@ class InventoryETL extends BaseETL
             );
         }
     }
-}  
-  /**
+
+    /**
      * Download and parse CSV report file with validation
      * 
      * Implements comprehensive CSV processing with:

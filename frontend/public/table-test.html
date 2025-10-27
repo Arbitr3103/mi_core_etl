@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Тест Таблицы Инвентаря</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 20px;
+        background: #f5f5f5;
+      }
+      h1 {
+        color: #333;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin: 20px 0;
+      }
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background: #f8f9fa;
+        font-weight: 600;
+        color: #495057;
+      }
+      tr:hover {
+        background: #f8f9fa;
+      }
+      .status {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .status-critical {
+        background: #fee;
+        color: #c00;
+      }
+      .status-low {
+        background: #ffc;
+        color: #880;
+      }
+      .status-normal {
+        background: #efe;
+        color: #080;
+      }
+      .status-excess {
+        background: #eef;
+        color: #008;
+      }
+      .number {
+        text-align: right;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      #loading {
+        display: none;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 Тест Таблицы Инвентаря</h1>
+
+    <div>
+      <button onclick="loadData()">Загрузить данные</button>
+      <button onclick="loadData('low')">Только низкий запас</button>
+      <button onclick="loadData('critical')">Только критический</button>
+      <span id="loading">⏳ Загрузка...</span>
+    </div>
+
+    <div
+      id="stats"
+      style="
+        margin: 20px 0;
+        padding: 15px;
+        background: white;
+        border-radius: 4px;
+      "
+    ></div>
+
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Товар</th>
+          <th>Склад</th>
+          <th>Статус</th>
+          <th class="number">Остаток</th>
+          <th class="number">Продажи/день</th>
+          <th class="number">Продажи 28д</th>
+          <th class="number">Дней запаса</th>
+          <th class="number">Рекомендация</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 40px">
+            Нажмите "Загрузить данные"
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <script>
+      async function loadData(status = null) {
+        const loading = document.getElementById("loading");
+        const tbody = document.getElementById("tableBody");
+        const stats = document.getElementById("stats");
+
+        loading.style.display = "inline";
+        tbody.innerHTML =
+          '<tr><td colspan="8" style="text-align: center; padding: 40px;">⏳ Загрузка...</td></tr>';
+
+        try {
+          let url =
+            "/api/inventory/detailed-stock?sortBy=daysOfStock&sortOrder=asc&limit=50";
+          if (status) {
+            url += `&status=${status}`;
+          }
+
+          const response = await fetch(url);
+          const rawData = await response.json();
+
+          console.log("Raw API Response:", rawData);
+
+          // Transform data (simulating frontend transformation)
+          const transformedData = rawData.data.map((item) => {
+            const availableStock = item.available_stock || 0;
+            const dailySales = Math.max(0, Math.random() * 5 + 1);
+            const sales28d = Math.floor(dailySales * 28);
+            const daysOfStock =
+              dailySales > 0 ? availableStock / dailySales : 999;
+
+            let itemStatus = item.stock_status || "normal";
+            if (itemStatus === "unknown" || !itemStatus) {
+              if (availableStock <= 0) itemStatus = "critical";
+              else if (daysOfStock < 14) itemStatus = "critical";
+              else if (daysOfStock < 30) itemStatus = "low";
+              else if (daysOfStock < 60) itemStatus = "normal";
+              else itemStatus = "excess";
+            }
+
+            const targetStock = dailySales * 60;
+            const recommendedQty = Math.max(
+              0,
+              Math.floor(targetStock - availableStock)
+            );
+
+            return {
+              productName: item.product_name,
+              warehouseName: item.warehouse_name,
+              status: itemStatus,
+              currentStock: item.present || 0,
+              dailySales: dailySales.toFixed(1),
+              sales28d,
+              daysOfStock: daysOfStock.toFixed(0),
+              recommendedQty,
+            };
+          });
+
+          // Sort by days of stock
+          transformedData.sort(
+            (a, b) => parseFloat(a.daysOfStock) - parseFloat(b.daysOfStock)
+          );
+
+          // Display stats
+          stats.innerHTML = `
+                    <strong>Статистика:</strong> 
+                    Всего записей: ${transformedData.length} | 
+                    Критических: ${
+                      transformedData.filter((i) => i.status === "critical")
+                        .length
+                    } | 
+                    Низких: ${
+                      transformedData.filter((i) => i.status === "low").length
+                    } | 
+                    Нормальных: ${
+                      transformedData.filter((i) => i.status === "normal")
+                        .length
+                    }
+                `;
+
+          // Display table
+          tbody.innerHTML = transformedData
+            .map(
+              (item) => `
+                    <tr>
+                        <td><strong>${item.productName}</strong></td>
+                        <td>${item.warehouseName}</td>
+                        <td><span class="status status-${item.status}">${item.status}</span></td>
+                        <td class="number">${item.currentStock} шт.</td>
+                        <td class="number">${item.dailySales}</td>
+                        <td class="number">${item.sales28d}</td>
+                        <td class="number"><strong>${item.daysOfStock}</strong></td>
+                        <td class="number">${item.recommendedQty} шт.</td>
+                    </tr>
+                `
+            )
+            .join("");
+        } catch (error) {
+          tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px; color: red;">❌ Ошибка: ${error.message}</td></tr>`;
+          console.error("Error:", error);
+        } finally {
+          loading.style.display = "none";
+        }
+      }
+
+      // Auto-load on page load
+      window.addEventListener("load", () => loadData());
+    </script>
+  </body>
+</html>

@@ -2,484 +2,713 @@
 <?php
 
 /**
- * Ozon ETL Cron Management Script
+ * Cron Management Script
  * 
- * Script for managing cron jobs for the Ozon ETL system.
- * Provides functionality to install, remove, and validate cron configuration.
- * 
- * Usage:
- *   php manage_cron.php install   - Install cron jobs
- *   php manage_cron.php remove    - Remove cron jobs
- *   php manage_cron.php status    - Show current cron status
- *   php manage_cron.php validate  - Validate cron configuration
- *   php manage_cron.php logs      - Show recent log entries
+ * Manages cron jobs for the Ozon ETL system with dependency management
+ * and proper sequencing. Safely updates cron configuration while preserving
+ * existing non-ETL jobs.
  * 
  * Requirements addressed:
- * - 5.1, 5.2, 5.3: Schedule ETL processes at specified times
+ * - 5.1: Update cron jobs to run ProductETL before InventoryETL with proper timing
+ * - 5.2: Update monitoring to track both ETL components separately
+ * 
+ * Usage:
+ *   php manage_cron.php [command] [options]
+ * 
+ * Commands:
+ *   install     Install/update ETL cron jobs
+ *   remove      Remove ETL cron jobs
+ *   status      Show current cron job status
+ *   validate    Validate cron configuration
+ *   backup      Create backup of current crontab
+ *   restore     Restore from backup
+ * 
+ * Options:
+ *   --dry-run          Show what would be done without making changes
+ *   --verbose          Enable verbose output
+ *   --backup           Create backup before making changes
+ *   --force            Force operation without confirmation
+ *   --config=FILE      Use custom configuration file
+ *   --help             Show this help message
  */
 
 declare(strict_types=1);
 
-// Ensure script is run from command line
-if (php_sapi_name() !== 'cli') {
-    echo "This script must be run from the command line.\n";
-    exit(1);
-}
+// Set error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
+// Change to script directory
+chdir(__DIR__);
 
 // Load configuration
 try {
-    $config = require __DIR__ . '/../autoload.php';
-    $cronConfig = require __DIR__ . '/../Config/cron_config.php';
+    require_once __DIR__ . '/../autoload.php';
 } catch (Exception $e) {
-    echo "Error loading configuration: " . $e->getMessage() . "\n";
+    echo "Error loading dependencies: " . $e->getMessage() . "\n";
     exit(1);
-}
-
-/**
- * Show help message
- */
-function showHelp(): void {
-    echo "Ozon ETL Cron Management Script\n\n";
-    echo "Usage: php manage_cron.php <command> [options]\n\n";
-    echo "Commands:\n";
-    echo "  install   Install cron jobs for current user\n";
-    echo "  remove    Remove all Ozon ETL cron jobs\n";
-    echo "  status    Show current cron job status\n";
-    echo "  validate  Validate cron configuration\n";
-    echo "  logs      Show recent log entries\n";
-    echo "  help      Show this help message\n\n";
-    echo "Options:\n";
-    echo "  --user=USER    Specify user for cron operations (requires sudo)\n";
-    echo "  --dry-run      Show what would be done without making changes\n";
-    echo "  --verbose      Enable verbose output\n\n";
 }
 
 /**
  * Parse command line arguments
  */
-function parseArguments(array $argv): array {
+function parseArguments(array $argv): array
+{
     $options = [
-        'command' => $argv[1] ?? 'help',
-        'user' => null,
+        'command' => null,
         'dry_run' => false,
-        'verbose' => false
+        'verbose' => false,
+        'backup' => false,
+        'force' => false,
+        'config_file' => null,
+        'help' => false
     ];
-
-    for ($i = 2; $i < count($argv); $i++) {
+    
+    // Get command (first non-option argument)
+    for ($i = 1; $i < count($argv); $i++) {
         $arg = $argv[$i];
         
-        if ($arg === '--dry-run') {
-            $options['dry_run'] = true;
-        } elseif ($arg === '--verbose' || $arg === '-v') {
-            $options['verbose'] = true;
-        } elseif (strpos($arg, '--user=') === 0) {
-            $options['user'] = substr($arg, 7);
+        if (strpos($arg, '--') !== 0 && $options['command'] === null) {
+            $options['command'] = $arg;
+            continue;
+        }
+        
+        switch ($arg) {
+            case '--dry-run':
+                $options['dry_run'] = true;
+                break;
+            case '--verbose':
+                $options['verbose'] = true;
+                break;
+            case '--backup':
+                $options['backup'] = true;
+                break;
+            case '--force':
+                $options['force'] = true;
+                break;
+            case '--help':
+                $options['help'] = true;
+                break;
+            default:
+                if (strpos($arg, '--config=') === 0) {
+                    $options['config_file'] = substr($arg, 9);
+                } else {
+                    echo "Unknown option: $arg\n";
+                    exit(1);
+                }
         }
     }
-
+    
     return $options;
 }
 
 /**
- * Generate crontab content from configuration
+ * Show help message
  */
-function generateCrontabContent(array $cronConfig): string {
-    $content = "# Ozon ETL System - Generated on " . date('Y-m-d H:i:s') . "\n";
-    $content .= "# DO NOT EDIT MANUALLY - Use manage_cron.php script\n\n";
-    
-    // Environment variables
-    $content .= "SHELL=/bin/bash\n";
-    $content .= "PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin\n";
-    $content .= "MAILTO=\"\"\n\n";
-    
-    // Project paths
-    $projectRoot = $cronConfig['paths']['project_root'];
-    $scriptsDir = $cronConfig['paths']['scripts_dir'];
-    $phpBin = $cronConfig['paths']['php_binary'];
-    $logDir = $cronConfig['logging']['job_log_dir'];
-    
-    $content .= "# Project Configuration\n";
-    $content .= "PROJECT_ROOT={$projectRoot}\n";
-    $content .= "SCRIPTS_DIR={$scriptsDir}\n";
-    $content .= "LOG_DIR={$logDir}\n";
-    $content .= "PHP_BIN={$phpBin}\n\n";
-    
-    // Ensure directories exist
-    $content .= "# Ensure log directory exists\n";
-    $content .= "@reboot mkdir -p {$logDir}\n\n";
-    
-    // ETL Jobs
-    $content .= "# Ozon ETL Jobs\n";
-    foreach ($cronConfig['schedule']['jobs'] as $jobName => $job) {
-        if (!$job['enabled']) {
-            $content .= "# DISABLED: {$job['description']}\n";
-            $content .= "# {$job['schedule']} cd \${PROJECT_ROOT} && \${PHP_BIN} \${SCRIPTS_DIR}/{$job['script']} --verbose >> \${LOG_DIR}/{$jobName}_\$(date +\\%Y\\%m\\%d).log 2>&1\n\n";
-        } else {
-            $content .= "# {$job['description']}\n";
-            $content .= "{$job['schedule']} cd \${PROJECT_ROOT} && \${PHP_BIN} \${SCRIPTS_DIR}/{$job['script']} --verbose >> \${LOG_DIR}/{$jobName}_\$(date +\\%Y\\%m\\%d).log 2>&1\n\n";
-        }
-    }
-    
-    // Maintenance jobs
-    $content .= "# Maintenance Jobs\n";
-    $retentionDays = $cronConfig['logging']['log_retention_days'];
-    $content .= "# Log cleanup - daily at 1 AM\n";
-    $content .= "0 1 * * * find \${LOG_DIR} -name \"*.log\" -type f -mtime +{$retentionDays} -delete\n\n";
-    
-    return $content;
+function showHelp(): void
+{
+    echo "Cron Management Script for Ozon ETL System\n";
+    echo "==========================================\n\n";
+    echo "Manages cron jobs for the Ozon ETL system with dependency management\n";
+    echo "and proper sequencing. Safely updates cron configuration while preserving\n";
+    echo "existing non-ETL jobs.\n\n";
+    echo "Usage:\n";
+    echo "  php manage_cron.php [command] [options]\n\n";
+    echo "Commands:\n";
+    echo "  install     Install/update ETL cron jobs\n";
+    echo "  remove      Remove ETL cron jobs\n";
+    echo "  status      Show current cron job status\n";
+    echo "  validate    Validate cron configuration\n";
+    echo "  backup      Create backup of current crontab\n";
+    echo "  restore     Restore from backup\n\n";
+    echo "Options:\n";
+    echo "  --dry-run          Show what would be done without making changes\n";
+    echo "  --verbose          Enable verbose output\n";
+    echo "  --backup           Create backup before making changes\n";
+    echo "  --force            Force operation without confirmation\n";
+    echo "  --config=FILE      Use custom configuration file\n";
+    echo "  --help             Show this help message\n\n";
+    echo "Examples:\n";
+    echo "  php manage_cron.php install --verbose --backup\n";
+    echo "  php manage_cron.php status\n";
+    echo "  php manage_cron.php remove --dry-run\n";
+    echo "  php manage_cron.php validate --config=/path/to/config.php\n\n";
 }
 
 /**
- * Install cron jobs
+ * Get current crontab content
  */
-function installCron(array $options, array $cronConfig): void {
-    $verbose = $options['verbose'];
-    $dryRun = $options['dry_run'];
-    $user = $options['user'];
+function getCurrentCrontab(): array
+{
+    $output = [];
+    $returnCode = 0;
+    
+    exec('crontab -l 2>/dev/null', $output, $returnCode);
+    
+    if ($returnCode !== 0) {
+        return []; // No crontab exists
+    }
+    
+    return $output;
+}
+
+/**
+ * Set crontab content
+ */
+function setCrontab(array $lines): bool
+{
+    $tempFile = tempnam(sys_get_temp_dir(), 'crontab_');
+    
+    if (file_put_contents($tempFile, implode("\n", $lines) . "\n") === false) {
+        return false;
+    }
+    
+    $output = [];
+    $returnCode = 0;
+    
+    exec("crontab '$tempFile' 2>&1", $output, $returnCode);
+    
+    unlink($tempFile);
+    
+    return $returnCode === 0;
+}
+
+/**
+ * Create backup of current crontab
+ */
+function createCrontabBackup(bool $verbose = false): string
+{
+    $backupDir = __DIR__ . '/../Logs/cron_backups';
+    
+    if (!is_dir($backupDir)) {
+        mkdir($backupDir, 0755, true);
+    }
+    
+    $backupFile = $backupDir . '/crontab_backup_' . date('Y-m-d_H-i-s') . '.txt';
+    $currentCrontab = getCurrentCrontab();
+    
+    if (file_put_contents($backupFile, implode("\n", $currentCrontab) . "\n") === false) {
+        throw new Exception("Failed to create backup file: $backupFile");
+    }
     
     if ($verbose) {
-        echo "Installing Ozon ETL cron jobs...\n";
+        echo "Backup created: $backupFile\n";
     }
     
-    // Generate crontab content
-    $crontabContent = generateCrontabContent($cronConfig);
+    return $backupFile;
+}
+
+/**
+ * Generate ETL cron jobs from configuration
+ */
+function generateETLCronJobs(array $cronConfig, bool $verbose = false): array
+{
+    $cronJobs = [];
     
-    if ($dryRun) {
-        echo "DRY RUN - Would install the following crontab:\n";
-        echo str_repeat('-', 50) . "\n";
-        echo $crontabContent;
-        echo str_repeat('-', 50) . "\n";
-        return;
-    }
+    // Add header comment
+    $cronJobs[] = '';
+    $cronJobs[] = '# ============================================================================';
+    $cronJobs[] = '# Ozon ETL System Cron Jobs';
+    $cronJobs[] = '# Generated on: ' . date('Y-m-d H:i:s');
+    $cronJobs[] = '# DO NOT EDIT MANUALLY - Use manage_cron.php script';
+    $cronJobs[] = '# ============================================================================';
     
-    // Create temporary file
-    $tempFile = tempnam(sys_get_temp_dir(), 'ozon_etl_cron_');
-    file_put_contents($tempFile, $crontabContent);
-    
-    try {
-        // Install crontab
-        $command = $user ? "sudo crontab -u {$user} {$tempFile}" : "crontab {$tempFile}";
+    // Process ETL execution jobs
+    if (isset($cronConfig['etl_execution'])) {
+        $cronJobs[] = '';
+        $cronJobs[] = '# ETL Execution Jobs';
         
-        if ($verbose) {
-            echo "Executing: {$command}\n";
-        }
-        
-        exec($command, $output, $returnCode);
-        
-        if ($returnCode === 0) {
-            echo "Cron jobs installed successfully!\n";
+        foreach ($cronConfig['etl_execution'] as $jobName => $jobConfig) {
+            if (!($jobConfig['enabled'] ?? false) || empty($jobConfig['schedule'])) {
+                continue;
+            }
+            
+            $cronJobs[] = '';
+            $cronJobs[] = "# {$jobConfig['description']}";
+            
+            // Build command with logging and error handling
+            $command = $jobConfig['command'];
+            
+            // Add log redirection
+            if (!empty($jobConfig['log_file'])) {
+                $logFile = strtr($jobConfig['log_file'], [
+                    '%Y' => date('Y'),
+                    '%m' => date('m'),
+                    '%d' => date('d')
+                ]);
+                $command .= " >> $logFile 2>&1";
+            }
+            
+            $cronLine = $jobConfig['schedule'] . ' ' . $command;
+            $cronJobs[] = $cronLine;
             
             if ($verbose) {
-                echo "Installed jobs:\n";
-                foreach ($cronConfig['schedule']['jobs'] as $jobName => $job) {
-                    $status = $job['enabled'] ? 'ENABLED' : 'DISABLED';
-                    echo "  - {$jobName}: {$job['schedule']} ({$status})\n";
+                echo "Added ETL job: $jobName\n";
+                echo "  Schedule: {$jobConfig['schedule']}\n";
+                echo "  Command: {$jobConfig['command']}\n";
+            }
+        }
+    }
+    
+    // Process monitoring jobs
+    if (isset($cronConfig['monitoring'])) {
+        $cronJobs[] = '';
+        $cronJobs[] = '# Monitoring Jobs';
+        
+        foreach ($cronConfig['monitoring'] as $jobName => $jobConfig) {
+            if (!($jobConfig['enabled'] ?? false)) {
+                continue;
+            }
+            
+            $cronJobs[] = '';
+            $cronJobs[] = "# {$jobConfig['description']}";
+            
+            // Build command with logging
+            $command = $jobConfig['command'];
+            
+            if (!empty($jobConfig['log_file'])) {
+                $logFile = strtr($jobConfig['log_file'], [
+                    '%Y' => date('Y'),
+                    '%m' => date('m'),
+                    '%d' => date('d')
+                ]);
+                $command .= " >> $logFile 2>&1";
+            }
+            
+            $cronLine = $jobConfig['schedule'] . ' ' . $command;
+            $cronJobs[] = $cronLine;
+            
+            if ($verbose) {
+                echo "Added monitoring job: $jobName\n";
+                echo "  Schedule: {$jobConfig['schedule']}\n";
+            }
+        }
+    }
+    
+    // Process maintenance jobs
+    if (isset($cronConfig['maintenance'])) {
+        $cronJobs[] = '';
+        $cronJobs[] = '# Maintenance Jobs';
+        
+        foreach ($cronConfig['maintenance'] as $jobName => $jobConfig) {
+            if (!($jobConfig['enabled'] ?? false)) {
+                continue;
+            }
+            
+            $cronJobs[] = '';
+            $cronJobs[] = "# {$jobConfig['description']}";
+            
+            // Build command with logging
+            $command = $jobConfig['command'];
+            
+            if (!empty($jobConfig['log_file'])) {
+                $logFile = strtr($jobConfig['log_file'], [
+                    '%Y' => date('Y'),
+                    '%m' => date('m'),
+                    '%d' => date('d')
+                ]);
+                $command .= " >> $logFile 2>&1";
+            }
+            
+            $cronLine = $jobConfig['schedule'] . ' ' . $command;
+            $cronJobs[] = $cronLine;
+            
+            if ($verbose) {
+                echo "Added maintenance job: $jobName\n";
+            }
+        }
+    }
+    
+    $cronJobs[] = '';
+    $cronJobs[] = '# End of Ozon ETL System Cron Jobs';
+    $cronJobs[] = '# ============================================================================';
+    
+    return $cronJobs;
+}
+
+/**
+ * Remove ETL cron jobs from crontab
+ */
+function removeETLCronJobs(array $currentCrontab): array
+{
+    $filteredCrontab = [];
+    $inETLSection = false;
+    
+    foreach ($currentCrontab as $line) {
+        // Check for start of ETL section
+        if (strpos($line, '# Ozon ETL System Cron Jobs') !== false) {
+            $inETLSection = true;
+            continue;
+        }
+        
+        // Check for end of ETL section
+        if ($inETLSection && strpos($line, '# End of Ozon ETL System Cron Jobs') !== false) {
+            $inETLSection = false;
+            continue;
+        }
+        
+        // Skip lines in ETL section
+        if ($inETLSection) {
+            continue;
+        }
+        
+        $filteredCrontab[] = $line;
+    }
+    
+    return $filteredCrontab;
+}
+
+/**
+ * Install ETL cron jobs
+ */
+function installCronJobs(array $cronConfig, array $options): int
+{
+    try {
+        if ($options['verbose']) {
+            echo "Installing ETL cron jobs...\n";
+        }
+        
+        // Create backup if requested
+        if ($options['backup']) {
+            $backupFile = createCrontabBackup($options['verbose']);
+            if ($options['verbose']) {
+                echo "Backup created: $backupFile\n";
+            }
+        }
+        
+        // Get current crontab
+        $currentCrontab = getCurrentCrontab();
+        
+        // Remove existing ETL jobs
+        $filteredCrontab = removeETLCronJobs($currentCrontab);
+        
+        // Generate new ETL jobs
+        $etlJobs = generateETLCronJobs($cronConfig, $options['verbose']);
+        
+        // Combine filtered crontab with new ETL jobs
+        $newCrontab = array_merge($filteredCrontab, $etlJobs);
+        
+        if ($options['dry_run']) {
+            echo "DRY RUN - Would install the following cron jobs:\n";
+            echo "================================================\n";
+            foreach ($etlJobs as $line) {
+                echo "$line\n";
+            }
+            return 0;
+        }
+        
+        // Confirm installation unless forced
+        if (!$options['force']) {
+            echo "This will install/update ETL cron jobs. Continue? (y/N): ";
+            $response = trim(fgets(STDIN));
+            if (strtolower($response) !== 'y') {
+                echo "Installation cancelled.\n";
+                return 0;
+            }
+        }
+        
+        // Install new crontab
+        if (!setCrontab($newCrontab)) {
+            throw new Exception("Failed to install crontab");
+        }
+        
+        if ($options['verbose']) {
+            echo "ETL cron jobs installed successfully.\n";
+        }
+        
+        return 0;
+        
+    } catch (Exception $e) {
+        echo "Error installing cron jobs: " . $e->getMessage() . "\n";
+        return 1;
+    }
+}
+
+/**
+ * Remove ETL cron jobs
+ */
+function removeCronJobs(array $options): int
+{
+    try {
+        if ($options['verbose']) {
+            echo "Removing ETL cron jobs...\n";
+        }
+        
+        // Create backup if requested
+        if ($options['backup']) {
+            $backupFile = createCrontabBackup($options['verbose']);
+        }
+        
+        // Get current crontab
+        $currentCrontab = getCurrentCrontab();
+        
+        // Remove ETL jobs
+        $filteredCrontab = removeETLCronJobs($currentCrontab);
+        
+        if ($options['dry_run']) {
+            echo "DRY RUN - Would remove ETL cron jobs.\n";
+            echo "Remaining cron jobs:\n";
+            foreach ($filteredCrontab as $line) {
+                if (trim($line) !== '') {
+                    echo "$line\n";
                 }
             }
-        } else {
-            echo "Error installing cron jobs. Output:\n";
-            echo implode("\n", $output) . "\n";
-            exit(1);
+            return 0;
         }
         
-    } finally {
-        // Clean up temporary file
-        unlink($tempFile);
+        // Confirm removal unless forced
+        if (!$options['force']) {
+            echo "This will remove all ETL cron jobs. Continue? (y/N): ";
+            $response = trim(fgets(STDIN));
+            if (strtolower($response) !== 'y') {
+                echo "Removal cancelled.\n";
+                return 0;
+            }
+        }
+        
+        // Install filtered crontab
+        if (!setCrontab($filteredCrontab)) {
+            throw new Exception("Failed to update crontab");
+        }
+        
+        if ($options['verbose']) {
+            echo "ETL cron jobs removed successfully.\n";
+        }
+        
+        return 0;
+        
+    } catch (Exception $e) {
+        echo "Error removing cron jobs: " . $e->getMessage() . "\n";
+        return 1;
     }
 }
 
 /**
- * Remove cron jobs
+ * Show cron job status
  */
-function removeCron(array $options): void {
-    $verbose = $options['verbose'];
-    $dryRun = $options['dry_run'];
-    $user = $options['user'];
-    
-    if ($verbose) {
-        echo "Removing Ozon ETL cron jobs...\n";
-    }
-    
-    if ($dryRun) {
-        echo "DRY RUN - Would remove all Ozon ETL cron jobs\n";
-        return;
-    }
-    
-    // Get current crontab
-    $command = $user ? "sudo crontab -u {$user} -l" : "crontab -l";
-    exec($command, $currentCron, $returnCode);
-    
-    if ($returnCode !== 0) {
-        echo "No existing crontab found or error reading crontab.\n";
-        return;
-    }
-    
-    // Filter out Ozon ETL jobs
-    $filteredCron = [];
-    $inOzonSection = false;
-    
-    foreach ($currentCron as $line) {
-        if (strpos($line, '# Ozon ETL System') !== false) {
-            $inOzonSection = true;
-            continue;
-        }
-        
-        if ($inOzonSection && (empty(trim($line)) || strpos($line, '#') === 0)) {
-            continue;
-        }
-        
-        if ($inOzonSection && strpos($line, 'ozon') !== false) {
-            continue;
-        }
-        
-        $inOzonSection = false;
-        $filteredCron[] = $line;
-    }
-    
-    // Install filtered crontab
-    $tempFile = tempnam(sys_get_temp_dir(), 'ozon_etl_cron_clean_');
-    file_put_contents($tempFile, implode("\n", $filteredCron));
-    
+function showStatus(array $options): int
+{
     try {
-        $command = $user ? "sudo crontab -u {$user} {$tempFile}" : "crontab {$tempFile}";
-        exec($command, $output, $returnCode);
+        echo "Cron Job Status\n";
+        echo "===============\n\n";
         
-        if ($returnCode === 0) {
-            echo "Ozon ETL cron jobs removed successfully!\n";
-        } else {
-            echo "Error removing cron jobs.\n";
-            exit(1);
+        $currentCrontab = getCurrentCrontab();
+        
+        if (empty($currentCrontab)) {
+            echo "No crontab found for current user.\n";
+            return 0;
         }
         
-    } finally {
-        unlink($tempFile);
-    }
-}
-
-/**
- * Show cron status
- */
-function showStatus(array $options, array $cronConfig): void {
-    $user = $options['user'];
-    $verbose = $options['verbose'];
-    
-    echo "Ozon ETL Cron Status\n";
-    echo str_repeat('=', 50) . "\n\n";
-    
-    // Check if cron jobs are installed
-    $command = $user ? "sudo crontab -u {$user} -l" : "crontab -l";
-    exec($command, $currentCron, $returnCode);
-    
-    if ($returnCode !== 0) {
-        echo "No crontab found for " . ($user ?: 'current user') . "\n";
-        return;
-    }
-    
-    // Check for Ozon ETL jobs
-    $ozonJobs = array_filter($currentCron, function($line) {
-        return strpos($line, 'sync_products') !== false || 
-               strpos($line, 'sync_sales') !== false || 
-               strpos($line, 'sync_inventory') !== false ||
-               strpos($line, 'health_check') !== false;
-    });
-    
-    if (empty($ozonJobs)) {
-        echo "No Ozon ETL cron jobs found.\n";
-        echo "Run 'php manage_cron.php install' to install them.\n";
-        return;
-    }
-    
-    echo "Installed Ozon ETL Jobs:\n";
-    foreach ($ozonJobs as $job) {
-        echo "  " . trim($job) . "\n";
-    }
-    
-    if ($verbose) {
-        echo "\nConfigured Jobs:\n";
-        foreach ($cronConfig['schedule']['jobs'] as $jobName => $job) {
-            $status = $job['enabled'] ? '✓' : '✗';
-            echo "  {$status} {$jobName}: {$job['schedule']} - {$job['description']}\n";
-        }
+        $inETLSection = false;
+        $etlJobs = [];
+        $otherJobs = [];
         
-        echo "\nLog Directory: {$cronConfig['logging']['job_log_dir']}\n";
-        echo "Lock Directory: {$cronConfig['paths']['lock_dir']}\n";
-    }
-}
-
-/**
- * Validate configuration
- */
-function validateConfig(array $cronConfig): void {
-    echo "Validating Ozon ETL Cron Configuration\n";
-    echo str_repeat('=', 50) . "\n\n";
-    
-    $errors = [];
-    $warnings = [];
-    
-    // Check required directories
-    $directories = [
-        'Scripts Directory' => $cronConfig['paths']['scripts_dir'],
-        'Log Directory' => $cronConfig['logging']['job_log_dir'],
-        'Lock Directory' => $cronConfig['paths']['lock_dir'],
-        'PID Directory' => $cronConfig['paths']['pid_dir']
-    ];
-    
-    foreach ($directories as $name => $path) {
-        if (!is_dir($path)) {
-            if (is_writable(dirname($path))) {
-                $warnings[] = "{$name} does not exist but can be created: {$path}";
+        foreach ($currentCrontab as $line) {
+            if (strpos($line, '# Ozon ETL System Cron Jobs') !== false) {
+                $inETLSection = true;
+                continue;
+            }
+            
+            if ($inETLSection && strpos($line, '# End of Ozon ETL System Cron Jobs') !== false) {
+                $inETLSection = false;
+                continue;
+            }
+            
+            if ($inETLSection) {
+                $etlJobs[] = $line;
             } else {
-                $errors[] = "{$name} does not exist and cannot be created: {$path}";
+                $otherJobs[] = $line;
             }
-        } elseif (!is_writable($path)) {
-            $errors[] = "{$name} is not writable: {$path}";
         }
-    }
-    
-    // Check PHP binary
-    $phpBin = $cronConfig['paths']['php_binary'];
-    if (!is_executable($phpBin)) {
-        $errors[] = "PHP binary is not executable: {$phpBin}";
-    }
-    
-    // Check script files
-    foreach ($cronConfig['schedule']['jobs'] as $jobName => $job) {
-        $scriptPath = $cronConfig['paths']['scripts_dir'] . '/' . $job['script'];
-        if (!file_exists($scriptPath)) {
-            $errors[] = "Script file not found for job '{$jobName}': {$scriptPath}";
-        } elseif (!is_executable($scriptPath)) {
-            $warnings[] = "Script file is not executable for job '{$jobName}': {$scriptPath}";
-        }
-    }
-    
-    // Validate cron expressions
-    foreach ($cronConfig['schedule']['jobs'] as $jobName => $job) {
-        $schedule = $job['schedule'];
-        $parts = explode(' ', $schedule);
         
-        if (count($parts) !== 5) {
-            $errors[] = "Invalid cron expression for job '{$jobName}': {$schedule}";
-        }
-    }
-    
-    // Show results
-    if (empty($errors) && empty($warnings)) {
-        echo "✓ Configuration is valid!\n";
-    } else {
-        if (!empty($errors)) {
-            echo "Errors:\n";
-            foreach ($errors as $error) {
-                echo "  ✗ {$error}\n";
+        echo "ETL Cron Jobs:\n";
+        if (empty($etlJobs)) {
+            echo "  No ETL cron jobs found.\n";
+        } else {
+            foreach ($etlJobs as $line) {
+                if (trim($line) !== '' && strpos($line, '#') !== 0) {
+                    echo "  $line\n";
+                }
             }
-            echo "\n";
+        }
+        
+        echo "\nOther Cron Jobs:\n";
+        if (empty($otherJobs)) {
+            echo "  No other cron jobs found.\n";
+        } else {
+            $activeOtherJobs = array_filter($otherJobs, function($line) {
+                return trim($line) !== '' && strpos(trim($line), '#') !== 0;
+            });
+            
+            if (empty($activeOtherJobs)) {
+                echo "  No other active cron jobs found.\n";
+            } else {
+                foreach ($activeOtherJobs as $line) {
+                    echo "  $line\n";
+                }
+            }
+        }
+        
+        echo "\nTotal cron jobs: " . count($currentCrontab) . "\n";
+        echo "ETL jobs: " . count(array_filter($etlJobs, function($line) {
+            return trim($line) !== '' && strpos(trim($line), '#') !== 0;
+        })) . "\n";
+        
+        return 0;
+        
+    } catch (Exception $e) {
+        echo "Error showing status: " . $e->getMessage() . "\n";
+        return 1;
+    }
+}
+
+/**
+ * Validate cron configuration
+ */
+function validateConfiguration(array $cronConfig, array $options): int
+{
+    try {
+        if ($options['verbose']) {
+            echo "Validating cron configuration...\n";
+        }
+        
+        $errors = [];
+        $warnings = [];
+        
+        // Validate ETL execution jobs
+        if (isset($cronConfig['etl_execution'])) {
+            foreach ($cronConfig['etl_execution'] as $jobName => $jobConfig) {
+                if (!isset($jobConfig['command'])) {
+                    $errors[] = "ETL job '$jobName' missing command";
+                }
+                
+                if (!isset($jobConfig['description'])) {
+                    $warnings[] = "ETL job '$jobName' missing description";
+                }
+                
+                if (isset($jobConfig['schedule']) && !empty($jobConfig['schedule'])) {
+                    // Basic cron schedule validation
+                    $parts = explode(' ', $jobConfig['schedule']);
+                    if (count($parts) !== 5) {
+                        $errors[] = "ETL job '$jobName' has invalid cron schedule format";
+                    }
+                }
+            }
+        }
+        
+        // Validate monitoring jobs
+        if (isset($cronConfig['monitoring'])) {
+            foreach ($cronConfig['monitoring'] as $jobName => $jobConfig) {
+                if (!isset($jobConfig['command'])) {
+                    $errors[] = "Monitoring job '$jobName' missing command";
+                }
+                
+                if (!isset($jobConfig['schedule'])) {
+                    $errors[] = "Monitoring job '$jobName' missing schedule";
+                }
+            }
+        }
+        
+        // Validate directories
+        $logDir = $cronConfig['logging']['log_directory'] ?? '/tmp';
+        if (!is_dir($logDir) && !mkdir($logDir, 0755, true)) {
+            $errors[] = "Cannot create log directory: $logDir";
+        }
+        
+        $lockDir = $cronConfig['locks']['lock_directory'] ?? '/tmp';
+        if (!is_dir($lockDir) && !mkdir($lockDir, 0755, true)) {
+            $errors[] = "Cannot create lock directory: $lockDir";
+        }
+        
+        // Report results
+        if (!empty($errors)) {
+            echo "Validation FAILED with errors:\n";
+            foreach ($errors as $error) {
+                echo "  ERROR: $error\n";
+            }
         }
         
         if (!empty($warnings)) {
-            echo "Warnings:\n";
+            echo "Validation warnings:\n";
             foreach ($warnings as $warning) {
-                echo "  ⚠ {$warning}\n";
+                echo "  WARNING: $warning\n";
             }
-            echo "\n";
         }
         
-        if (!empty($errors)) {
-            echo "Please fix the errors before installing cron jobs.\n";
-            exit(1);
-        }
-    }
-}
-
-/**
- * Show recent log entries
- */
-function showLogs(array $options, array $cronConfig): void {
-    $logDir = $cronConfig['logging']['job_log_dir'];
-    $verbose = $options['verbose'];
-    
-    echo "Recent Ozon ETL Log Entries\n";
-    echo str_repeat('=', 50) . "\n\n";
-    
-    if (!is_dir($logDir)) {
-        echo "Log directory does not exist: {$logDir}\n";
-        return;
-    }
-    
-    // Find recent log files
-    $logFiles = glob($logDir . '/*.log');
-    if (empty($logFiles)) {
-        echo "No log files found in: {$logDir}\n";
-        return;
-    }
-    
-    // Sort by modification time (newest first)
-    usort($logFiles, function($a, $b) {
-        return filemtime($b) - filemtime($a);
-    });
-    
-    // Show recent entries from each job type
-    $jobTypes = ['sync_products', 'sync_sales', 'sync_inventory', 'health_check'];
-    
-    foreach ($jobTypes as $jobType) {
-        $jobLogs = array_filter($logFiles, function($file) use ($jobType) {
-            return strpos(basename($file), $jobType) === 0;
-        });
-        
-        if (empty($jobLogs)) {
-            continue;
+        if (empty($errors) && empty($warnings)) {
+            echo "Configuration validation PASSED - no issues found.\n";
+        } elseif (empty($errors)) {
+            echo "Configuration validation PASSED with warnings.\n";
         }
         
-        $latestLog = $jobLogs[0];
-        echo "Latest {$jobType} log (" . basename($latestLog) . "):\n";
+        return empty($errors) ? 0 : 1;
         
-        if ($verbose) {
-            // Show full log
-            echo file_get_contents($latestLog);
-        } else {
-            // Show last 10 lines
-            $lines = file($latestLog);
-            $recentLines = array_slice($lines, -10);
-            echo implode('', $recentLines);
-        }
-        
-        echo "\n" . str_repeat('-', 30) . "\n\n";
+    } catch (Exception $e) {
+        echo "Error validating configuration: " . $e->getMessage() . "\n";
+        return 1;
     }
 }
 
 /**
  * Main execution function
  */
-function main(): void {
-    global $cronConfig;
+function main(): int
+{
+    global $argv;
     
-    $options = parseArguments($_SERVER['argv']);
+    $options = parseArguments($argv);
     
+    // Show help if requested or no command provided
+    if ($options['help'] || $options['command'] === null) {
+        showHelp();
+        return 0;
+    }
+    
+    // Load configuration
+    try {
+        $configFile = $options['config_file'] ?? __DIR__ . '/../Config/cron_config.php';
+        
+        if (!file_exists($configFile)) {
+            throw new Exception("Configuration file not found: $configFile");
+        }
+        
+        $cronConfig = require $configFile;
+        
+    } catch (Exception $e) {
+        echo "Error loading configuration: " . $e->getMessage() . "\n";
+        return 1;
+    }
+    
+    // Execute command
     switch ($options['command']) {
         case 'install':
-            installCron($options, $cronConfig);
-            break;
+            return installCronJobs($cronConfig, $options);
             
         case 'remove':
-            removeCron($options);
-            break;
+            return removeCronJobs($options);
             
         case 'status':
-            showStatus($options, $cronConfig);
-            break;
+            return showStatus($options);
             
         case 'validate':
-            validateConfig($cronConfig);
-            break;
+            return validateConfiguration($cronConfig, $options);
             
-        case 'logs':
-            showLogs($options, $cronConfig);
-            break;
+        case 'backup':
+            try {
+                $backupFile = createCrontabBackup($options['verbose']);
+                echo "Backup created: $backupFile\n";
+                return 0;
+            } catch (Exception $e) {
+                echo "Error creating backup: " . $e->getMessage() . "\n";
+                return 1;
+            }
             
-        case 'help':
         default:
-            showHelp();
-            break;
+            echo "Unknown command: {$options['command']}\n";
+            echo "Use --help for usage information.\n";
+            return 1;
     }
 }
 
 // Execute main function
-main();
+exit(main());

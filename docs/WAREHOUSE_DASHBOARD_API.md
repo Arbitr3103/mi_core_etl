@@ -14,13 +14,38 @@ The Warehouse Dashboard API provides endpoints for managing warehouse inventory 
 
 All endpoints require authentication using the existing system authentication mechanism. Include authentication credentials in your requests.
 
+## Default Filtering Behavior
+
+**Important:** By default, the API returns only products that are truly "in sale" - meaning products that are visible in the marketplace and have available stock. This ensures accurate inventory management and prevents confusion from archived or out-of-stock items.
+
+### What Gets Filtered Out by Default
+
+The API automatically excludes:
+
+-   **Archived or Hidden Products**: Products with `stock_status = 'archived_or_hidden'` (products not visible in marketplace)
+-   **Out of Stock Products**: Products with `stock_status = 'out_of_stock'` (products with zero available stock)
+
+### Including Hidden Products
+
+To see all products including hidden and out-of-stock items, use the `include_hidden=true` parameter:
+
+```bash
+GET /api/inventory/detailed-stock?include_hidden=true
+```
+
+This is useful for:
+
+-   Auditing complete inventory
+-   Reviewing archived products
+-   Analyzing historical product data
+
 ## Endpoints
 
-### 1. Get Dashboard Data
+### 1. Get Detailed Inventory Stock
 
-Retrieve warehouse inventory data with calculated metrics and replenishment recommendations.
+Retrieve detailed inventory data with calculated metrics, stock status, and visibility information.
 
-**Endpoint:** `GET /api/warehouse/dashboard`
+**Endpoint:** `GET /api/inventory/detailed-stock`
 
 **Query Parameters:**
 
@@ -31,15 +56,27 @@ Retrieve warehouse inventory data with calculated metrics and replenishment reco
 | `liquidity_status`       | string  | No       | -                    | Filter by liquidity status: `critical`, `low`, `normal`, `excess`                                           |
 | `active_only`            | boolean | No       | `true`               | Show only active products (with sales in last 30 days OR stock > 0)                                         |
 | `has_replenishment_need` | boolean | No       | `false`              | Show only products that need replenishment                                                                  |
+| `include_hidden`         | boolean | No       | `false`              | **NEW:** Include archived/hidden and out-of-stock products (default excludes them)                          |
+| `visibility`             | string  | No       | -                    | **NEW:** Filter by visibility status: `VISIBLE`, `HIDDEN`, `MODERATION`, `UNKNOWN`                          |
 | `sort_by`                | string  | No       | `replenishment_need` | Sort field: `name`, `warehouse_name`, `available`, `daily_sales_avg`, `days_of_stock`, `replenishment_need` |
 | `sort_order`             | string  | No       | `desc`               | Sort direction: `asc` or `desc`                                                                             |
 | `page`                   | integer | No       | `1`                  | Page number for pagination                                                                                  |
 | `limit`                  | integer | No       | `100`                | Items per page (max: 500)                                                                                   |
 
-**Example Request:**
+**Example Requests:**
 
 ```bash
-GET /api/warehouse/dashboard?warehouse=АДЫГЕЙСК_РФЦ&liquidity_status=critical&active_only=true
+# Default behavior - only visible products with stock
+GET /api/inventory/detailed-stock?warehouse=АДЫГЕЙСК_РФЦ&liquidity_status=critical&active_only=true
+
+# Include hidden and out-of-stock products
+GET /api/inventory/detailed-stock?warehouse=АДЫГЕЙСК_РФЦ&include_hidden=true
+
+# Filter by specific visibility status
+GET /api/inventory/detailed-stock?visibility=VISIBLE
+
+# Get only hidden products
+GET /api/inventory/detailed-stock?visibility=HIDDEN&include_hidden=true
 ```
 
 **Response:**
@@ -117,37 +154,49 @@ GET /api/warehouse/dashboard?warehouse=АДЫГЕЙСК_РФЦ&liquidity_status=
 
 **Response Fields:**
 
-| Field                      | Type    | Description                                     |
-| -------------------------- | ------- | ----------------------------------------------- |
-| `product_id`               | integer | Unique product identifier                       |
-| `sku`                      | string  | Product SKU                                     |
-| `name`                     | string  | Product name                                    |
-| `warehouse_name`           | string  | Warehouse location name                         |
-| `cluster`                  | string  | Warehouse cluster/region                        |
-| `available`                | integer | Units available for sale                        |
-| `reserved`                 | integer | Units reserved for orders                       |
-| `preparing_for_sale`       | integer | Units being prepared for sale                   |
-| `in_supply_requests`       | integer | Units in supply requests                        |
-| `in_transit`               | integer | Units in transit to warehouse                   |
-| `in_inspection`            | integer | Units undergoing inspection                     |
-| `returning_from_customers` | integer | Units being returned                            |
-| `expiring_soon`            | integer | Units with expiring shelf life                  |
-| `defective`                | integer | Defective units                                 |
-| `daily_sales_avg`          | float   | Average daily sales over 28 days                |
-| `sales_last_28_days`       | integer | Total sales in last 28 days                     |
-| `days_without_sales`       | integer | Consecutive days without sales                  |
-| `days_of_stock`            | float   | Days until stock runs out (null if no sales)    |
-| `liquidity_status`         | string  | Status: `critical`, `low`, `normal`, `excess`   |
-| `target_stock`             | integer | Target stock for 30 days (daily_sales_avg × 30) |
-| `replenishment_need`       | integer | Units needed to reach target stock              |
-| `last_updated`             | string  | ISO 8601 timestamp of last data update          |
+| Field                      | Type    | Description                                                                                               |
+| -------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `product_id`               | integer | Unique product identifier                                                                                 |
+| `sku`                      | string  | Product SKU                                                                                               |
+| `name`                     | string  | Product name                                                                                              |
+| `warehouse_name`           | string  | Warehouse location name                                                                                   |
+| `cluster`                  | string  | Warehouse cluster/region                                                                                  |
+| `visibility`               | string  | **NEW:** Product visibility status: `VISIBLE`, `HIDDEN`, `MODERATION`, `UNKNOWN`                          |
+| `available`                | integer | Units available for sale                                                                                  |
+| `reserved`                 | integer | Units reserved for orders                                                                                 |
+| `preparing_for_sale`       | integer | Units being prepared for sale                                                                             |
+| `in_supply_requests`       | integer | Units in supply requests                                                                                  |
+| `in_transit`               | integer | Units in transit to warehouse                                                                             |
+| `in_inspection`            | integer | Units undergoing inspection                                                                               |
+| `returning_from_customers` | integer | Units being returned                                                                                      |
+| `expiring_soon`            | integer | Units with expiring shelf life                                                                            |
+| `defective`                | integer | Defective units                                                                                           |
+| `daily_sales_avg`          | float   | Average daily sales over 28 days                                                                          |
+| `sales_last_28_days`       | integer | Total sales in last 28 days                                                                               |
+| `days_without_sales`       | integer | Consecutive days without sales                                                                            |
+| `days_of_stock`            | float   | Days until stock runs out (null if no sales)                                                              |
+| `stock_status`             | string  | **UPDATED:** Combined status: `archived_or_hidden`, `out_of_stock`, `critical`, `low`, `normal`, `excess` |
+| `target_stock`             | integer | Target stock for 30 days (daily_sales_avg × 30)                                                           |
+| `replenishment_need`       | integer | Units needed to reach target stock                                                                        |
+| `last_updated`             | string  | ISO 8601 timestamp of last data update                                                                    |
 
-**Liquidity Status Definitions:**
+**Stock Status Definitions:**
 
--   **critical**: < 7 days of stock remaining
--   **low**: 7-14 days of stock remaining
--   **normal**: 15-45 days of stock remaining
--   **excess**: > 45 days of stock remaining
+The `stock_status` field combines visibility and availability information:
+
+-   **archived_or_hidden**: Product is not visible in marketplace (visibility != VISIBLE)
+-   **out_of_stock**: Product is visible but has zero available stock
+-   **critical**: < 14 days of stock remaining (visible product with low stock)
+-   **low**: 14-30 days of stock remaining
+-   **normal**: 30-60 days of stock remaining
+-   **excess**: > 60 days of stock remaining
+
+**Visibility Status Values:**
+
+-   **VISIBLE**: Product is active and visible in marketplace
+-   **HIDDEN**: Product is archived or hidden from marketplace
+-   **MODERATION**: Product is under moderation review
+-   **UNKNOWN**: Visibility status is not determined
 
 **Error Responses:**
 
@@ -278,6 +327,82 @@ GET /api/warehouse/clusters
 
 ---
 
+## Filtering Behavior Details
+
+### Default Filtering Logic
+
+By default, the API implements smart filtering to show only products that are truly "in sale":
+
+```sql
+-- Default WHERE clause (when include_hidden is not set or false)
+WHERE stock_status NOT IN ('archived_or_hidden', 'out_of_stock')
+```
+
+This means:
+
+1. **Only visible products** are returned (products with visibility = 'VISIBLE')
+2. **Only products with available stock** are returned (available_stock > 0)
+
+### Use Cases
+
+#### 1. Standard Inventory Management (Default)
+
+```bash
+GET /api/inventory/detailed-stock
+```
+
+Returns only products that are:
+
+-   Visible in marketplace
+-   Have available stock
+-   Are truly "in sale"
+
+**Use for:** Daily inventory management, replenishment planning, sales analysis
+
+#### 2. Complete Inventory Audit
+
+```bash
+GET /api/inventory/detailed-stock?include_hidden=true
+```
+
+Returns all products including:
+
+-   Hidden/archived products
+-   Out of stock products
+-   Products under moderation
+
+**Use for:** Complete inventory audits, historical analysis, product lifecycle management
+
+#### 3. Specific Visibility Filtering
+
+```bash
+GET /api/inventory/detailed-stock?visibility=HIDDEN&include_hidden=true
+```
+
+Returns only hidden products.
+
+**Use for:** Reviewing archived products, cleanup operations, reactivation planning
+
+#### 4. Out of Stock Analysis
+
+```bash
+GET /api/inventory/detailed-stock?statuses[]=out_of_stock&include_hidden=true
+```
+
+Returns only out-of-stock products.
+
+**Use for:** Stockout analysis, urgent replenishment identification
+
+### Backward Compatibility
+
+Existing API consumers will automatically benefit from the new filtering:
+
+-   Default behavior excludes hidden and out-of-stock items
+-   Response format remains unchanged (new fields added, existing fields preserved)
+-   All existing query parameters continue to work
+
+To maintain old behavior (show all products), add `include_hidden=true` to requests.
+
 ## Calculation Formulas
 
 ### Daily Sales Average
@@ -377,16 +502,33 @@ X-RateLimit-Reset: 1634567890
 ### JavaScript/TypeScript
 
 ```typescript
-// Fetch dashboard data
+// Fetch dashboard data (default - only visible products with stock)
 const response = await fetch(
-    "/api/warehouse/dashboard?active_only=true&liquidity_status=critical"
+    "/api/inventory/detailed-stock?active_only=true&liquidity_status=critical"
 );
 const data = await response.json();
 
 if (data.success) {
-    console.log("Total products:", data.data.summary.total_products);
-    console.log("Critical items:", data.data.summary.by_liquidity.critical);
+    console.log("Total products:", data.data.metadata.totalCount);
+    console.log("Filtered count:", data.data.metadata.filteredCount);
+
+    // Access visibility information
+    data.data.data.forEach((item) => {
+        console.log(`${item.productName}: ${item.visibility} - ${item.status}`);
+    });
 }
+
+// Fetch all products including hidden ones
+const allProductsResponse = await fetch(
+    "/api/inventory/detailed-stock?include_hidden=true"
+);
+const allData = await allProductsResponse.json();
+
+// Filter by specific visibility
+const hiddenProductsResponse = await fetch(
+    "/api/inventory/detailed-stock?visibility=HIDDEN&include_hidden=true"
+);
+const hiddenData = await hiddenProductsResponse.json();
 
 // Export to CSV
 window.location.href = "/api/warehouse/export?warehouse=АДЫГЕЙСК_РФЦ";
@@ -395,15 +537,33 @@ window.location.href = "/api/warehouse/export?warehouse=АДЫГЕЙСК_РФЦ"
 ### PHP
 
 ```php
+// Default behavior - only visible products with stock
 $ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, 'http://localhost/api/warehouse/dashboard?active_only=true');
+curl_setopt($ch, CURLOPT_URL, 'http://localhost/api/inventory/detailed-stock?active_only=true');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 $response = curl_exec($ch);
 curl_close($ch);
 
 $data = json_decode($response, true);
 if ($data['success']) {
-    echo "Total products: " . $data['data']['summary']['total_products'];
+    echo "Total products: " . $data['data']['metadata']['totalCount'] . "\n";
+
+    // Check visibility status
+    foreach ($data['data']['data'] as $item) {
+        echo "{$item['productName']}: {$item['visibility']} - {$item['status']}\n";
+    }
+}
+
+// Include hidden products
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'http://localhost/api/inventory/detailed-stock?include_hidden=true');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = curl_exec($ch);
+curl_close($ch);
+
+$allData = json_decode($response, true);
+if ($allData['success']) {
+    echo "All products (including hidden): " . $allData['data']['metadata']['totalCount'] . "\n";
 }
 ```
 
@@ -412,14 +572,38 @@ if ($data['success']) {
 ```python
 import requests
 
-response = requests.get('http://localhost/api/warehouse/dashboard', params={
+# Default behavior - only visible products with stock
+response = requests.get('http://localhost/api/inventory/detailed-stock', params={
     'active_only': 'true',
     'liquidity_status': 'critical'
 })
 
 data = response.json()
 if data['success']:
-    print(f"Total products: {data['data']['summary']['total_products']}")
+    print(f"Total products: {data['data']['metadata']['totalCount']}")
+
+    # Check visibility status
+    for item in data['data']['data']:
+        print(f"{item['productName']}: {item['visibility']} - {item['status']}")
+
+# Include hidden products
+all_response = requests.get('http://localhost/api/inventory/detailed-stock', params={
+    'include_hidden': 'true'
+})
+
+all_data = all_response.json()
+if all_data['success']:
+    print(f"All products (including hidden): {all_data['data']['metadata']['totalCount']}")
+
+# Get only hidden products
+hidden_response = requests.get('http://localhost/api/inventory/detailed-stock', params={
+    'visibility': 'HIDDEN',
+    'include_hidden': 'true'
+})
+
+hidden_data = hidden_response.json()
+if hidden_data['success']:
+    print(f"Hidden products: {hidden_data['data']['metadata']['totalCount']}")
 ```
 
 ---

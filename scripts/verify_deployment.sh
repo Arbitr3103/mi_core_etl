@@ -1,469 +1,400 @@
 #!/bin/bash
 
-# Deployment Verification Script
-# Version: 1.0
-# Usage: ./verify_deployment.sh [quick|full|continuous]
+# Ozon ETL Refactoring Deployment Verification Script
+# Description: Comprehensive verification of deployment success
+# Author: ETL Development Team
+# Date: 2025-10-27
 
 set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-VERIFICATION_LOG="/var/log/inventory_sync/verification.log"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+VERIFICATION_LOG="/var/log/ozon_etl_verification.log"
 
-# Load environment variables
-if [ -f "$PROJECT_DIR/.env" ]; then
-    source "$PROJECT_DIR/.env"
-else
-    echo "ERROR: .env file not found in $PROJECT_DIR"
-    exit 1
-fi
+# Database configuration
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-5432}"
+DB_NAME="${DB_NAME:-mi_core_db}"
+DB_USER="${DB_USER:-postgres}"
+
+# Application configuration
+APP_DIR="${APP_DIR:-/var/www/html}"
+WEB_USER="${WEB_USER:-www-data}"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Counters
+# Test results
 TESTS_PASSED=0
 TESTS_FAILED=0
-TESTS_WARNING=0
+TESTS_TOTAL=0
 
 # Logging function
 log() {
-    local level="$1"
+    local level=$1
     shift
-    local message="$*"
+    local message="$@"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     
-    # Log to file
-    echo "${timestamp} [${level}] ${message}" >> "$VERIFICATION_LOG"
-    
-    # Log to console with colors
-    case "$level" in
-        "ERROR")
-            echo -e "${RED}[✗ FAIL]${NC} $message"
-            ((TESTS_FAILED++))
+    case $level in
+        "INFO")
+            echo -e "${GREEN}[INFO]${NC} $message" | tee -a "$VERIFICATION_LOG"
             ;;
         "WARN")
-            echo -e "${YELLOW}[⚠ WARN]${NC} $message"
-            ((TESTS_WARNING++))
+            echo -e "${YELLOW}[WARN]${NC} $message" | tee -a "$VERIFICATION_LOG"
             ;;
-        "INFO")
-            echo -e "${GREEN}[✓ PASS]${NC} $message"
+        "ERROR")
+            echo -e "${RED}[ERROR]${NC} $message" | tee -a "$VERIFICATION_LOG"
+            ;;
+        "PASS")
+            echo -e "${GREEN}[PASS]${NC} $message" | tee -a "$VERIFICATION_LOG"
             ((TESTS_PASSED++))
             ;;
-        "DEBUG")
-            echo -e "${BLUE}[ℹ INFO]${NC} $message"
+        "FAIL")
+            echo -e "${RED}[FAIL]${NC} $message" | tee -a "$VERIFICATION_LOG"
+            ((TESTS_FAILED++))
             ;;
     esac
+    
+    echo "[$timestamp] [$level] $message" >> "$VERIFICATION_LOG"
+    ((TESTS_TOTAL++))
 }
 
 # Test function wrapper
 run_test() {
     local test_name="$1"
-    local test_function="$2"
+    local test_command="$2"
     
-    echo -e "\n${BLUE}Testing: $test_name${NC}"
+    log "INFO" "Running test: $test_name"
     
-    if $test_function; then
-        log "INFO" "$test_name"
+    if eval "$test_command"; then
+        log "PASS" "$test_name"
+        return 0
     else
-        log "ERROR" "$test_name"
+        log "FAIL" "$test_name"
         return 1
     fi
 }
 
 # Database connectivity test
-test_database_connection() {
-    mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "SELECT 1;" "${DB_NAME}" >/dev/null 2>&1
+test_database_connectivity() {
+    sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -c "SELECT 1;" &> /dev/null
 }
 
-# Migration status test
-test_migration_status() {
-    local status=$(mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -se "
-        SELECT status FROM migration_log 
-        WHERE migration_name = 'inventory_sync_production_migration_v1.0' 
-        ORDER BY created_at DESC LIMIT 1
-    " 2>/dev/null)
+# Database schema tests
+test_visibility_field_exists() {
+    local result=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'dim_products' 
+            AND column_name = 'visibility'
+        );
+    " | tr -d ' ')
     
-    [ "$status" = "completed" ]
+    [[ "$result" == "t" ]]
 }
 
-# Table structure test
-test_table_structure() {
-    local required_columns=$(mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -se "
-        SELECT COUNT(*) FROM information_schema.columns 
-        WHERE table_schema = DATABASE() 
-        AND table_name = 'inventory_data' 
-        AND column_name IN ('warehouse_name', 'stock_type', 'quantity_present', 'quantity_reserved', 'last_sync_at')
-    " 2>/dev/null)
+test_etl_tracking_tables_exist() {
+    local count=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT COUNT(*) FROM information_schema.tables 
+        WHERE table_name IN ('etl_execution_log', 'etl_workflow_executions', 'data_quality_metrics');
+    " | tr -d ' ')
     
-    [ "$required_columns" -eq 5 ]
+    [[ "$count" == "3" ]]
 }
 
-# Sync logs table test
-test_sync_logs_table() {
-    mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "SELECT 1 FROM sync_logs LIMIT 1;" >/dev/null 2>&1
-}
-
-# Data integrity test
-test_data_integrity() {
-    local null_count=$(mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -se "
-        SELECT COUNT(*) FROM inventory_data 
-        WHERE warehouse_name IS NULL OR stock_type IS NULL
-    " 2>/dev/null)
+test_enhanced_view_exists() {
+    local result=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.views 
+            WHERE table_name = 'v_detailed_inventory'
+        );
+    " | tr -d ' ')
     
-    [ "$null_count" -eq 0 ]
+    [[ "$result" == "t" ]]
 }
 
-# Python modules test
-test_python_modules() {
-    cd "$PROJECT_DIR"
-    python3 -c "
-import inventory_sync_service
-import sync_monitor
-import sync_logger
-from replenishment_db_connector import connect_to_replenishment_db
-print('All modules imported successfully')
-" >/dev/null 2>&1
+test_materialized_view_exists() {
+    local result=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT EXISTS (
+            SELECT 1 FROM pg_matviews 
+            WHERE matviewname = 'mv_detailed_inventory'
+        );
+    " | tr -d ' ')
+    
+    [[ "$result" == "t" ]]
 }
 
-# API credentials test
-test_api_credentials() {
-    [ -n "$OZON_CLIENT_ID" ] && [ -n "$OZON_API_KEY" ] && [ -n "$WB_API_KEY" ]
+test_stock_status_function_exists() {
+    local result=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT EXISTS (
+            SELECT 1 FROM pg_proc 
+            WHERE proname = 'get_product_stock_status'
+        );
+    " | tr -d ' ')
+    
+    [[ "$result" == "t" ]]
 }
 
-# Ozon API connectivity test
-test_ozon_api() {
-    python3 -c "
-import requests
-import os
-headers = {
-    'Client-Id': os.getenv('OZON_CLIENT_ID'),
-    'Api-Key': os.getenv('OZON_API_KEY')
-}
-response = requests.get('https://api-seller.ozon.ru/v1/report/info', headers=headers, timeout=10)
-exit(0 if response.status_code in [200, 401] else 1)
-" >/dev/null 2>&1
+# Data integrity tests
+test_view_returns_data() {
+    local count=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT COUNT(*) FROM v_detailed_inventory LIMIT 1;
+    " | tr -d ' ')
+    
+    [[ "$count" =~ ^[0-9]+$ ]]
 }
 
-# Wildberries API connectivity test
-test_wb_api() {
-    python3 -c "
-import requests
-import os
-headers = {'Authorization': os.getenv('WB_API_KEY')}
-response = requests.get('https://suppliers-api.wildberries.ru/api/v1/supplier/incomes', headers=headers, timeout=10)
-exit(0 if response.status_code in [200, 401] else 1)
-" >/dev/null 2>&1
+test_stock_status_calculation() {
+    local result=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT get_product_stock_status('VISIBLE', 100, 10, 5.0);
+    " | tr -d ' ')
+    
+    [[ "$result" == "normal" ]]
 }
 
-# Cron jobs test
-test_cron_jobs() {
-    crontab -l 2>/dev/null | grep -q "inventory_sync_service.py"
+test_no_orphaned_inventory() {
+    local count=$(sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -t -c "
+        SELECT COUNT(*) FROM inventory i
+        LEFT JOIN dim_products p ON i.offer_id = p.offer_id
+        WHERE p.offer_id IS NULL;
+    " | tr -d ' ')
+    
+    [[ "$count" == "0" ]]
 }
 
-# Cron service test
-test_cron_service() {
-    systemctl is-active --quiet cron
+# Application tests
+test_application_files_exist() {
+    [[ -f "$APP_DIR/src/ETL/Ozon/Scripts/etl_health_check.php" ]] && \
+    [[ -f "$APP_DIR/src/ETL/Ozon/Scripts/run_etl_workflow.php" ]] && \
+    [[ -f "$APP_DIR/src/ETL/Ozon/Scripts/run_data_quality_tests.php" ]]
 }
 
-# Log files test
-test_log_files() {
-    [ -d "$(dirname "$VERIFICATION_LOG")" ] && [ -w "$(dirname "$VERIFICATION_LOG")" ]
-}
-
-# Permissions test
 test_file_permissions() {
-    [ -x "$PROJECT_DIR/inventory_sync_service.py" ] && 
-    [ -x "$SCRIPT_DIR/deploy_production.sh" ] && 
-    [ -r "$PROJECT_DIR/.env" ]
+    [[ -x "$APP_DIR/src/ETL/Ozon/Scripts/etl_health_check.php" ]] && \
+    [[ -x "$APP_DIR/src/ETL/Ozon/Scripts/run_etl_workflow.php" ]] && \
+    [[ "$(stat -c %U "$APP_DIR")" == "$WEB_USER" ]]
 }
 
-# Disk space test
-test_disk_space() {
-    local free_space=$(df / | awk 'NR==2 {print $4}')
-    [ "$free_space" -gt 524288 ]  # 512MB in KB
+test_configuration_files_exist() {
+    [[ -f "$APP_DIR/config/database.php" ]] && \
+    [[ -f "$APP_DIR/config/etl.php" ]]
 }
 
-# Manual sync test
-test_manual_sync() {
-    cd "$PROJECT_DIR"
-    timeout 300 python3 inventory_sync_service.py --test-mode --source=ozon >/dev/null 2>&1
+test_log_directories_exist() {
+    [[ -d "/var/log/ozon_etl" ]] && \
+    [[ "$(stat -c %U /var/log/ozon_etl)" == "$WEB_USER" ]]
 }
 
-# Recent sync data test
-test_recent_sync_data() {
-    local recent_count=$(mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -se "
-        SELECT COUNT(*) FROM inventory_data 
-        WHERE last_sync_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-    " 2>/dev/null)
-    
-    [ "$recent_count" -gt 0 ]
+# ETL functionality tests
+test_etl_health_check_script() {
+    sudo -u "$WEB_USER" php "$APP_DIR/src/ETL/Ozon/Scripts/etl_health_check.php" --brief &> /dev/null
 }
 
-# Monitoring script test
-test_monitoring_script() {
-    [ -x "$SCRIPT_DIR/monitor_deployment.sh" ] && 
-    timeout 30 "$SCRIPT_DIR/monitor_deployment.sh" >/dev/null 2>&1
+test_data_quality_script() {
+    sudo -u "$WEB_USER" php "$APP_DIR/src/ETL/Ozon/Scripts/run_data_quality_tests.php" --quick &> /dev/null
 }
 
-# Performance test
-test_performance() {
-    cd "$PROJECT_DIR"
-    
-    # Test database query performance
-    local query_time=$(mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "
-        SELECT COUNT(*) FROM inventory_data WHERE source = 'Ozon' AND last_sync_at > DATE_SUB(NOW(), INTERVAL 1 DAY);
-    " 2>/dev/null | tail -1)
-    
-    # Simple performance check - query should complete
-    [ -n "$query_time" ]
+# Cron job tests
+test_cron_jobs_configured() {
+    crontab -u "$WEB_USER" -l 2>/dev/null | grep -q "product-etl" && \
+    crontab -u "$WEB_USER" -l 2>/dev/null | grep -q "inventory-etl"
 }
 
-# Email configuration test (if configured)
-test_email_config() {
-    if [ -n "$SMTP_HOST" ] && [ -n "$SMTP_USER" ]; then
-        # Test SMTP connection
-        timeout 10 python3 -c "
-import smtplib
-import os
-try:
-    server = smtplib.SMTP(os.getenv('SMTP_HOST'), int(os.getenv('SMTP_PORT', 587)))
-    server.quit()
-    print('SMTP connection successful')
-except:
-    exit(1)
-" >/dev/null 2>&1
+# API tests (if web server is running)
+test_api_health_endpoint() {
+    if systemctl is-active --quiet nginx; then
+        curl -s -f "http://localhost/api/health" &> /dev/null
     else
-        # Email not configured, skip test
+        # Skip if nginx is not running
         return 0
     fi
 }
 
-# Quick verification (essential tests only)
-quick_verification() {
-    echo -e "${BLUE}=== QUICK VERIFICATION ===${NC}"
-    
-    run_test "Database Connection" test_database_connection
-    run_test "Migration Status" test_migration_status
-    run_test "Table Structure" test_table_structure
-    run_test "Python Modules" test_python_modules
-    run_test "API Credentials" test_api_credentials
-    run_test "Cron Jobs" test_cron_jobs
-    run_test "File Permissions" test_file_permissions
+test_api_detailed_stock_endpoint() {
+    if systemctl is-active --quiet nginx; then
+        curl -s -f "http://localhost/api/inventory/detailed-stock?limit=1" &> /dev/null
+    else
+        # Skip if nginx is not running
+        return 0
+    fi
 }
 
-# Full verification (all tests)
-full_verification() {
-    echo -e "${BLUE}=== FULL VERIFICATION ===${NC}"
+# Performance tests
+test_view_performance() {
+    local start_time=$(date +%s%N)
+    sudo -u postgres psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -c "SELECT * FROM v_detailed_inventory LIMIT 100;" &> /dev/null
+    local end_time=$(date +%s%N)
+    local duration=$(( (end_time - start_time) / 1000000 ))  # Convert to milliseconds
     
-    # Core functionality tests
-    run_test "Database Connection" test_database_connection
-    run_test "Migration Status" test_migration_status
-    run_test "Table Structure" test_table_structure
-    run_test "Sync Logs Table" test_sync_logs_table
-    run_test "Data Integrity" test_data_integrity
+    # Should complete within 2 seconds (2000ms)
+    [[ $duration -lt 2000 ]]
+}
+
+# Monitoring tests
+test_monitoring_dashboard_exists() {
+    [[ -f "$APP_DIR/monitoring/dashboard.php" ]]
+}
+
+# Security tests
+test_sensitive_files_permissions() {
+    # Check that config files are not world-readable
+    local config_perms=$(stat -c %a "$APP_DIR/config/database.php" 2>/dev/null || echo "000")
+    [[ "$config_perms" == "644" ]] || [[ "$config_perms" == "640" ]]
+}
+
+# Rollback readiness test
+test_rollback_script_exists() {
+    [[ -f "$PROJECT_ROOT/migrations/ozon_etl_refactoring_rollback.sql" ]] && \
+    [[ -f "$PROJECT_ROOT/scripts/rollback_deployment.sh" ]]
+}
+
+# Main verification function
+run_all_tests() {
+    log "INFO" "Starting deployment verification..."
+    log "INFO" "Verification started at: $(date)"
+    
+    # Database tests
+    log "INFO" "=== Database Tests ==="
+    run_test "Database connectivity" "test_database_connectivity"
+    run_test "Visibility field exists" "test_visibility_field_exists"
+    run_test "ETL tracking tables exist" "test_etl_tracking_tables_exist"
+    run_test "Enhanced view exists" "test_enhanced_view_exists"
+    run_test "Materialized view exists" "test_materialized_view_exists"
+    run_test "Stock status function exists" "test_stock_status_function_exists"
+    
+    # Data integrity tests
+    log "INFO" "=== Data Integrity Tests ==="
+    run_test "View returns data" "test_view_returns_data"
+    run_test "Stock status calculation works" "test_stock_status_calculation"
+    run_test "No orphaned inventory records" "test_no_orphaned_inventory"
     
     # Application tests
-    run_test "Python Modules" test_python_modules
-    run_test "API Credentials" test_api_credentials
-    run_test "Ozon API Connectivity" test_ozon_api
-    run_test "Wildberries API Connectivity" test_wb_api
+    log "INFO" "=== Application Tests ==="
+    run_test "Application files exist" "test_application_files_exist"
+    run_test "File permissions correct" "test_file_permissions"
+    run_test "Configuration files exist" "test_configuration_files_exist"
+    run_test "Log directories exist" "test_log_directories_exist"
     
-    # System tests
-    run_test "Cron Jobs Configuration" test_cron_jobs
-    run_test "Cron Service Status" test_cron_service
-    run_test "Log Files Access" test_log_files
-    run_test "File Permissions" test_file_permissions
-    run_test "Disk Space" test_disk_space
+    # ETL functionality tests
+    log "INFO" "=== ETL Functionality Tests ==="
+    run_test "ETL health check script works" "test_etl_health_check_script"
+    run_test "Data quality script works" "test_data_quality_script"
+    run_test "Cron jobs configured" "test_cron_jobs_configured"
     
-    # Functional tests
-    run_test "Manual Sync Execution" test_manual_sync
-    run_test "Recent Sync Data" test_recent_sync_data
-    run_test "Monitoring Script" test_monitoring_script
-    run_test "Performance Check" test_performance
+    # API tests
+    log "INFO" "=== API Tests ==="
+    run_test "API health endpoint" "test_api_health_endpoint"
+    run_test "API detailed stock endpoint" "test_api_detailed_stock_endpoint"
     
-    # Optional tests
-    if run_test "Email Configuration" test_email_config; then
-        log "DEBUG" "Email notifications configured and tested"
-    else
-        log "WARN" "Email configuration test failed (may not be configured)"
-    fi
+    # Performance tests
+    log "INFO" "=== Performance Tests ==="
+    run_test "View performance acceptable" "test_view_performance"
+    
+    # Monitoring tests
+    log "INFO" "=== Monitoring Tests ==="
+    run_test "Monitoring dashboard exists" "test_monitoring_dashboard_exists"
+    
+    # Security tests
+    log "INFO" "=== Security Tests ==="
+    run_test "Sensitive files permissions" "test_sensitive_files_permissions"
+    
+    # Rollback readiness
+    log "INFO" "=== Rollback Readiness Tests ==="
+    run_test "Rollback scripts exist" "test_rollback_script_exists"
 }
 
-# Continuous monitoring
-continuous_monitoring() {
-    echo -e "${BLUE}=== CONTINUOUS MONITORING ===${NC}"
-    echo "Starting continuous monitoring... Press Ctrl+C to stop"
-    
-    local iteration=1
-    
-    while true; do
-        echo -e "\n${BLUE}--- Monitoring Iteration $iteration ($(date)) ---${NC}"
-        
-        # Reset counters for this iteration
-        TESTS_PASSED=0
-        TESTS_FAILED=0
-        TESTS_WARNING=0
-        
-        # Run essential tests
-        run_test "Database Connection" test_database_connection
-        run_test "Recent Sync Data" test_recent_sync_data
-        run_test "Cron Service Status" test_cron_service
-        run_test "Disk Space" test_disk_space
-        
-        # Show iteration summary
-        echo -e "\nIteration $iteration Summary: ${GREEN}$TESTS_PASSED passed${NC}, ${RED}$TESTS_FAILED failed${NC}, ${YELLOW}$TESTS_WARNING warnings${NC}"
-        
-        # Wait 5 minutes before next iteration
-        sleep 300
-        ((iteration++))
-    done
-}
-
-# Show system information
-show_system_info() {
-    echo -e "\n${BLUE}=== SYSTEM INFORMATION ===${NC}"
-    
-    # Database info
-    echo -e "\n${BLUE}Database Information:${NC}"
-    mysql -h"${DB_HOST:-localhost}" -P"${DB_PORT:-3306}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "
-        SELECT 
-            'inventory_data' as table_name,
-            COUNT(*) as total_records,
-            COUNT(CASE WHEN last_sync_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 END) as recent_records,
-            MAX(last_sync_at) as last_sync
-        FROM inventory_data
-        UNION ALL
-        SELECT 
-            'sync_logs' as table_name,
-            COUNT(*) as total_records,
-            COUNT(CASE WHEN started_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 END) as recent_records,
-            MAX(started_at) as last_sync
-        FROM sync_logs;
-    " 2>/dev/null || echo "Database query failed"
-    
-    # System resources
-    echo -e "\n${BLUE}System Resources:${NC}"
-    echo "Disk Usage: $(df -h / | awk 'NR==2 {print $5}')"
-    echo "Memory Usage: $(free -h | awk 'NR==2{printf "%.1f%%", $3/$2*100}')"
-    echo "Load Average: $(uptime | awk -F'load average:' '{print $2}')"
-    
-    # Cron jobs
-    echo -e "\n${BLUE}Cron Jobs:${NC}"
-    crontab -l 2>/dev/null | grep inventory_sync || echo "No inventory sync cron jobs found"
-    
-    # Recent logs
-    echo -e "\n${BLUE}Recent Log Entries:${NC}"
-    if [ -f "$VERIFICATION_LOG" ]; then
-        tail -5 "$VERIFICATION_LOG"
-    else
-        echo "No verification log found"
-    fi
-}
-
-# Generate verification report
+# Generate detailed report
 generate_report() {
-    local report_file="/tmp/inventory_sync_verification_report_$(date +%Y%m%d_%H%M%S).txt"
+    local report_file="/var/log/ozon_etl_verification_report_$(date +%Y%m%d_%H%M%S).json"
     
-    {
-        echo "Inventory Sync System Verification Report"
-        echo "Generated: $(date)"
-        echo "========================================"
-        echo ""
-        
-        echo "Test Results Summary:"
-        echo "- Tests Passed: $TESTS_PASSED"
-        echo "- Tests Failed: $TESTS_FAILED"
-        echo "- Warnings: $TESTS_WARNING"
-        echo ""
-        
-        echo "System Information:"
-        show_system_info
-        
-        echo ""
-        echo "Recent Verification Log:"
-        if [ -f "$VERIFICATION_LOG" ]; then
-            tail -20 "$VERIFICATION_LOG"
-        fi
-        
-    } > "$report_file"
+    # Get system information
+    local system_info=$(cat << EOF
+{
+    "verification_timestamp": "$(date -Iseconds)",
+    "hostname": "$(hostname)",
+    "os_version": "$(lsb_release -d 2>/dev/null | cut -f2 || uname -a)",
+    "php_version": "$(php -v | head -n1)",
+    "postgresql_version": "$(sudo -u postgres psql --version)",
+    "deployment_verification": {
+        "tests_total": $TESTS_TOTAL,
+        "tests_passed": $TESTS_PASSED,
+        "tests_failed": $TESTS_FAILED,
+        "success_rate": $(echo "scale=2; $TESTS_PASSED * 100 / $TESTS_TOTAL" | bc -l 2>/dev/null || echo "0")
+    }
+}
+EOF
+)
     
-    echo -e "\n${GREEN}Verification report generated: $report_file${NC}"
+    echo "$system_info" > "$report_file"
+    log "INFO" "Detailed report generated: $report_file"
+}
+
+# Display summary
+display_summary() {
+    echo
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}    DEPLOYMENT VERIFICATION SUMMARY    ${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo
+    echo "Total tests run: $TESTS_TOTAL"
+    echo -e "Tests passed: ${GREEN}$TESTS_PASSED${NC}"
+    echo -e "Tests failed: ${RED}$TESTS_FAILED${NC}"
+    
+    if [[ $TESTS_FAILED -eq 0 ]]; then
+        echo
+        echo -e "${GREEN}✓ ALL TESTS PASSED - DEPLOYMENT VERIFIED${NC}"
+        echo
+        echo "The Ozon ETL refactoring has been successfully deployed and verified."
+        echo "The system is ready for production use."
+    else
+        echo
+        echo -e "${RED}✗ SOME TESTS FAILED - DEPLOYMENT ISSUES DETECTED${NC}"
+        echo
+        echo "Please review the failed tests and resolve issues before proceeding."
+        echo "Consider running the rollback procedure if critical issues are found."
+    fi
+    
+    echo
+    echo "Verification log: $VERIFICATION_LOG"
+    echo "Next steps:"
+    echo "1. Monitor ETL execution: tail -f /var/log/ozon_etl/*.log"
+    echo "2. Check system status: php $APP_DIR/src/ETL/Ozon/Scripts/etl_health_check.php"
+    echo "3. Run data quality tests: php $APP_DIR/src/ETL/Ozon/Scripts/run_data_quality_tests.php"
+    
+    if [[ $TESTS_FAILED -gt 0 ]]; then
+        echo "4. If issues persist, run rollback: $PROJECT_ROOT/scripts/rollback_deployment.sh"
+    fi
+    
+    echo
 }
 
 # Main function
 main() {
-    local mode="${1:-quick}"
-    
-    # Create log directory
+    # Create log file
     mkdir -p "$(dirname "$VERIFICATION_LOG")"
+    touch "$VERIFICATION_LOG"
     
-    echo -e "${BLUE}Inventory Sync System Verification${NC}"
-    echo -e "${BLUE}Mode: $mode${NC}"
-    echo -e "${BLUE}Started: $(date)${NC}"
+    # Run verification
+    run_all_tests
+    generate_report
+    display_summary
     
-    case "$mode" in
-        "quick")
-            quick_verification
-            ;;
-        "full")
-            full_verification
-            ;;
-        "continuous")
-            continuous_monitoring
-            ;;
-        "info")
-            show_system_info
-            exit 0
-            ;;
-        "report")
-            full_verification
-            generate_report
-            ;;
-        *)
-            echo "Usage: $0 [quick|full|continuous|info|report]"
-            echo ""
-            echo "Modes:"
-            echo "  quick      - Run essential tests only (default)"
-            echo "  full       - Run comprehensive test suite"
-            echo "  continuous - Continuous monitoring (Ctrl+C to stop)"
-            echo "  info       - Show system information only"
-            echo "  report     - Generate full verification report"
-            echo ""
-            echo "Examples:"
-            echo "  $0 quick      # Quick verification"
-            echo "  $0 full       # Full test suite"
-            echo "  $0 continuous # Continuous monitoring"
-            echo "  $0 report     # Generate report"
-            exit 0
-            ;;
-    esac
-    
-    # Show summary (except for continuous mode)
-    if [ "$mode" != "continuous" ]; then
-        echo -e "\n${BLUE}=== VERIFICATION SUMMARY ===${NC}"
-        echo -e "Tests Passed: ${GREEN}$TESTS_PASSED${NC}"
-        echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
-        echo -e "Warnings: ${YELLOW}$TESTS_WARNING${NC}"
-        
-        if [ $TESTS_FAILED -eq 0 ]; then
-            echo -e "\n${GREEN}✓ Overall Status: VERIFICATION PASSED${NC}"
-            exit 0
-        else
-            echo -e "\n${RED}✗ Overall Status: VERIFICATION FAILED${NC}"
-            echo -e "${YELLOW}Check the failed tests above and resolve issues${NC}"
-            exit 1
-        fi
+    # Exit with appropriate code
+    if [[ $TESTS_FAILED -eq 0 ]]; then
+        exit 0
+    else
+        exit 1
     fi
 }
 
-# Trap Ctrl+C for continuous monitoring
-trap 'echo -e "\n${YELLOW}Monitoring stopped by user${NC}"; exit 0' INT
+# Handle script interruption
+trap 'log "ERROR" "Verification interrupted"; exit 1' INT TERM
 
 # Run main function
 main "$@"

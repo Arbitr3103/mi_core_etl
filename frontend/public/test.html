@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 5px;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 Frontend Test Page</h1>
+
+    <div id="status"></div>
+
+    <h2>API Tests:</h2>
+    <div id="api-results"></div>
+
+    <script>
+      const statusDiv = document.getElementById("status");
+      const resultsDiv = document.getElementById("api-results");
+
+      statusDiv.innerHTML =
+        '<div class="status success">✅ JavaScript is working!</div>';
+
+      // Test API endpoints
+      async function testAPI() {
+        const endpoints = [
+          "/api/inventory/detailed-stock?action=summary",
+          "/api/inventory/detailed-stock?action=warehouses",
+          "/api/inventory/detailed-stock?limit=5",
+        ];
+
+        for (const endpoint of endpoints) {
+          try {
+            const response = await fetch(endpoint);
+            const data = await response.json();
+
+            resultsDiv.innerHTML += `
+                        <div class="status success">
+                            ✅ ${endpoint}<br>
+                            Status: ${response.status}<br>
+                            Data: ${JSON.stringify(
+                              data.meta || data.data?.length || "OK"
+                            )}
+                        </div>
+                    `;
+          } catch (error) {
+            resultsDiv.innerHTML += `
+                        <div class="status error">
+                            ❌ ${endpoint}<br>
+                            Error: ${error.message}
+                        </div>
+                    `;
+          }
+        }
+      }
+
+      testAPI();
+    </script>
+  </body>
+</html>
