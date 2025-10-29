@@ -150,23 +150,18 @@ function handleListAction($pdo) {
             dp.id as product_id,
             dp.sku_ozon as offer_id,
             dp.product_name,
-            dp.ozon_visibility as visibility,
+            NULL as visibility,
             i.warehouse_name,
             i.stock_type,
             i.quantity_present as present,
             i.quantity_reserved as reserved,
             (i.quantity_present - i.quantity_reserved) as available_stock,
             CASE 
-                WHEN dp.ozon_visibility IS NULL OR dp.ozon_visibility = '' THEN 'unknown'
-                WHEN dp.ozon_visibility IN ('VISIBLE', 'ACTIVE', 'продаётся') THEN 
-                    CASE 
-                        WHEN (i.quantity_present - i.quantity_reserved) <= 0 THEN 'out_of_stock'
-                        WHEN (i.quantity_present - i.quantity_reserved) < 20 THEN 'critical'
-                        WHEN (i.quantity_present - i.quantity_reserved) < 50 THEN 'low'
-                        WHEN (i.quantity_present - i.quantity_reserved) < 100 THEN 'normal'
-                        ELSE 'excess'
-                    END
-                ELSE 'archived_or_hidden'
+                WHEN (i.quantity_present - i.quantity_reserved) <= 0 THEN 'out_of_stock'
+                WHEN (i.quantity_present - i.quantity_reserved) < 20 THEN 'critical'
+                WHEN (i.quantity_present - i.quantity_reserved) < 50 THEN 'low'
+                WHEN (i.quantity_present - i.quantity_reserved) < 100 THEN 'normal'
+                ELSE 'excess'
             END as stock_status,
             i.updated_at as last_updated
         FROM dim_products dp
