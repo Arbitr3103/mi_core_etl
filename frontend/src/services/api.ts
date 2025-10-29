@@ -339,7 +339,7 @@ export const fetchWarehouses = async (): Promise<string[]> => {
       low_count: number;
       replenishment_needed_count: number;
     }>;
-  }>("/api/detailed-stock.php?action=warehouses", {
+  }>("/detailed-stock.php?action=warehouses", {
     method: "GET",
   });
 

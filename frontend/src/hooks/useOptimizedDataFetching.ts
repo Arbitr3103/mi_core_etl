@@ -286,7 +286,7 @@ export function useOptimizedFetch<T>(
  * Hook for optimized inventory data fetching
  */
 export function useOptimizedInventoryData(filters: FilterState) {
-  return useOptimizedFetch("/api/detailed-stock.php", filters, {
+  return useOptimizedFetch("/detailed-stock.php", filters, {
     cacheTime: 5 * 60 * 1000, // 5 minutes
     staleTime: 30 * 1000, // 30 seconds
     dedupe: true,
@@ -299,7 +299,7 @@ export function useOptimizedInventoryData(filters: FilterState) {
  */
 export function useOptimizedWarehouses() {
   return useOptimizedFetch(
-    "/api/detailed-stock.php",
+    "/detailed-stock.php",
     { action: "warehouses" },
     {
       cacheTime: 30 * 60 * 1000, // 30 minutes
@@ -315,7 +315,7 @@ export function useOptimizedWarehouses() {
  */
 export function useOptimizedSummary() {
   return useOptimizedFetch(
-    "/api/detailed-stock.php",
+    "/detailed-stock.php",
     { action: "summary" },
     {
       cacheTime: 10 * 60 * 1000, // 10 minutes
