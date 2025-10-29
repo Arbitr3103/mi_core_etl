@@ -235,7 +235,7 @@ export const fetchDetailedInventory = async (
   params: DetailedStockRequest
 ): Promise<DetailedStockResponse> => {
   const queryString = buildQueryString(params);
-  const endpoint = `/inventory/detailed-stock${
+  const endpoint = `/api/detailed-stock.php${
     queryString ? `?${queryString}` : ""
   }`;
 
@@ -339,7 +339,7 @@ export const fetchWarehouses = async (): Promise<string[]> => {
       low_count: number;
       replenishment_needed_count: number;
     }>;
-  }>("/inventory/detailed-stock?action=warehouses", {
+  }>("/api/detailed-stock.php?action=warehouses", {
     method: "GET",
   });
 

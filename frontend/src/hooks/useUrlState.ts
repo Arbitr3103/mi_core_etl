@@ -81,6 +81,7 @@ const deserializeFilters = (searchParams: URLSearchParams): FilterState => {
       : [],
     searchTerm: search || "",
     showOnlyUrgent: urgent === "true",
+    showArchived: false,
     minDaysOfStock: minDays ? parseInt(minDays, 10) : undefined,
     maxDaysOfStock: maxDays ? parseInt(maxDays, 10) : undefined,
   };

@@ -10,7 +10,7 @@ export const DiagnosticPage: React.FC = () => {
 
   useEffect(() => {
     // Test API connection
-    fetch("/api/inventory/detailed-stock?action=summary")
+    fetch("/api/detailed-stock.php?action=summary")
       .then((res) => res.json())
       .then((data) => {
         setApiStatus("✅ API Connected");
@@ -22,7 +22,7 @@ export const DiagnosticPage: React.FC = () => {
       });
 
     // Test warehouses endpoint
-    fetch("/api/inventory/detailed-stock?action=warehouses")
+    fetch("/api/detailed-stock.php?action=warehouses")
       .then((res) => res.json())
       .then((data) => {
         setWarehousesData(data);

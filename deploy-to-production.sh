@@ -1,119 +1,96 @@
 #!/bin/bash
+# Production Deployment Script for Inventory Table Feature
+# Date: 2025-10-27
+# Description: Deploys the new inventory table to production server
 
-echo "🚀 РАЗВЕРТЫВАНИЕ API ИСПРАВЛЕНИЙ НА ПРОДАКШН"
-echo "============================================="
-echo "Дата: $(date)"
-echo
+set -e  # Exit on error
 
-# Проверяем, что мы в правильной директории
-if [ ! -f "api/inventory-v4.php" ]; then
-    echo "❌ Ошибка: файл api/inventory-v4.php не найден"
-    echo "Убедитесь, что вы находитесь в корневой директории проекта"
-    exit 1
+echo "🚀 Starting Production Deployment..."
+echo "=================================="
+
+# Configuration
+DEPLOY_DIR="/var/www/market-mi.ru"
+BACKUP_DIR="/var/www/backups/market-mi-$(date +%Y%m%d-%H%M%S)"
+FRONTEND_BUILD_DIR="$DEPLOY_DIR/frontend/dist"
+
+# Step 1: Create backup
+echo ""
+echo "📦 Step 1: Creating backup..."
+sudo mkdir -p /var/www/backups
+sudo cp -r $DEPLOY_DIR $BACKUP_DIR
+echo "✅ Backup created at: $BACKUP_DIR"
+
+# Step 2: Stash local changes
+echo ""
+echo "💾 Step 2: Stashing local changes..."
+cd $DEPLOY_DIR
+sudo git stash save "backup-before-table-deployment-$(date +%Y%m%d-%H%M%S)"
+echo "✅ Local changes stashed"
+
+# Step 3: Pull latest code
+echo ""
+echo "⬇️  Step 3: Pulling latest code from GitHub..."
+sudo git fetch origin main
+sudo git reset --hard origin/main
+echo "✅ Code updated to latest version"
+
+# Step 4: Install frontend dependencies
+echo ""
+echo "📦 Step 4: Installing frontend dependencies..."
+cd $DEPLOY_DIR/frontend
+sudo npm install --production
+echo "✅ Dependencies installed"
+
+# Step 5: Build frontend
+echo ""
+echo "🔨 Step 5: Building frontend..."
+sudo npm run build
+echo "✅ Frontend built successfully"
+
+# Step 6: Set correct permissions
+echo ""
+echo "🔐 Step 6: Setting permissions..."
+sudo chown -R www-data:www-data $DEPLOY_DIR
+sudo chmod -R 755 $DEPLOY_DIR
+sudo chmod -R 775 $DEPLOY_DIR/frontend/dist
+echo "✅ Permissions set"
+
+# Step 7: Clear cache
+echo ""
+echo "🧹 Step 7: Clearing cache..."
+if [ -d "$DEPLOY_DIR/cache" ]; then
+    sudo rm -rf $DEPLOY_DIR/cache/*
 fi
+echo "✅ Cache cleared"
 
-echo "📋 Что будет развернуто:"
-echo "- Исправленный API файл inventory-v4.php"
-echo "- Скрипт проверки БД check-database-structure.php"
-echo "- Скрипт исправления прав fix-api-issues.php"
-echo
-
-read -p "Продолжить развертывание? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Развертывание отменено"
-    exit 0
-fi
-
-# Определяем сервер (замените на ваш)
-SERVER_HOST="api.zavodprostavok.ru"
-SERVER_USER="vladimir"
-SERVER_PATH="/var/www/mi_core_api"
-
-echo "🔄 Этап 1: Создание резервной копии на сервере..."
-ssh ${SERVER_USER}@${SERVER_HOST} "cd ${SERVER_PATH} && cp api/inventory-v4.php api/inventory-v4.php.backup.$(date +%Y%m%d_%H%M%S)"
-
-if [ $? -eq 0 ]; then
-    echo "✅ Резервная копия создана"
+# Step 8: Test API endpoints
+echo ""
+echo "🧪 Step 8: Testing API endpoints..."
+API_TEST=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/inventory/detailed-stock?limit=1)
+if [ "$API_TEST" = "200" ]; then
+    echo "✅ API test passed (HTTP $API_TEST)"
 else
-    echo "❌ Ошибка создания резервной копии"
-    exit 1
+    echo "⚠️  API test returned HTTP $API_TEST"
 fi
 
-echo "📤 Этап 2: Загрузка исправленных файлов..."
-
-# Загружаем основной API файл
-scp api/inventory-v4.php ${SERVER_USER}@${SERVER_HOST}:${SERVER_PATH}/api/
-if [ $? -eq 0 ]; then
-    echo "✅ API файл загружен"
-else
-    echo "❌ Ошибка загрузки API файла"
-    exit 1
-fi
-
-# Загружаем вспомогательные скрипты
-scp check-database-structure.php ${SERVER_USER}@${SERVER_HOST}:${SERVER_PATH}/
-scp fix-api-issues.php ${SERVER_USER}@${SERVER_HOST}:${SERVER_PATH}/
-
-echo "🔧 Этап 3: Проверка структуры БД на сервере..."
-ssh ${SERVER_USER}@${SERVER_HOST} "cd ${SERVER_PATH} && php check-database-structure.php"
-
-echo "🧪 Этап 4: Тестирование API endpoints..."
-
-# Тестируем основные endpoints
-endpoints=("overview" "stats" "products" "critical" "test")
-
-for endpoint in "${endpoints[@]}"; do
-    echo "Тестируем: $endpoint"
-    
-    response=$(curl -s -w "%{http_code}" "http://${SERVER_HOST}/api/inventory-v4.php?action=$endpoint")
-    http_code="${response: -3}"
-    body="${response%???}"
-    
-    if [ "$http_code" = "200" ]; then
-        if echo "$body" | grep -q '"success":true'; then
-            echo "✅ $endpoint: OK"
-        else
-            echo "⚠️ $endpoint: HTTP 200, но ошибка в ответе"
-            echo "   $(echo "$body" | head -c 100)..."
-        fi
-    else
-        echo "❌ $endpoint: HTTP $http_code"
-    fi
-done
-
-echo
-echo "🎯 Этап 5: Финальная проверка..."
-
-# Проверяем основной endpoint overview
-overview_response=$(curl -s "http://${SERVER_HOST}/api/inventory-v4.php?action=overview")
-
-if echo "$overview_response" | grep -q '"success":true'; then
-    echo "✅ API полностью функционален"
-    
-    # Извлекаем статистику
-    if echo "$overview_response" | grep -q '"total_products"'; then
-        total_products=$(echo "$overview_response" | grep -o '"total_products":[0-9]*' | cut -d':' -f2)
-        products_in_stock=$(echo "$overview_response" | grep -o '"products_in_stock":[0-9]*' | cut -d':' -f2)
-        echo "📊 Статистика: $products_in_stock из $total_products товаров в наличии"
-    fi
-else
-    echo "❌ API не работает корректно"
-    echo "Ответ: $(echo "$overview_response" | head -c 200)"
-fi
-
-echo
-echo "🏁 РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО"
-echo "=========================="
-echo "✅ Исправления применены"
-echo "✅ API endpoints протестированы"
-echo
-echo "🔗 Доступные endpoints:"
-echo "http://${SERVER_HOST}/api/inventory-v4.php?action=overview"
-echo "http://${SERVER_HOST}/api/inventory-v4.php?action=products&limit=10"
-echo "http://${SERVER_HOST}/api/inventory-v4.php?action=critical&threshold=5"
-echo
-echo "📋 Следующие шаги:"
-echo "1. Проверить дашборд: https://${SERVER_HOST}/dashboard_inventory_v4.php"
-echo "2. Исправить права БД: ssh ${SERVER_USER}@${SERVER_HOST} 'cd ${SERVER_PATH} && php fix-api-issues.php'"
-echo "3. Мониторить логи ошибок"
+# Step 9: Display deployment info
+echo ""
+echo "=================================="
+echo "✅ Deployment Complete!"
+echo "=================================="
+echo ""
+echo "📊 Deployment Summary:"
+echo "  - Backup location: $BACKUP_DIR"
+echo "  - Frontend build: $FRONTEND_BUILD_DIR"
+echo "  - API endpoint: https://www.market-mi.ru/api/inventory/detailed-stock"
+echo "  - Dashboard URL: https://www.market-mi.ru/"
+echo ""
+echo "🔍 Next Steps:"
+echo "  1. Open https://www.market-mi.ru/ in browser"
+echo "  2. Check that table displays correctly"
+echo "  3. Test filtering and sorting"
+echo "  4. Verify data accuracy"
+echo ""
+echo "🔄 To rollback if needed:"
+echo "  sudo cp -r $BACKUP_DIR/* $DEPLOY_DIR/"
+echo ""
