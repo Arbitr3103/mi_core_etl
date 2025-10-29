@@ -65,7 +65,7 @@ function handleWarehousesAction($pdo) {
             COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) < 20 THEN 1 END) as replenishment_needed_count
         FROM inventory i
         JOIN dim_products dp ON i.product_id = dp.id
-        WHERE dp.sku_ozon ~ '^[0-9]+$'
+        WHERE 1=1
         GROUP BY i.warehouse_name
         ORDER BY i.warehouse_name
     ";
@@ -102,7 +102,7 @@ function handleSummaryAction($pdo) {
             COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) >= 100 THEN 1 END) as excess_count
         FROM inventory i
         JOIN dim_products dp ON i.product_id = dp.id
-        WHERE dp.sku_ozon ~ '^[0-9]+$'
+        WHERE 1=1
     ";
     
     $stmt = $pdo->query($query);
@@ -130,7 +130,7 @@ function handleListAction($pdo) {
     $search = $_GET['search'] ?? null;
     
     // Build query
-    $whereConditions = ["dp.sku_ozon ~ '^[0-9]+$'"];
+    $whereConditions = ["1=1"];
     $params = [];
     
     if ($warehouse) {
