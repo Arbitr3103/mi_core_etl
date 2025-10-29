@@ -31,8 +31,10 @@ interface InventoryTableProps {
 
 /**
  * Table column definitions with formatting
+ * NOTE: This is replaced by COMPACT_TABLE_COLUMNS from TableColumns.ts
  */
-const TABLE_COLUMNS: TableColumn[] = [
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const TABLE_COLUMNS_OLD: TableColumn[] = [
   {
     key: "productName",
     label: "Product",
@@ -355,10 +357,6 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   onBulkSelection,
   loading,
 }) => {
-  const [tableContainer, setTableContainer] = useState<HTMLDivElement | null>(
-    null
-  );
-
   // Create unique IDs for each item
   const itemsWithIds = useMemo(
     () =>
@@ -368,14 +366,6 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
       })),
     [data]
   );
-
-  // Virtual scrolling setup
-  const virtualizer = useVirtualizer({
-    count: itemsWithIds.length,
-    getScrollElement: () => tableContainer,
-    estimateSize: () => 60, // Estimated row height
-    overscan: 10, // Render extra items for smooth scrolling
-  });
 
   // Handle row selection
   const handleRowSelection = useCallback(

@@ -344,12 +344,6 @@ export const WarehouseDashboard: React.FC = () => {
 
               {/* Inventory Table - Mobile: Horizontal scroll, Desktop: Full width */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                {console.log("WarehouseDashboard rendering table with:", {
-                  hasResponse: !!response,
-                  dataLength: response?.data?.length || 0,
-                  loading: loading.filter,
-                  firstItem: response?.data?.[0],
-                })}
                 <InventoryTable
                   data={response?.data || []}
                   sortConfig={sortConfig}

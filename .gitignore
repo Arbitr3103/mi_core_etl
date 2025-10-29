@@ -207,6 +207,10 @@ deploy_*.sh
 *_deploy*.sh
 apply_*.sh
 setup_*.sh
+quick-deploy.sh
+server-deploy-final.sh
+deploy-to-production.sh
+PRODUCTION_DEPLOY_INSTRUCTIONS.md
 
 # ===================================================================
 # DATABASE (temporary)
