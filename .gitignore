@@ -241,3 +241,28 @@ docker-compose.override.yml
 .pnpm-store/
 .yarn/
 .npm/
+# Temporary session and deployment files
+SESSION_REPORT_*.md
+DEPLOY_INSTRUCTIONS_*.md
+POSTGRESQL_MIGRATION_TODO.md
+WAREHOUSE_DASHBOARD_FIX.md
+GIT_FILES_ANALYSIS.md
+
+# Build artifacts
+frontend/test-server/warehouse-dashboard/assets/
+*.tar.gz
+*.zip
+
+# Temporary test files
+frontend/test-server/warehouse-dashboard/*-test.html
+frontend/test-server/warehouse-dashboard/test.html
+frontend/test-server/warehouse-dashboard/simple-table.html
+
+# Backup and fixed files
+*_backup.py
+*_backup.php
+*_fixed.php
+*_fixed.py
+
+# Performance dashboard (if temporary)
+public/performance-dashboard.html
