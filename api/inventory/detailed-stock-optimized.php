@@ -29,7 +29,7 @@ try {
     
     // Connect to PostgreSQL
     $dsn = "pgsql:host=localhost;port=5432;dbname=mi_core_db";
-    $pdo = new PDO($dsn, 'mi_core_user', 'MiCore2025Secure', [
+    $pdo = new PDO($dsn, 'api_user', 'ApiUser2025Secure!', [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
@@ -230,7 +230,6 @@ function handleListAction($pdo, $cache) {
                 dp.id as product_id,
                 dp.sku_ozon as offer_id,
                 dp.product_name,
-                dp.visibility,
                 i.warehouse_name,
                 i.stock_type,
                 i.source,
