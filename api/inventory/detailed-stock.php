@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 try {
     // Connect to PostgreSQL
     $dsn = "pgsql:host=localhost;port=5432;dbname=mi_core_db";
-    $pdo = new PDO($dsn, 'api_user', 'ApiUser2025Secure', [
+    $pdo = new PDO($dsn, 'mi_core_user', 'MiCore2025Secure', [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
