@@ -13,6 +13,7 @@ import type {
   StatusIndicatorProps,
 } from "../../types/inventory-dashboard";
 import { STATUS_COLORS } from "../../types/inventory-dashboard";
+import { isValidStockStatus } from "../../utils/dataValidation";
 
 /**
  * Get status label for display
@@ -140,10 +141,13 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  const colors = STATUS_COLORS[status];
-  const label = getStatusLabel(status);
-  const description = getStatusDescription(status, daysOfStock);
-  const urgency = getUrgencyLevel(status, daysOfStock);
+  // Защита от некорректного статуса (undefined/null/невалидное значение)
+  const safeStatus: StockStatus = isValidStockStatus(status) ? status : "normal";
+  
+  const colors = STATUS_COLORS[safeStatus];
+  const label = getStatusLabel(safeStatus);
+  const description = getStatusDescription(safeStatus, daysOfStock);
+  const urgency = getUrgencyLevel(safeStatus, daysOfStock);
 
   // Size-specific classes
   const sizeClasses = {
@@ -182,11 +186,11 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
       tabIndex={showTooltip ? 0 : -1}
       id={`status-${Math.random().toString(36).substr(2, 9)}`}
     >
-      <StatusDot status={status} size={size} urgency={urgency} />
+      <StatusDot status={safeStatus} size={size} urgency={urgency} />
       <span className={`font-medium ${sizeClasses[size].text}`}>{label}</span>
       {size !== "sm" && (
         <span className={`text-xs opacity-75`}>
-          {status === "no_sales"
+          {safeStatus === "no_sales"
             ? ""
             : `${daysOfStock > 999 ? "999+" : daysOfStock.toFixed(0)}d`}
         </span>
