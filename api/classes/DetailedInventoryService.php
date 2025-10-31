@@ -190,11 +190,10 @@ class DetailedInventoryService {
     private function buildWhereConditions($filters) {
         $conditions = [];
         
-        // Default filtering - exclude archived/hidden and out of stock products
-        // This ensures API returns only products that are truly "in sale" by default
-        // Users can set include_hidden=true to see all products including hidden ones
+        // Default filtering — exclude archived/hidden items at SQL level
+        // Backend guarantees only active (not archived/hidden) items are returned by default
         if (!isset($filters['include_hidden']) || !$filters['include_hidden']) {
-            $conditions[] = "stock_status NOT IN ('archived_or_hidden', 'out_of_stock')";
+            $conditions[] = "stock_status <> 'archived_or_hidden'";
         }
         
         // Visibility filter - allows explicit filtering by visibility status
@@ -274,8 +273,9 @@ class DetailedInventoryService {
      * @return string ORDER BY clause
      */
     private function buildOrderByClause($filters) {
-        $sortBy = $filters['sort_by'] ?? 'urgency_score';
-        $sortOrder = strtoupper($filters['sort_order'] ?? 'DESC');
+        // Default sorting: days_of_stock ASC (items that will stockout earlier go first)
+        $sortBy = $filters['sort_by'] ?? 'days_of_stock';
+        $sortOrder = strtoupper($filters['sort_order'] ?? 'ASC');
         
         // Validate sort order
         if (!in_array($sortOrder, ['ASC', 'DESC'])) {
@@ -298,7 +298,7 @@ class DetailedInventoryService {
             'last_updated' => 'last_updated'
         ];
         
-        $sortField = $sortFieldMap[$sortBy] ?? 'urgency_score';
+        $sortField = $sortFieldMap[$sortBy] ?? 'days_of_stock';
         
         return " ORDER BY $sortField $sortOrder";
     }
