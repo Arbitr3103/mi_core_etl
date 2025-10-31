@@ -256,7 +256,7 @@ export const STATUS_COLORS = {
  */
 export const DEFAULT_FILTERS: FilterState = {
   warehouses: [],
-  statuses: ["critical", "low"], // By default, show only critical and low stock items
+  statuses: [],
   searchTerm: "",
   showOnlyUrgent: false,
   showArchived: false, // By default, hide archived (zero stock) products
