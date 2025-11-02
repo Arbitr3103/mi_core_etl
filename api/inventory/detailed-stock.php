@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 try {
     // Connect to PostgreSQL
     $dsn = "pgsql:host=localhost;port=5432;dbname=mi_core_db";
-    $pdo = new PDO($dsn, 'mi_core_user', 'MiCore2025Secure', [
+    $pdo = new PDO($dsn, 'api_user', 'ApiUser2025Secure', [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
@@ -52,27 +52,28 @@ try {
  * Get list of warehouses with stock counts
  */
 function handleWarehousesAction($pdo) {
+    // Агрегация по вью с обязательным бэкенд-фильтром (без archived_or_hidden)
     $query = "
         SELECT 
-            i.warehouse_name,
-            COUNT(DISTINCT dp.id) as product_count,
-            SUM(i.quantity_present) as total_present,
-            SUM(i.quantity_reserved) as total_reserved,
-            SUM(i.quantity_present - i.quantity_reserved) as total_available,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) <= 0 THEN 1 END) as out_of_stock_count,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) > 0 AND (i.quantity_present - i.quantity_reserved) < 20 THEN 1 END) as critical_count,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) >= 20 AND (i.quantity_present - i.quantity_reserved) < 50 THEN 1 END) as low_count,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) < 20 THEN 1 END) as replenishment_needed_count
-        FROM inventory i
-        JOIN dim_products dp ON i.product_id = dp.id
-        WHERE 1=1
-        GROUP BY i.warehouse_name
-        ORDER BY i.warehouse_name
+            v.warehouse_name,
+            COUNT(*) as product_count,
+            SUM(v.current_stock) as total_present,
+            0 as total_reserved,
+            SUM(v.available_stock) as total_available,
+            SUM(CASE WHEN v.stock_status = 'out_of_stock' THEN 1 ELSE 0 END) as out_of_stock_count,
+            SUM(CASE WHEN v.stock_status = 'critical' THEN 1 ELSE 0 END) as critical_count,
+            SUM(CASE WHEN COALESCE(v.recommended_qty,0) > 0 THEN 1 ELSE 0 END) as replenishment_needed_count
+        FROM v_detailed_inventory v
+        WHERE v.stock_status <> 'archived_or_hidden'
+          AND v.available_stock > 0
+          AND v.warehouse_name IS NOT NULL
+        GROUP BY v.warehouse_name
+        ORDER BY v.warehouse_name
     ";
-    
+
     $stmt = $pdo->query($query);
     $warehouses = $stmt->fetchAll();
-    
+
     echo json_encode([
         'success' => true,
         'data' => $warehouses,
@@ -88,26 +89,29 @@ function handleWarehousesAction($pdo) {
  * Get summary statistics
  */
 function handleSummaryAction($pdo) {
+    // Сводка по активным товарам (без archived_or_hidden)
     $query = "
         SELECT 
-            COUNT(DISTINCT dp.id) as total_products,
-            COUNT(DISTINCT i.warehouse_name) as total_warehouses,
-            SUM(i.quantity_present) as total_present,
-            SUM(i.quantity_reserved) as total_reserved,
-            SUM(i.quantity_present - i.quantity_reserved) as total_available,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) <= 0 THEN 1 END) as out_of_stock_count,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) > 0 AND (i.quantity_present - i.quantity_reserved) < 20 THEN 1 END) as critical_count,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) >= 20 AND (i.quantity_present - i.quantity_reserved) < 50 THEN 1 END) as low_count,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) >= 50 AND (i.quantity_present - i.quantity_reserved) < 100 THEN 1 END) as normal_count,
-            COUNT(CASE WHEN (i.quantity_present - i.quantity_reserved) >= 100 THEN 1 END) as excess_count
-        FROM inventory i
-        JOIN dim_products dp ON i.product_id = dp.id
-        WHERE 1=1
+            COUNT(*) as total_products,
+            COUNT(DISTINCT v.warehouse_name) as total_warehouses,
+            SUM(v.current_stock) as total_present,
+            0 as total_reserved,
+            SUM(v.available_stock) as total_available,
+            SUM(CASE WHEN v.stock_status = 'out_of_stock' THEN 1 ELSE 0 END) as out_of_stock_count,
+            SUM(CASE WHEN v.stock_status = 'critical' THEN 1 ELSE 0 END) as critical_count,
+            SUM(CASE WHEN v.stock_status = 'low' THEN 1 ELSE 0 END) as low_count,
+            SUM(CASE WHEN v.stock_status = 'normal' THEN 1 ELSE 0 END) as normal_count,
+            SUM(CASE WHEN v.stock_status = 'excess' THEN 1 ELSE 0 END) as excess_count,
+            SUM(COALESCE(v.recommended_qty,0)) as total_recommended_qty
+        FROM v_detailed_inventory v
+        WHERE v.stock_status <> 'archived_or_hidden'
+          AND v.available_stock > 0
+          AND v.warehouse_name IS NOT NULL
     ";
-    
+
     $stmt = $pdo->query($query);
     $summary = $stmt->fetch();
-    
+
     echo json_encode([
         'success' => true,
         'data' => $summary,
@@ -125,21 +129,28 @@ function handleListAction($pdo) {
     // Get query parameters
     $limit = isset($_GET['limit']) ? min((int)$_GET['limit'], 1000) : 100;
     $offset = isset($_GET['offset']) ? max((int)$_GET['offset'], 0) : 0;
-    $stockStatus = $_GET['stock_status'] ?? null;
+    $stockStatus = $_GET['stock_status'] ?? null; // игнорируется по умолчанию
     $warehouse = $_GET['warehouse'] ?? null;
     $search = $_GET['search'] ?? null;
-    
-    // Build query
-    $whereConditions = ["1=1"];
+    $sortBy = $_GET['sortBy'] ?? 'days_of_stock';
+    $sortOrder = strtoupper($_GET['sortOrder'] ?? 'ASC');
+    if (!in_array($sortOrder, ['ASC','DESC'])) { $sortOrder = 'ASC'; }
+
+    // Build query (вью с обязательным фильтром активных)
+    $whereConditions = [
+        "v.stock_status <> 'archived_or_hidden'",
+        "v.available_stock > 0",
+        "v.warehouse_name IS NOT NULL"
+    ];
     $params = [];
     
     if ($warehouse) {
-        $whereConditions[] = "i.warehouse_name = :warehouse";
+        $whereConditions[] = "v.warehouse_name = :warehouse";
         $params['warehouse'] = $warehouse;
     }
     
     if ($search) {
-        $whereConditions[] = "(dp.product_name ILIKE :search OR dp.sku_ozon ILIKE :search)";
+        $whereConditions[] = "(v.product_name ILIKE :search OR v.sku ILIKE :search OR v.sku_ozon ILIKE :search)";
         $params['search'] = "%$search%";
     }
     
@@ -147,27 +158,24 @@ function handleListAction($pdo) {
     
     $query = "
         SELECT 
-            dp.id as product_id,
-            dp.sku_ozon as offer_id,
-            dp.product_name,
-            NULL as visibility,
-            i.warehouse_name,
-            i.stock_type,
-            i.quantity_present as present,
-            i.quantity_reserved as reserved,
-            (i.quantity_present - i.quantity_reserved) as available_stock,
-            CASE 
-                WHEN (i.quantity_present - i.quantity_reserved) <= 0 THEN 'out_of_stock'
-                WHEN (i.quantity_present - i.quantity_reserved) < 20 THEN 'critical'
-                WHEN (i.quantity_present - i.quantity_reserved) < 50 THEN 'low'
-                WHEN (i.quantity_present - i.quantity_reserved) < 100 THEN 'normal'
-                ELSE 'excess'
-            END as stock_status,
-            i.updated_at as last_updated
-        FROM dim_products dp
-        LEFT JOIN inventory i ON dp.id = i.product_id
+            v.product_id,
+            v.product_name,
+            v.sku as offer_id,
+            v.visibility,
+            v.warehouse_name,
+            NULL as stock_type,
+            v.current_stock as present,
+            0 as reserved,
+            v.available_stock,
+            v.stock_status,
+            v.last_updated,
+            v.days_of_stock,
+            -- Рекомендация и стоимость берём из вью (временный хотфикс до обновления вью)
+            COALESCE(v.recommended_qty, 0)::int AS recommended_qty,
+            COALESCE(v.recommended_value, 0)::numeric AS recommended_value
+        FROM v_detailed_inventory v
         WHERE $whereClause
-        ORDER BY dp.product_name, i.warehouse_name
+        ORDER BY " . ($sortBy === 'days_of_stock' ? 'v.days_of_stock' : 'v.days_of_stock') . " $sortOrder
         LIMIT :limit OFFSET :offset
     ";
     
@@ -184,8 +192,7 @@ function handleListAction($pdo) {
     // Get total count
     $countQuery = "
         SELECT COUNT(*) as total
-        FROM dim_products dp
-        LEFT JOIN inventory i ON dp.id = i.product_id
+        FROM v_detailed_inventory v
         WHERE $whereClause
     ";
     
