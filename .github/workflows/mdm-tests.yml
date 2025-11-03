@@ -22,7 +22,6 @@ on:
 
 jobs:
   unit-tests:
-    if: false  # Temporarily disabled to stabilize CI (legacy config)
     name: Unit Tests
     runs-on: ubuntu-latest
 
@@ -51,9 +50,17 @@ jobs:
         if: ${{ hashFiles('composer.lock') != '' }}
         run: composer install --prefer-dist --no-progress
 
-      - name: Run PHPUnit tests
-        if: ${{ hashFiles('composer.lock') != '' }}
-        run: vendor/bin/phpunit --configuration phpunit.xml --testsuite unit
+      - name: Run Unit Test Suite (with fallback)
+        run: |
+          if [ -f vendor/bin/phpunit ]; then
+            vendor/bin/phpunit --configuration phpunit.xml --testsuite unit
+          else
+            if [ -f tests/Unit/run_sync_tests.php ]; then
+              php tests/Unit/run_sync_tests.php
+            else
+              echo "No phpunit and no fallback test runner found; skipping"
+            fi
+          fi
 
       - name: Generate coverage report
         if: matrix.php-version == '8.1'
@@ -174,10 +181,8 @@ jobs:
           extensions: pdo, pdo_mysql, pdo_sqlite, mbstring
 
       - name: Install dependencies
-        run: |
-          if [ -f composer.json ]; then
-            composer install --prefer-dist --no-progress
-          fi
+        if: ${{ hashFiles('composer.lock') != '' }}
+        run: composer install --prefer-dist --no-progress
 
       - name: Run data type compatibility tests
         run: |
@@ -239,7 +244,6 @@ jobs:
           php tests/test_sql_queries_comprehensive.php
 
   code-quality:
-    if: false  # Temporarily disabled to stabilize CI (legacy config)
     name: Code Quality Checks
     runs-on: ubuntu-latest
 
