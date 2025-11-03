@@ -52,18 +52,22 @@ jobs:
             ${{ runner.os }}-php-
 
       - name: Install dependencies
+        if: ${{ hashFiles('composer.lock') != '' }}
         run: composer install --prefer-dist --no-progress
 
       - name: Copy environment file
         run: cp .env.example .env
 
       - name: Run PHP CS Fixer
+        if: ${{ hashFiles('composer.lock') != '' }}
         run: composer run cs-check
 
       - name: Run PHPStan
+        if: ${{ hashFiles('composer.lock') != '' }}
         run: composer run stan
 
       - name: Run PHPUnit tests
+        if: ${{ hashFiles('composer.lock') != '' }}
         run: composer run test-coverage
         env:
           PG_HOST: localhost
