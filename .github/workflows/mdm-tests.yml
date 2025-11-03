@@ -287,11 +287,15 @@ jobs:
           php-version: "8.1"
           extensions: pdo, pdo_pgsql, pdo_mysql, mbstring
 
-      - name: Install dependencies
+      - name: Validate composer.json
         run: |
           if [ -f composer.json ]; then
-            composer install --prefer-dist --no-progress
+            composer validate --strict
           fi
+
+      - name: Install dependencies
+        if: ${{ hashFiles('composer.lock') != '' }}
+        run: composer install --prefer-dist --no-progress --no-interaction --no-scripts
 
       - name: Check PHP syntax
         run: |
