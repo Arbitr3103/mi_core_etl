@@ -97,33 +97,33 @@ class DetailedInventoryService {
         
         $query = "
             SELECT 
-                product_id,
-                product_name,
-                sku,
-                sku_ozon,
-                sku_wb,
-                sku_internal,
-                warehouse_name,
-                cluster,
-                marketplace_source,
-                visibility,
-                current_stock,
-                available_stock,
-                daily_sales_avg,
-                sales_last_28_days,
-                days_of_stock,
-                stock_status,
-                recommended_qty,
-                recommended_value,
-                urgency_score,
-                stockout_risk,
-                cost_price,
-                current_stock_value,
-                turnover_rate,
-                sales_trend,
-                last_updated,
-                last_sale_date
-            FROM $viewName
+                v.product_id,
+                v.product_name,
+                v.sku,
+                v.sku_ozon,
+                v.sku_wb,
+                v.sku_internal,
+                v.warehouse_name,
+                v.cluster,
+                v.marketplace_source,
+                v.visibility,
+                v.current_stock,
+                v.available_stock,
+                v.daily_sales_avg,
+                v.sales_last_28_days,
+                v.days_of_stock,
+                v.stock_status,
+                v.recommended_qty,
+                v.recommended_value,
+                v.urgency_score,
+                v.stockout_risk,
+                v.cost_price,
+                v.current_stock_value,
+                v.turnover_rate,
+                v.sales_trend,
+                v.last_updated,
+                v.last_sale_date
+            FROM $viewName v
         ";
         
         // Add WHERE clause
@@ -148,7 +148,7 @@ class DetailedInventoryService {
      * @return string SQL query
      */
     private function buildCountQuery($filters) {
-        $query = "SELECT COUNT(*) as total FROM v_detailed_inventory";
+        $query = "SELECT COUNT(*) as total FROM v_detailed_inventory v";
         
         $whereConditions = $this->buildWhereConditions($filters);
         if (!empty($whereConditions)) {
@@ -193,74 +193,74 @@ class DetailedInventoryService {
         // Default filtering — exclude archived/hidden items at SQL level
         // Backend guarantees only active (not archived/hidden) items are returned by default
         if (!isset($filters['include_hidden']) || !$filters['include_hidden']) {
-            $conditions[] = "stock_status <> 'archived_or_hidden'";
+            $conditions[] = "v.stock_status <> 'archived_or_hidden'";
         }
         
         // Visibility filter - allows explicit filtering by visibility status
         if (!empty($filters['visibility'])) {
             if (is_array($filters['visibility'])) {
                 $placeholders = str_repeat('?,', count($filters['visibility']) - 1) . '?';
-                $conditions[] = "visibility IN ($placeholders)";
+                $conditions[] = "v.visibility IN ($placeholders)";
             } else {
-                $conditions[] = "visibility = ?";
+                $conditions[] = "v.visibility = ?";
             }
         }
         
         // Warehouse filter
         if (!empty($filters['warehouses']) && is_array($filters['warehouses'])) {
             $placeholders = str_repeat('?,', count($filters['warehouses']) - 1) . '?';
-            $conditions[] = "warehouse_name IN ($placeholders)";
+            $conditions[] = "v.warehouse_name IN ($placeholders)";
         } elseif (!empty($filters['warehouse'])) {
-            $conditions[] = "warehouse_name = ?";
+            $conditions[] = "v.warehouse_name = ?";
         }
         
         // Status filter (enhanced with functional index support)
         if (!empty($filters['statuses']) && is_array($filters['statuses'])) {
             $placeholders = str_repeat('?,', count($filters['statuses']) - 1) . '?';
-            $conditions[] = "stock_status IN ($placeholders)";
+            $conditions[] = "v.stock_status IN ($placeholders)";
         } elseif (!empty($filters['status'])) {
-            $conditions[] = "stock_status = ?";
+            $conditions[] = "v.stock_status = ?";
         }
         
         // Product search
         if (!empty($filters['search'])) {
             $conditions[] = "(
-                product_name ILIKE ? OR 
-                sku ILIKE ? OR 
-                sku_ozon ILIKE ? OR 
-                sku_wb ILIKE ? OR 
-                sku_internal ILIKE ?
+                v.product_name ILIKE ? OR 
+                v.sku ILIKE ? OR 
+                v.sku_ozon ILIKE ? OR 
+                v.sku_wb ILIKE ? OR 
+                v.sku_internal ILIKE ?
             )";
         }
         
         // Minimum days of stock
         if (isset($filters['min_days_of_stock']) && is_numeric($filters['min_days_of_stock'])) {
-            $conditions[] = "days_of_stock >= ?";
+            $conditions[] = "v.days_of_stock >= ?";
         }
         
         // Maximum days of stock
         if (isset($filters['max_days_of_stock']) && is_numeric($filters['max_days_of_stock'])) {
-            $conditions[] = "days_of_stock <= ?";
+            $conditions[] = "v.days_of_stock <= ?";
         }
         
         // Urgency filter
         if (isset($filters['min_urgency_score']) && is_numeric($filters['min_urgency_score'])) {
-            $conditions[] = "urgency_score >= ?";
+            $conditions[] = "v.urgency_score >= ?";
         }
         
         // Only products with replenishment need
         if (!empty($filters['has_replenishment_need'])) {
-            $conditions[] = "recommended_qty > 0";
+            $conditions[] = "v.recommended_qty > 0";
         }
         
         // Only active products (with stock or recent sales)
         if (!empty($filters['active_only'])) {
-            $conditions[] = "(current_stock > 0 OR sales_last_28_days > 0)";
+            $conditions[] = "(v.current_stock > 0 OR v.sales_last_28_days > 0)";
         }
         
         // NEW: Filter by available stock
         if (isset($filters['min_available_stock']) && is_numeric($filters['min_available_stock'])) {
-            $conditions[] = "available_stock >= ?";
+            $conditions[] = "v.available_stock >= ?";
         }
         
         return $conditions;
@@ -284,18 +284,18 @@ class DetailedInventoryService {
         
         // Map sort fields to actual column names
         $sortFieldMap = [
-            'product_name' => 'product_name',
-            'warehouse_name' => 'warehouse_name',
-            'current_stock' => 'current_stock',
-            'available_stock' => 'available_stock',
-            'daily_sales_avg' => 'daily_sales_avg',
-            'days_of_stock' => 'days_of_stock',
-            'stock_status' => 'stock_status',
-            'recommended_qty' => 'recommended_qty',
-            'urgency_score' => 'urgency_score',
-            'stockout_risk' => 'stockout_risk',
-            'turnover_rate' => 'turnover_rate',
-            'last_updated' => 'last_updated'
+            'product_name' => 'v.product_name',
+            'warehouse_name' => 'v.warehouse_name',
+            'current_stock' => 'v.current_stock',
+            'available_stock' => 'v.available_stock',
+            'daily_sales_avg' => 'v.daily_sales_avg',
+            'days_of_stock' => 'v.days_of_stock',
+            'stock_status' => 'v.stock_status',
+            'recommended_qty' => 'v.recommended_qty',
+            'urgency_score' => 'v.urgency_score',
+            'stockout_risk' => 'v.stockout_risk',
+            'turnover_rate' => 'v.turnover_rate',
+            'last_updated' => 'v.last_updated'
         ];
         
         $sortField = $sortFieldMap[$sortBy] ?? 'days_of_stock';
