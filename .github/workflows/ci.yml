@@ -40,7 +40,7 @@ jobs:
           coverage: xdebug
 
       - name: Validate composer.json and composer.lock
-        run: composer validate || true
+        run: composer validate --no-check-publish || true
         continue-on-error: true
 
       - name: Cache Composer packages
