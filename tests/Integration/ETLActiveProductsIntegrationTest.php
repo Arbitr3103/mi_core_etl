@@ -476,49 +476,29 @@ class ETLActiveProductsIntegrationTest
      */
     private function setupTestDatabase(): void
     {
-        $this->testDatabaseName = 'test_etl_active_products_' . time();
+        $this->testDatabaseName = getenv('DB_NAME') ?: 'mi_core_test';
         
         try {
-            // Create test database connection
-            $dsn = sprintf(
-                'mysql:host=%s;port=%s;charset=utf8mb4',
-                DB_HOST,
-                DB_PORT
-            );
-            
-            $tempPdo = new PDO($dsn, DB_USER, DB_PASSWORD, [
+            $host = getenv('DB_HOST') ?: '127.0.0.1';
+            $port = getenv('DB_PORT') ?: '5432';
+            $user = getenv('DB_USER') ?: 'postgres';
+            $pass = getenv('DB_PASSWORD') ?: 'postgres';
+
+            $dsn = sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $this->testDatabaseName);
+            $this->pdo = new PDO($dsn, $user, $pass, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
             ]);
             
-            // Create test database
-            $tempPdo->exec("CREATE DATABASE IF NOT EXISTS `{$this->testDatabaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            
-            // Connect to test database
-            $dsn = sprintf(
-                'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-                DB_HOST,
-                DB_PORT,
-                $this->testDatabaseName
-            );
-            
-            $this->pdo = new PDO($dsn, DB_USER, DB_PASSWORD, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-            ]);
-            
-            // Create required tables
             $this->createTestTables();
-            
         } catch (PDOException $e) {
-            // Fallback to SQLite for testing if MySQL is not available
+            // Fallback to SQLite for testing if Postgres is not available
             $this->pdo = new PDO('sqlite::memory:', null, null, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
             ]);
-            
             $this->createTestTables();
-            echo "⚠️  Using SQLite in-memory database for testing (MySQL not available)\n";
+            echo "⚠️  Using SQLite in-memory database for testing (PostgreSQL not available)\n";
         }
     }   
  /**
@@ -527,32 +507,189 @@ class ETLActiveProductsIntegrationTest
     private function createTestTables(): void
     {
         $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        $autoIncrement = $driver === 'sqlite' ? 'AUTOINCREMENT' : 'AUTO_INCREMENT';
-        $timestamp = $driver === 'sqlite' ? 'DATETIME DEFAULT CURRENT_TIMESTAMP' : 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP';
-        $json = $driver === 'sqlite' ? 'TEXT' : 'JSON';
         
-        // ETL extracted data table
-        $this->pdo->exec("
-            CREATE TABLE IF NOT EXISTS etl_extracted_data (
-                id INTEGER PRIMARY KEY {$autoIncrement},
-                source VARCHAR(50) NOT NULL,
-                external_sku VARCHAR(255) NOT NULL,
-                source_name VARCHAR(255),
-                source_brand VARCHAR(255),
-                source_category VARCHAR(255),
-                price DECIMAL(10,2),
-                description TEXT,
-                attributes {$json},
-                raw_data TEXT,
-                extracted_at {$timestamp},
-                is_active BOOLEAN,
-                activity_checked_at {$timestamp},
-                activity_reason VARCHAR(255),
-                created_at {$timestamp},
-                updated_at {$timestamp},
-                UNIQUE KEY unique_source_sku (source, external_sku)
-            )
-        ");
+        if ($driver === 'pgsql') {
+            // PostgreSQL schema
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_extracted_data (
+                    id SERIAL PRIMARY KEY,
+                    source VARCHAR(50) NOT NULL,
+                    external_sku VARCHAR(255) NOT NULL,
+                    source_name VARCHAR(255),
+                    source_brand VARCHAR(255),
+                    source_category VARCHAR(255),
+                    price NUMERIC(10,2),
+                    description TEXT,
+                    attributes JSONB,
+                    raw_data TEXT,
+                    extracted_at TIMESTAMP DEFAULT NOW(),
+                    is_active BOOLEAN,
+                    activity_checked_at TIMESTAMP DEFAULT NOW(),
+                    activity_reason VARCHAR(255),
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    CONSTRAINT unique_source_sku UNIQUE (source, external_sku)
+                )
+            ");
+            
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_runs (
+                    id SERIAL PRIMARY KEY,
+                    status VARCHAR(50) NOT NULL,
+                    duration NUMERIC(8,3),
+                    total_extracted INTEGER DEFAULT 0,
+                    total_saved INTEGER DEFAULT 0,
+                    results JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            ");
+            
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_logs (
+                    id SERIAL PRIMARY KEY,
+                    source VARCHAR(50) NOT NULL,
+                    level VARCHAR(20) NOT NULL,
+                    message TEXT NOT NULL,
+                    context JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            ");
+            
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_activity_monitoring (
+                    id SERIAL PRIMARY KEY,
+                    source VARCHAR(50) NOT NULL UNIQUE,
+                    monitoring_enabled BOOLEAN DEFAULT TRUE,
+                    last_check_at TIMESTAMP DEFAULT NOW(),
+                    active_count_current INTEGER DEFAULT 0,
+                    active_count_previous INTEGER DEFAULT 0,
+                    total_count_current INTEGER DEFAULT 0,
+                    change_threshold_percent NUMERIC(5,2) DEFAULT 10.0,
+                    notification_sent_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            ");
+            
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_product_activity_log (
+                    id SERIAL PRIMARY KEY,
+                    source VARCHAR(50) NOT NULL,
+                    external_sku VARCHAR(255) NOT NULL,
+                    previous_status BOOLEAN,
+                    new_status BOOLEAN,
+                    reason VARCHAR(255),
+                    changed_at TIMESTAMP DEFAULT NOW(),
+                    changed_by VARCHAR(100) DEFAULT 'system'
+                )
+            ");
+            
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_notifications (
+                    id SERIAL PRIMARY KEY,
+                    type VARCHAR(50) NOT NULL,
+                    subject VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    priority VARCHAR(20) DEFAULT 'medium',
+                    source VARCHAR(50) NOT NULL,
+                    data JSONB,
+                    email_sent BOOLEAN DEFAULT FALSE,
+                    log_sent BOOLEAN DEFAULT FALSE,
+                    webhook_sent BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            ");
+        } else {
+            // Existing SQLite/MySQL-neutral fallback
+            $autoIncrement = $driver === 'sqlite' ? 'AUTOINCREMENT' : 'AUTO_INCREMENT';
+            $timestamp = $driver === 'sqlite' ? "DATETIME DEFAULT CURRENT_TIMESTAMP" : 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP';
+            $json = $driver === 'sqlite' ? 'TEXT' : 'JSON';
+            
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_extracted_data (
+                    id INTEGER PRIMARY KEY {$autoIncrement},
+                    source VARCHAR(50) NOT NULL,
+                    external_sku VARCHAR(255) NOT NULL,
+                    source_name VARCHAR(255),
+                    source_brand VARCHAR(255),
+                    source_category VARCHAR(255),
+                    price DECIMAL(10,2),
+                    description TEXT,
+                    attributes {$json},
+                    raw_data TEXT,
+                    extracted_at {$timestamp},
+                    is_active BOOLEAN,
+                    activity_checked_at {$timestamp},
+                    activity_reason VARCHAR(255),
+                    created_at {$timestamp},
+                    updated_at {$timestamp},
+                    UNIQUE KEY unique_source_sku (source, external_sku)
+                )
+            ");
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_runs (
+                    id INTEGER PRIMARY KEY {$autoIncrement},
+                    status VARCHAR(50) NOT NULL,
+                    duration DECIMAL(8,3),
+                    total_extracted INTEGER DEFAULT 0,
+                    total_saved INTEGER DEFAULT 0,
+                    results {$json},
+                    created_at {$timestamp}
+                )
+            ");
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_logs (
+                    id INTEGER PRIMARY KEY {$autoIncrement},
+                    source VARCHAR(50) NOT NULL,
+                    level VARCHAR(20) NOT NULL,
+                    message TEXT NOT NULL,
+                    context {$json},
+                    created_at {$timestamp}
+                )
+            ");
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_activity_monitoring (
+                    id INTEGER PRIMARY KEY {$autoIncrement},
+                    source VARCHAR(50) NOT NULL UNIQUE,
+                    monitoring_enabled BOOLEAN DEFAULT TRUE,
+                    last_check_at {$timestamp},
+                    active_count_current INTEGER DEFAULT 0,
+                    active_count_previous INTEGER DEFAULT 0,
+                    total_count_current INTEGER DEFAULT 0,
+                    change_threshold_percent DECIMAL(5,2) DEFAULT 10.0,
+                    notification_sent_at {$timestamp},
+                    created_at {$timestamp},
+                    updated_at {$timestamp}
+                )
+            ");
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_product_activity_log (
+                    id INTEGER PRIMARY KEY {$autoIncrement},
+                    source VARCHAR(50) NOT NULL,
+                    external_sku VARCHAR(255) NOT NULL,
+                    previous_status BOOLEAN,
+                    new_status BOOLEAN,
+                    reason VARCHAR(255),
+                    changed_at {$timestamp},
+                    changed_by VARCHAR(100) DEFAULT 'system'
+                )
+            ");
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS etl_notifications (
+                    id INTEGER PRIMARY KEY {$autoIncrement},
+                    type VARCHAR(50) NOT NULL,
+                    subject VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    priority VARCHAR(20) DEFAULT 'medium',
+                    source VARCHAR(50) NOT NULL,
+                    data {$json},
+                    email_sent BOOLEAN DEFAULT FALSE,
+                    log_sent BOOLEAN DEFAULT FALSE,
+                    webhook_sent BOOLEAN DEFAULT FALSE,
+                    created_at {$timestamp}
+                )
+            ");
+        }
         
         // ETL runs table
         $this->pdo->exec("
@@ -682,23 +819,55 @@ class ETLActiveProductsIntegrationTest
             ['ozon', 'TEST_SKU_005', 'Test Product 5', 'Test Brand', 'Test Category', 59.99, 1, 'visible_processed_stock']
         ];
         
-        $stmt = $this->pdo->prepare("
-            INSERT INTO etl_extracted_data 
-            (source, external_sku, source_name, source_brand, source_category, price, 
-             is_active, activity_reason, extracted_at, activity_checked_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-        ");
+        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO etl_extracted_data 
+                (source, external_sku, source_name, source_brand, source_category, price, 
+                 is_active, activity_reason, extracted_at, activity_checked_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                ON CONFLICT (source, external_sku) DO UPDATE SET
+                  source_name = EXCLUDED.source_name,
+                  source_brand = EXCLUDED.source_brand,
+                  source_category = EXCLUDED.source_category,
+                  price = EXCLUDED.price,
+                  is_active = EXCLUDED.is_active,
+                  activity_reason = EXCLUDED.activity_reason,
+                  activity_checked_at = EXCLUDED.activity_checked_at,
+                  updated_at = NOW()
+            ");
+        } else {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO etl_extracted_data 
+                (source, external_sku, source_name, source_brand, source_category, price, 
+                 is_active, activity_reason, extracted_at, activity_checked_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            ");
+        }
         
         foreach ($testData as $row) {
             $stmt->execute($row);
         }
         
         // Setup activity monitoring for test sources
-        $this->pdo->exec("
-            INSERT OR REPLACE INTO etl_activity_monitoring 
-            (source, monitoring_enabled, active_count_current, total_count_current)
-            VALUES ('ozon', 1, 3, 5)
-        ");
+        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $this->pdo->exec("
+                INSERT INTO etl_activity_monitoring (source, monitoring_enabled, active_count_current, total_count_current)
+                VALUES ('ozon', TRUE, 3, 5)
+                ON CONFLICT (source) DO UPDATE SET 
+                  monitoring_enabled = EXCLUDED.monitoring_enabled,
+                  active_count_current = EXCLUDED.active_count_current,
+                  total_count_current = EXCLUDED.total_count_current,
+                  updated_at = NOW()
+            ");
+        } else {
+            $this->pdo->exec("
+                INSERT OR REPLACE INTO etl_activity_monitoring 
+                (source, monitoring_enabled, active_count_current, total_count_current)
+                VALUES ('ozon', 1, 3, 5)
+            ");
+        }
     }
 
     /**
@@ -751,14 +920,42 @@ class ETLActiveProductsIntegrationTest
      */
     private function setupActivityMonitoring(): void
     {
-        $this->pdo->exec("
-            INSERT OR REPLACE INTO etl_activity_monitoring 
-            (source, monitoring_enabled, active_count_current, active_count_previous, 
-             total_count_current, change_threshold_percent)
-            VALUES 
-            ('ozon', 1, 3, 5, 8, 15.0),
-            ('test_source', 1, 10, 15, 25, 20.0)
-        ");
+        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $this->pdo->exec("
+                INSERT INTO etl_activity_monitoring 
+                (source, monitoring_enabled, active_count_current, active_count_previous, total_count_current, change_threshold_percent)
+                VALUES 
+                ('ozon', TRUE, 3, 5, 8, 15.0)
+                ON CONFLICT (source) DO UPDATE SET 
+                  monitoring_enabled = EXCLUDED.monitoring_enabled,
+                  active_count_current = EXCLUDED.active_count_current,
+                  active_count_previous = EXCLUDED.active_count_previous,
+                  total_count_current = EXCLUDED.total_count_current,
+                  change_threshold_percent = EXCLUDED.change_threshold_percent,
+                  updated_at = NOW();
+                INSERT INTO etl_activity_monitoring 
+                (source, monitoring_enabled, active_count_current, active_count_previous, total_count_current, change_threshold_percent)
+                VALUES 
+                ('test_source', TRUE, 10, 15, 25, 20.0)
+                ON CONFLICT (source) DO UPDATE SET 
+                  monitoring_enabled = EXCLUDED.monitoring_enabled,
+                  active_count_current = EXCLUDED.active_count_current,
+                  active_count_previous = EXCLUDED.active_count_previous,
+                  total_count_current = EXCLUDED.total_count_current,
+                  change_threshold_percent = EXCLUDED.change_threshold_percent,
+                  updated_at = NOW();
+            ");
+        } else {
+            $this->pdo->exec("
+                INSERT OR REPLACE INTO etl_activity_monitoring 
+                (source, monitoring_enabled, active_count_current, active_count_previous, 
+                 total_count_current, change_threshold_percent)
+                VALUES 
+                ('ozon', 1, 3, 5, 8, 15.0),
+                ('test_source', 1, 10, 15, 25, 20.0)
+            ");
+        }
     }
 
     /**
@@ -767,12 +964,22 @@ class ETLActiveProductsIntegrationTest
     private function createActivityBaseline(): void
     {
         // Update monitoring table with baseline data
-        $this->pdo->exec("
-            UPDATE etl_activity_monitoring 
-            SET active_count_previous = active_count_current,
-                last_check_at = datetime('now', '-1 hour')
-            WHERE source IN ('ozon', 'test_source')
-        ");
+        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $this->pdo->exec("
+                UPDATE etl_activity_monitoring 
+                SET active_count_previous = active_count_current,
+                    last_check_at = NOW() - INTERVAL '1 hour'
+                WHERE source IN ('ozon', 'test_source')
+            ");
+        } else {
+            $this->pdo->exec("
+                UPDATE etl_activity_monitoring 
+                SET active_count_previous = active_count_current,
+                    last_check_at = datetime('now', '-1 hour')
+                WHERE source IN ('ozon', 'test_source')
+            ");
+        }
     }
 
     /**
@@ -789,13 +996,24 @@ class ETLActiveProductsIntegrationTest
         ");
         
         // Log the activity change
-        $this->pdo->exec("
-            INSERT INTO etl_product_activity_log 
-            (source, external_sku, previous_status, new_status, reason, changed_at)
-            VALUES 
-            ('ozon', 'TEST_SKU_001', 1, 0, 'became_invisible', datetime('now')),
-            ('ozon', 'TEST_SKU_002', 1, 0, 'stock_depleted', datetime('now'))
-        ");
+        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $this->pdo->exec("
+                INSERT INTO etl_product_activity_log 
+                (source, external_sku, previous_status, new_status, reason, changed_at)
+                VALUES 
+                ('ozon', 'TEST_SKU_001', TRUE, FALSE, 'became_invisible', NOW()),
+                ('ozon', 'TEST_SKU_002', TRUE, FALSE, 'stock_depleted', NOW())
+            ");
+        } else {
+            $this->pdo->exec("
+                INSERT INTO etl_product_activity_log 
+                (source, external_sku, previous_status, new_status, reason, changed_at)
+                VALUES 
+                ('ozon', 'TEST_SKU_001', 1, 0, 'became_invisible', datetime('now')),
+                ('ozon', 'TEST_SKU_002', 1, 0, 'stock_depleted', datetime('now'))
+            ");
+        }
     }    /*
 *
      * Test notification sending

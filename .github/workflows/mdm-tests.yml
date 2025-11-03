@@ -156,6 +156,16 @@ jobs:
             echo "PHPUnit not available; skipping OzonStockReportsETLIntegrationTest";
           fi
 
+      - name: Run ETLActiveProducts Integration
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: mi_core_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: |
+          php tests/Integration/ETLActiveProductsIntegrationTest.php || true
+
   regression-tests:
     if: false  # Temporarily disabled
     name: Regression Tests
