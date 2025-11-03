@@ -42,7 +42,7 @@ class WarehouseSalesAnalyticsService {
                 FROM stock_movements
                 WHERE product_id = :product_id
                     AND warehouse_name = :warehouse_name
-                    AND movement_date >= CURRENT_DATE - :days
+                    AND movement_date >= CURRENT_DATE - INTERVAL '$days days'
                     AND quantity < 0
                     AND movement_type IN ('sale', 'order')
             ";
@@ -50,8 +50,7 @@ class WarehouseSalesAnalyticsService {
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
                 'product_id' => $productId,
-                'warehouse_name' => $warehouseName,
-                'days' => $days
+                'warehouse_name' => $warehouseName
             ]);
             
             $result = $stmt->fetch();
@@ -143,7 +142,7 @@ class WarehouseSalesAnalyticsService {
                 FROM stock_movements
                 WHERE product_id = :product_id
                     AND warehouse_name = :warehouse_name
-                    AND movement_date >= CURRENT_DATE - 28
+                    AND movement_date >= CURRENT_DATE - INTERVAL '28 days'
                     AND quantity < 0
                     AND movement_type IN ('sale', 'order')
             ";
@@ -186,14 +185,13 @@ class WarehouseSalesAnalyticsService {
                 FROM stock_movements
                 WHERE product_id = :product_id
                     AND warehouse_name = :warehouse_name
-                    AND movement_date >= CURRENT_DATE - :days
+                    AND movement_date >= CURRENT_DATE - INTERVAL '$days days'
             ";
             
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
                 'product_id' => $productId,
-                'warehouse_name' => $warehouseName,
-                'days' => $days
+                'warehouse_name' => $warehouseName
             ]);
             
             $result = $stmt->fetch();

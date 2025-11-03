@@ -266,3 +266,17 @@ frontend/test-server/warehouse-dashboard/simple-table.html
 
 # Performance dashboard (if temporary)
 public/performance-dashboard.html
+LOCAL_DATABASE_USERS.md
+
+# Workspace-specific temporary specs and reports
+.kiro/
+migration_script_validation_report_*.txt
+migrations/migration_verification_report_local.md
+deployment_scripts_validation_complete.marker
+tests/performance_results/
+
+# Local run notes (exclude from VCS)
+DEPLOY_STEPS_MANUAL.md
+EXPORT_FUNCTIONALITY_VERIFIED.md
+FINAL_STATUS.md
+QUICK_DASHBOARD_TEST.md
