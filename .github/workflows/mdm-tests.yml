@@ -141,6 +141,21 @@ jobs:
         run: |
           php tests/Integration/ActivityTrackingDatabaseIntegrationTest.php
 
+      - name: Run OzonStockReports ETL Integration (PHPUnit)
+        if: ${{ hashFiles('composer.lock') != '' }}
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: mi_core_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: |
+          if [ -f vendor/bin/phpunit ]; then
+            vendor/bin/phpunit tests/Integration/OzonStockReportsETLIntegrationTest.php
+          else
+            echo "PHPUnit not available; skipping OzonStockReportsETLIntegrationTest";
+          fi
+
   regression-tests:
     if: false  # Temporarily disabled
     name: Regression Tests

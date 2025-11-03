@@ -16,7 +16,7 @@ class OzonStockReportsETLIntegrationTest extends PHPUnit\Framework\TestCase {
     private $csvProcessor;
     private $inventoryUpdater;
     private $alertManager;
-    private $testDatabaseName = 'test_ozon_stock_reports';
+    private $testDatabaseName = 'mi_core_test';
     
     protected function setUp(): void {
         // Create test database connection
@@ -32,7 +32,12 @@ class OzonStockReportsETLIntegrationTest extends PHPUnit\Framework\TestCase {
     
     protected function tearDown(): void {
         if ($this->testPdo) {
-            $this->testPdo->exec("DROP DATABASE IF EXISTS {$this->testDatabaseName}");
+            // Очистка данных после тестов для идемпотентности
+            try { $this->testPdo->exec("TRUNCATE TABLE replenishment_alerts RESTART IDENTITY CASCADE"); } catch (\Throwable $e) {}
+            try { $this->testPdo->exec("TRUNCATE TABLE stock_movements RESTART IDENTITY CASCADE"); } catch (\Throwable $e) {}
+            try { $this->testPdo->exec("TRUNCATE TABLE inventory RESTART IDENTITY CASCADE"); } catch (\Throwable $e) {}
+            try { $this->testPdo->exec("TRUNCATE TABLE replenishment_settings RESTART IDENTITY CASCADE"); } catch (\Throwable $e) {}
+            try { $this->testPdo->exec("TRUNCATE TABLE dim_products RESTART IDENTITY CASCADE"); } catch (\Throwable $e) {}
             $this->testPdo = null;
         }
     }
@@ -42,26 +47,14 @@ class OzonStockReportsETLIntegrationTest extends PHPUnit\Framework\TestCase {
      */
     private function createTestDatabase(): void {
         try {
-            // Connect to MySQL without database
-            $pdo = new PDO(
-                'mysql:host=localhost',
-                'root',
-                '',
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
-            
-            // Create test database
-            $pdo->exec("DROP DATABASE IF EXISTS {$this->testDatabaseName}");
-            $pdo->exec("CREATE DATABASE {$this->testDatabaseName} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            
-            // Connect to test database
-            $this->testPdo = new PDO(
-                "mysql:host=localhost;dbname={$this->testDatabaseName}",
-                'root',
-                '',
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
-            
+            $host = getenv('DB_HOST') ?: '127.0.0.1';
+            $port = getenv('DB_PORT') ?: '5432';
+            $name = getenv('DB_NAME') ?: $this->testDatabaseName;
+            $user = getenv('DB_USER') ?: 'postgres';
+            $pass = getenv('DB_PASSWORD') ?: 'postgres';
+
+            $dsn = sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $name);
+            $this->testPdo = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         } catch (PDOException $e) {
             $this->markTestSkipped('Database connection failed: ' . $e->getMessage());
         }
@@ -71,101 +64,94 @@ class OzonStockReportsETLIntegrationTest extends PHPUnit\Framework\TestCase {
      * Set up test database tables
      */
     private function setupTestTables(): void {
-        // Create dim_products table
+        // Create dim_products table (PostgreSQL)
         $this->testPdo->exec("
-            CREATE TABLE dim_products (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS dim_products (
+                id SERIAL PRIMARY KEY,
                 sku VARCHAR(255) NOT NULL UNIQUE,
                 sku_ozon VARCHAR(255),
                 sku_wb VARCHAR(255),
                 product_name VARCHAR(500),
-                cost_price DECIMAL(10,2),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB
+                cost_price NUMERIC(10,2),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
         ");
         
-        // Create inventory table
+        // Create inventory table (PostgreSQL)
         $this->testPdo->exec("
-            CREATE TABLE inventory (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                product_id INT NOT NULL,
+            CREATE TABLE IF NOT EXISTS inventory (
+                id SERIAL PRIMARY KEY,
+                product_id INT NOT NULL REFERENCES dim_products(id) ON DELETE CASCADE,
                 warehouse_name VARCHAR(255) NOT NULL,
-                source ENUM('Ozon', 'Wildberries') NOT NULL,
+                source VARCHAR(20) NOT NULL,
                 quantity_present INT DEFAULT 0,
                 quantity_reserved INT DEFAULT 0,
                 stock_type VARCHAR(50) DEFAULT 'fbo',
-                report_source ENUM('API_DIRECT', 'API_REPORTS') DEFAULT 'API_DIRECT',
+                report_source VARCHAR(20) DEFAULT 'API_DIRECT',
                 last_report_update TIMESTAMP NULL,
                 report_code VARCHAR(255) NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                
-                UNIQUE KEY unique_inventory (product_id, warehouse_name, source),
-                FOREIGN KEY (product_id) REFERENCES dim_products(id) ON DELETE CASCADE,
-                INDEX idx_warehouse_name (warehouse_name),
-                INDEX idx_source (source),
-                INDEX idx_report_source (report_source)
-            ) ENGINE=InnoDB
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                CONSTRAINT unique_inventory UNIQUE (product_id, warehouse_name, source)
+            )
         ");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_warehouse_name ON inventory (warehouse_name)");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_source ON inventory (source)");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_report_source ON inventory (report_source)");
         
-        // Create stock_movements table for sales data
+        // Create stock_movements table for sales data (PostgreSQL)
         $this->testPdo->exec("
-            CREATE TABLE stock_movements (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                product_id INT NOT NULL,
+            CREATE TABLE IF NOT EXISTS stock_movements (
+                id SERIAL PRIMARY KEY,
+                product_id INT NOT NULL REFERENCES dim_products(id) ON DELETE CASCADE,
                 warehouse_name VARCHAR(255),
-                movement_type ENUM('sale', 'order', 'return', 'adjustment') NOT NULL,
+                movement_type VARCHAR(20) NOT NULL,
                 quantity INT NOT NULL,
-                movement_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                
-                FOREIGN KEY (product_id) REFERENCES dim_products(id) ON DELETE CASCADE,
-                INDEX idx_product_movement (product_id, movement_date),
-                INDEX idx_movement_type (movement_type)
-            ) ENGINE=InnoDB
+                movement_date TIMESTAMP DEFAULT NOW()
+            )
         ");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_product_movement ON stock_movements (product_id, movement_date)");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_movement_type ON stock_movements (movement_type)");
         
-        // Create replenishment_alerts table
+        // Create replenishment_alerts table (PostgreSQL)
         $this->testPdo->exec("
-            CREATE TABLE replenishment_alerts (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                product_id INT NOT NULL,
+            CREATE TABLE IF NOT EXISTS replenishment_alerts (
+                id SERIAL PRIMARY KEY,
+                product_id INT NOT NULL REFERENCES dim_products(id) ON DELETE CASCADE,
                 sku VARCHAR(255),
                 product_name VARCHAR(500),
-                alert_type ENUM('STOCKOUT_CRITICAL', 'STOCKOUT_WARNING', 'NO_SALES', 'SLOW_MOVING') NOT NULL,
-                alert_level ENUM('CRITICAL', 'HIGH', 'MEDIUM', 'LOW') NOT NULL,
+                alert_type VARCHAR(50) NOT NULL,
+                alert_level VARCHAR(20) NOT NULL,
                 message TEXT NOT NULL,
                 current_stock INT,
-                days_until_stockout DECIMAL(5,1),
+                days_until_stockout NUMERIC(5,1),
                 recommended_action TEXT,
-                status ENUM('NEW', 'ACKNOWLEDGED', 'RESOLVED', 'IGNORED') DEFAULT 'NEW',
+                status VARCHAR(20) DEFAULT 'NEW',
                 acknowledged_by VARCHAR(255),
                 acknowledged_at TIMESTAMP NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                
-                FOREIGN KEY (product_id) REFERENCES dim_products(id) ON DELETE CASCADE,
-                INDEX idx_alert_type (alert_type),
-                INDEX idx_alert_level (alert_level),
-                INDEX idx_status (status),
-                INDEX idx_created_at (created_at)
-            ) ENGINE=InnoDB
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
         ");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_alert_type ON replenishment_alerts (alert_type)");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_alert_level ON replenishment_alerts (alert_level)");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_status ON replenishment_alerts (status)");
+        $this->testPdo->exec("CREATE INDEX IF NOT EXISTS idx_created_at ON replenishment_alerts (created_at)");
         
-        // Create replenishment_settings table
+        // Create replenishment_settings table (PostgreSQL)
         $this->testPdo->exec("
-            CREATE TABLE replenishment_settings (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                category ENUM('ANALYSIS', 'NOTIFICATIONS', 'GENERAL') NOT NULL,
+            CREATE TABLE IF NOT EXISTS replenishment_settings (
+                id SERIAL PRIMARY KEY,
+                category VARCHAR(50) NOT NULL,
                 setting_key VARCHAR(255) NOT NULL,
                 setting_value TEXT,
-                setting_type ENUM('STRING', 'INTEGER', 'DECIMAL', 'BOOLEAN', 'JSON') NOT NULL,
+                setting_type VARCHAR(20) NOT NULL,
                 is_active BOOLEAN DEFAULT TRUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                
-                UNIQUE KEY unique_setting (category, setting_key)
-            ) ENGINE=InnoDB
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                CONSTRAINT unique_setting UNIQUE (category, setting_key)
+            )
         ");
     }
     
