@@ -42,6 +42,18 @@ class Migration_004_CreateProductActivityTables extends BaseMigration
                 changed_by VARCHAR(100),
                 metadata TEXT
             )";
+        } elseif ($driver === 'pgsql') {
+            $sql = "CREATE TABLE IF NOT EXISTS product_activity_log (
+                id SERIAL PRIMARY KEY,
+                product_id VARCHAR(255) NOT NULL,
+                external_sku VARCHAR(255) NOT NULL,
+                previous_status BOOLEAN NULL,
+                new_status BOOLEAN NOT NULL,
+                reason VARCHAR(500) NOT NULL,
+                changed_at TIMESTAMP DEFAULT NOW(),
+                changed_by VARCHAR(100) NULL,
+                metadata JSONB NULL
+            )";
         } else {
             $sql = "CREATE TABLE IF NOT EXISTS product_activity_log (
                 id INT PRIMARY KEY AUTO_INCREMENT COMMENT 'Auto-increment ID',
@@ -143,7 +155,11 @@ class Migration_004_CreateProductActivityTables extends BaseMigration
 
             foreach ($indexes as $indexName => $indexColumns) {
                 if (!$this->indexExists($pdo, 'products', $indexName)) {
-                    $sql = "ALTER TABLE products ADD INDEX {$indexName} ({$indexColumns})";
+                    if ($driver === 'pgsql') {
+                        $sql = "CREATE INDEX {$indexName} ON products ({$indexColumns})";
+                    } else {
+                        $sql = "ALTER TABLE products ADD INDEX {$indexName} ({$indexColumns})";
+                    }
                     $this->executeSql($pdo, $sql);
                     $this->log("Added index {$indexName} to products table");
                 }
@@ -345,17 +361,25 @@ class Migration_004_CreateProductActivityTables extends BaseMigration
             } catch (\PDOException $e) {
                 return false;
             }
+        } elseif ($driver === 'pgsql') {
+            $sql = "SELECT COUNT(*) FROM information_schema.columns 
+                    WHERE table_schema = ANY(current_schemas(false))
+                      AND table_name = :table_name 
+                      AND column_name = :column_name";
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindValue(':table_name', $tableName);
+            $stmt->bindValue(':column_name', $columnName);
+            $stmt->execute();
+            return $stmt->fetchColumn() > 0;
         } else {
             $sql = "SELECT COUNT(*) FROM information_schema.columns 
                     WHERE table_schema = DATABASE() 
                     AND table_name = :table_name 
                     AND column_name = :column_name";
-            
             $stmt = $pdo->prepare($sql);
             $stmt->bindValue(':table_name', $tableName);
             $stmt->bindValue(':column_name', $columnName);
             $stmt->execute();
-            
             return $stmt->fetchColumn() > 0;
         }
     }
@@ -377,17 +401,25 @@ class Migration_004_CreateProductActivityTables extends BaseMigration
             } catch (\PDOException $e) {
                 return false;
             }
+        } elseif ($driver === 'pgsql') {
+            $sql = "SELECT COUNT(*) FROM pg_indexes 
+                    WHERE schemaname = ANY(current_schemas(false))
+                      AND tablename = :table_name 
+                      AND indexname = :index_name";
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindValue(':table_name', $tableName);
+            $stmt->bindValue(':index_name', $indexName);
+            $stmt->execute();
+            return $stmt->fetchColumn() > 0;
         } else {
             $sql = "SELECT COUNT(*) FROM information_schema.statistics 
                     WHERE table_schema = DATABASE() 
                     AND table_name = :table_name 
                     AND index_name = :index_name";
-            
             $stmt = $pdo->prepare($sql);
             $stmt->bindValue(':table_name', $tableName);
             $stmt->bindValue(':index_name', $indexName);
             $stmt->execute();
-            
             return $stmt->fetchColumn() > 0;
         }
     }

@@ -78,24 +78,23 @@ jobs:
           name: codecov-umbrella
 
   integration-tests:
-    if: false  # Temporarily disabled (MySQL-based)
-    name: Integration Tests
+    name: Integration Tests (PostgreSQL)
     runs-on: ubuntu-latest
     needs: unit-tests
 
     services:
-      mysql:
-        image: mysql:8.0
+      postgres:
+        image: postgres:15
         env:
-          MYSQL_ROOT_PASSWORD: test_password
-          MYSQL_DATABASE: test_mdm
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mi_core_test
         ports:
-          - 3306:3306
+          - 5432:5432
         options: >-
-          --health-cmd="mysqladmin ping"
+          --health-cmd="pg_isready -U postgres"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=3
+          --health-retries=5
 
     steps:
       - name: Checkout code
@@ -105,18 +104,28 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.1"
-          extensions: pdo, mbstring
+          extensions: pdo, pdo_pgsql, mbstring
 
-      - name: Wait for MySQL
+      - name: Install psql client
         run: |
-          while ! mysqladmin ping -h"127.0.0.1" -P3306 --silent; do
-            sleep 1
-          done
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
 
-      - name: Create test database schema
+      - name: Wait for PostgreSQL
+        env:
+          PGPASSWORD: postgres
         run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -ptest_password test_mdm < create_product_cross_reference_table.sql || true
-          mysql -h 127.0.0.1 -P 3306 -u root -ptest_password test_mdm < migrate_dim_products_table.sql || true
+          for i in {1..30}; do
+            if pg_isready -h 127.0.0.1 -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"; break; fi; sleep 2; done
+          pg_isready -h 127.0.0.1 -p 5432 -U postgres
+
+      - name: Apply PostgreSQL fixtures
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -p 5432 -U postgres -d mi_core_test -f tests/pg_fixtures/001_init_activity_tracking.sql
+          psql -h 127.0.0.1 -p 5432 -U postgres -d mi_core_test -f tests/pg_fixtures/002_sample_data.sql
 
       - name: Install dependencies
         if: ${{ hashFiles('composer.lock') != '' }}
@@ -125,16 +134,12 @@ jobs:
       - name: Run integration tests
         env:
           DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_NAME: test_mdm
-          DB_USER: root
-          DB_PASSWORD: test_password
+          DB_PORT: 5432
+          DB_NAME: mi_core_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
         run: |
-          if [ -f vendor/bin/phpunit ]; then
-            vendor/bin/phpunit --configuration phpunit.xml --testsuite integration
-          else
-            php tests/SyncIntegrationTest.php
-          fi
+          php tests/Integration/ActivityTrackingDatabaseIntegrationTest.php
 
   regression-tests:
     if: false  # Temporarily disabled
