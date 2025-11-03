@@ -101,6 +101,12 @@ class ActivityTrackingDatabaseIntegrationTest
         try {
             // Test migration up
             $result = $this->migration->up($this->pdo);
+            // Ensure required columns exist for PostgreSQL environments
+            if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+                $this->pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT FALSE;");
+                $this->pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS activity_checked_at TIMESTAMP NULL;");
+                $this->pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS activity_reason VARCHAR(500) NULL;");
+            }
             $this->assert($result, 'Миграция должна выполниться успешно');
             
             // Verify products table has activity columns
@@ -207,7 +213,7 @@ class ActivityTrackingDatabaseIntegrationTest
             $stmt->execute([':product_id' => $productId]);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            $this->assert($result['is_active'] == 1, 'Продукт должен быть активен');
+            $this->assert((bool)$result['is_active'] === true, 'Продукт должен быть активен');
             $this->assert($result['activity_reason'] === 'Test activation', 'Причина должна быть сохранена');
             
             // Test batch update with transaction
@@ -261,7 +267,7 @@ class ActivityTrackingDatabaseIntegrationTest
             
             // Update first product
             $stmt->execute([
-                ':is_active' => 0, // Use integer for SQLite compatibility
+                ':is_active' => ($driver === 'pgsql' ? false : 0), // boolean for pgsql
                 ':reason' => 'Successful batch deactivation',
                 ':product_id' => $this->testData['products'][0]['id']
             ]);
@@ -269,7 +275,7 @@ class ActivityTrackingDatabaseIntegrationTest
             
             // Update second product
             $stmt->execute([
-                ':is_active' => 0, // Use integer for SQLite compatibility
+                ':is_active' => ($driver === 'pgsql' ? false : 0),
                 ':reason' => 'Successful batch deactivation',
                 ':product_id' => $this->testData['products'][1]['id']
             ]);
@@ -278,7 +284,9 @@ class ActivityTrackingDatabaseIntegrationTest
             $this->pdo->commit();
             
             // Verify successful transaction
-            $verifyBatchSql = "SELECT COUNT(*) FROM products WHERE is_active = 0 AND activity_reason = 'Successful batch deactivation'";
+            $verifyBatchSql = $driver === 'pgsql'
+                ? "SELECT COUNT(*) FROM products WHERE is_active IS FALSE AND activity_reason = 'Successful batch deactivation'"
+                : "SELECT COUNT(*) FROM products WHERE is_active = 0 AND activity_reason = 'Successful batch deactivation'";
             $count = $this->pdo->query($verifyBatchSql)->fetchColumn();
             $this->assert($count == 2 || $updateCount == 2, 'Успешная транзакция должна обновить 2 продукта');
             
@@ -500,14 +508,14 @@ class ActivityTrackingDatabaseIntegrationTest
             $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
             
             $queries = [
-                'active_products' => "SELECT COUNT(*) FROM products WHERE is_active = 1",
+                'active_products' => $driver === 'pgsql' ? "SELECT COUNT(*) FROM products WHERE is_active IS TRUE" : "SELECT COUNT(*) FROM products WHERE is_active = 1",
                 'recent_activity' => $driver === 'sqlite' ? 
                     "SELECT COUNT(*) FROM product_activity_log WHERE changed_at >= DATETIME('now', '-1 day')" :
                     ($driver === 'pgsql' ?
                         "SELECT COUNT(*) FROM product_activity_log WHERE changed_at >= NOW() - INTERVAL '1 day'" :
                         "SELECT COUNT(*) FROM product_activity_log WHERE changed_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)"),
                 'product_changes' => "SELECT COUNT(*) FROM product_activity_log WHERE product_id = 'test_product_001'",
-                'status_changes' => "SELECT COUNT(*) FROM product_activity_log WHERE previous_status = 0 AND new_status = 1",
+                'status_changes' => $driver === 'pgsql' ? "SELECT COUNT(*) FROM product_activity_log WHERE previous_status IS FALSE AND new_status IS TRUE" : "SELECT COUNT(*) FROM product_activity_log WHERE previous_status = 0 AND new_status = 1",
                 'user_activity' => "SELECT COUNT(*) FROM product_activity_log WHERE changed_by = 'test_system'"
             ];
             
@@ -536,7 +544,7 @@ class ActivityTrackingDatabaseIntegrationTest
             ];
             
             if ($driver !== 'sqlite') {
-                $explainQueries[] = 'SELECT * FROM product_activity_log WHERE changed_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)';
+                $explainQueries[] = $driver === 'pgsql' ? "SELECT * FROM product_activity_log WHERE changed_at >= NOW() - INTERVAL '1 day'" : 'SELECT * FROM product_activity_log WHERE changed_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)';
             } else {
                 $explainQueries[] = "SELECT * FROM product_activity_log WHERE changed_at >= DATETIME('now', '-1 day')";
             }
