@@ -6,7 +6,14 @@
  * Can be executed without PHPUnit installed.
  */
 
-require_once __DIR__ . '/tests/bootstrap.php';
+// Попытка подключить общий bootstrap тестов из корня tests
+$bootstrap1 = __DIR__ . '/../bootstrap.php';
+$bootstrap2 = __DIR__ . '/bootstrap.php';
+if (file_exists($bootstrap1)) {
+    require_once $bootstrap1;
+} elseif (file_exists($bootstrap2)) {
+    require_once $bootstrap2;
+}
 
 class SimpleTestRunner {
     private $passed = 0;
