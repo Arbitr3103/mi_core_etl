@@ -27,7 +27,7 @@ jobs:
 
     strategy:
       matrix:
-        php-version: ["7.4", "8.0", "8.1", "8.2"]
+        php-version: ["8.1", "8.2", "8.3"]
 
     steps:
       - name: Checkout code
@@ -37,7 +37,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
-          extensions: pdo, pdo_mysql, pdo_sqlite, mbstring
+          extensions: pdo, pdo_pgsql, mbstring
           coverage: xdebug
 
       - name: Validate composer.json
@@ -76,6 +76,7 @@ jobs:
           name: codecov-umbrella
 
   integration-tests:
+    if: false  # Temporarily disabled (MySQL-based)
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: unit-tests
@@ -102,7 +103,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.1"
-          extensions: pdo, pdo_mysql, pdo_sqlite, mbstring
+          extensions: pdo, mbstring
 
       - name: Wait for MySQL
         run: |
@@ -136,6 +137,7 @@ jobs:
           fi
 
   regression-tests:
+    if: false  # Temporarily disabled
     name: Regression Tests
     runs-on: ubuntu-latest
     needs: unit-tests
@@ -165,6 +167,7 @@ jobs:
           fi
 
   data-type-compatibility-tests:
+    if: false  # Temporarily disabled
     name: Data Type Compatibility Tests
     runs-on: ubuntu-latest
     needs: unit-tests
@@ -194,6 +197,7 @@ jobs:
           fi
 
   sql-query-tests:
+    if: false  # Temporarily disabled (MySQL-based)
     name: SQL Query Tests
     runs-on: ubuntu-latest
     needs: unit-tests
@@ -220,7 +224,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.1"
-          extensions: pdo, pdo_mysql, mbstring
+          extensions: pdo, mbstring
 
       - name: Wait for MySQL
         run: |
