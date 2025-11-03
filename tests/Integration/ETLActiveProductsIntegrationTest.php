@@ -812,11 +812,11 @@ class ETLActiveProductsIntegrationTest
     {
         // Insert test extracted data
         $testData = [
-            ['ozon', 'TEST_SKU_001', 'Test Product 1', 'Test Brand', 'Test Category', 99.99, 1, 'visible_processed_stock'],
-            ['ozon', 'TEST_SKU_002', 'Test Product 2', 'Test Brand', 'Test Category', 149.99, 1, 'visible_processed_stock'],
-            ['ozon', 'TEST_SKU_003', 'Test Product 3', 'Test Brand', 'Test Category', 79.99, 0, 'not_visible'],
-            ['ozon', 'TEST_SKU_004', 'Test Product 4', 'Test Brand', 'Test Category', 199.99, 0, 'no_stock'],
-            ['ozon', 'TEST_SKU_005', 'Test Product 5', 'Test Brand', 'Test Category', 59.99, 1, 'visible_processed_stock']
+            ['ozon', 'TEST_SKU_001', 'Test Product 1', 'Test Brand', 'Test Category', 99.99, true, 'visible_processed_stock'],
+            ['ozon', 'TEST_SKU_002', 'Test Product 2', 'Test Brand', 'Test Category', 149.99, true, 'visible_processed_stock'],
+            ['ozon', 'TEST_SKU_003', 'Test Product 3', 'Test Brand', 'Test Category', 79.99, false, 'not_visible'],
+            ['ozon', 'TEST_SKU_004', 'Test Product 4', 'Test Brand', 'Test Category', 199.99, false, 'no_stock'],
+            ['ozon', 'TEST_SKU_005', 'Test Product 5', 'Test Brand', 'Test Category', 59.99, true, 'visible_processed_stock']
         ];
         
         $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
@@ -877,16 +877,37 @@ class ETLActiveProductsIntegrationTest
     {
         // This would normally come from external APIs
         // For testing, we simulate the data structure
-        
-        // Insert some baseline data that ETL can work with
-        $this->pdo->exec("
-            INSERT OR REPLACE INTO etl_extracted_data 
-            (source, external_sku, source_name, price, is_active, activity_reason, extracted_at, activity_checked_at)
-            VALUES 
-            ('ozon', 'SOURCE_SKU_001', 'Source Product 1', 89.99, 1, 'visible_processed_stock', datetime('now'), datetime('now')),
-            ('ozon', 'SOURCE_SKU_002', 'Source Product 2', 129.99, 1, 'visible_processed_stock', datetime('now'), datetime('now')),
-            ('ozon', 'SOURCE_SKU_003', 'Source Product 3', 69.99, 0, 'not_visible', datetime('now'), datetime('now'))
-        ");
+
+        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            // PostgreSQL-specific insert with booleans and NOW()
+            $this->pdo->exec("
+                INSERT INTO etl_extracted_data 
+                (source, external_sku, source_name, price, is_active, activity_reason, extracted_at, activity_checked_at)
+                VALUES 
+                ('ozon', 'SOURCE_SKU_001', 'Source Product 1', 89.99, TRUE, 'visible_processed_stock', NOW(), NOW()),
+                ('ozon', 'SOURCE_SKU_002', 'Source Product 2', 129.99, TRUE, 'visible_processed_stock', NOW(), NOW()),
+                ('ozon', 'SOURCE_SKU_003', 'Source Product 3', 69.99, FALSE, 'not_visible', NOW(), NOW())
+                ON CONFLICT (source, external_sku) DO UPDATE SET
+                  source_name = EXCLUDED.source_name,
+                  price = EXCLUDED.price,
+                  is_active = EXCLUDED.is_active,
+                  activity_reason = EXCLUDED.activity_reason,
+                  extracted_at = EXCLUDED.extracted_at,
+                  activity_checked_at = EXCLUDED.activity_checked_at,
+                  updated_at = NOW()
+            ");
+        } else {
+            // SQLite fallback
+            $this->pdo->exec("
+                INSERT OR REPLACE INTO etl_extracted_data 
+                (source, external_sku, source_name, price, is_active, activity_reason, extracted_at, activity_checked_at)
+                VALUES 
+                ('ozon', 'SOURCE_SKU_001', 'Source Product 1', 89.99, 1, 'visible_processed_stock', datetime('now'), datetime('now')),
+                ('ozon', 'SOURCE_SKU_002', 'Source Product 2', 129.99, 1, 'visible_processed_stock', datetime('now'), datetime('now')),
+                ('ozon', 'SOURCE_SKU_003', 'Source Product 3', 69.99, 0, 'not_visible', datetime('now'), datetime('now'))
+            ");
+        }
     }
 
     /**
