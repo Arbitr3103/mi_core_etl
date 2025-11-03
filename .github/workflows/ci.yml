@@ -77,6 +77,7 @@ jobs:
           PG_PASSWORD: postgres
 
       - name: Upload coverage reports
+        if: ${{ hashFiles('coverage/clover.xml') != '' }}
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage/clover.xml
